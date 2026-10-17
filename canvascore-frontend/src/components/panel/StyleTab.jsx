@@ -3,6 +3,7 @@ import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, Palette, Type } 
 import { PanelAccordion, SpacingControl, ColorInput } from './fields';
 import { handleNumericKey, labelStyle, inputStyle } from './helpers';
 import DeviceBar from './DeviceBar';
+import StyleToolbar from './StyleToolbar';
 import { blockLabel } from '../../editor/blockCatalog';
 import { TYPE_PRESETS } from '../../render/typography.mjs';
 
@@ -21,6 +22,8 @@ export default function StyleTab({ ctx }) {
   };
   return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+
+    <StyleToolbar block={selectedBlock} />
 
     <DeviceBar block={selectedBlock} />
     {OWN_BUTTONS.includes(selectedBlock.type) && (

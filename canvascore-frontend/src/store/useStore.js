@@ -154,6 +154,14 @@ export const readBlockClipboard = () => {
   try { const v = JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || 'null'); return v && v.block && v.block.type ? v : null; } catch { return null; }
 };
 
+// The ids of every block of a type on the page (nested blocks too), in page order
+export const blockIdsOfType = (blocks, type) => {
+  const out = [];
+  const walk = (list) => { for (const b of list || []) { if (b.type === type) out.push(b.id); walk(b.children); } };
+  walk(blocks);
+  return out;
+};
+
 export const useStore = create((set, get) => ({
   isAuthenticated: false,
   userRole: 'editor',
@@ -546,6 +554,38 @@ export const useStore = create((set, get) => ({
     const blocks = updateNode(state.blocks, id, updates);
     lastEdit.sig = sig; lastEdit.t = now; lastEdit.blocks = blocks;
     return merge ? { blocks, futureBlocks: [] } : pushHistory(state, blocks);
+  }),
+  // Copy style: the look of one block (its styles and its tablet and phone overrides), to paste onto others.
+  // Held in memory for the session; a paste is one undo step, however many blocks it changes.
+  styleClipboard: null,
+  copyStyle: (id) => {
+    const b = findNodeById(get().blocks, id);
+    if (!b) return null;
+    const clip = { type: b.type, styles: { ...(b.styles || {}) }, responsive: b.responsive ? JSON.parse(JSON.stringify(b.responsive)) : undefined };
+    set({ styleClipboard: clip });
+    return clip;
+  },
+  pasteStyle: (ids) => {
+    const clip = get().styleClipboard;
+    if (!clip || !Array.isArray(ids) || !ids.length) return 0;
+    set((state) => {
+      let blocks = state.blocks;
+      for (const id of ids) {
+        blocks = updateNode(blocks, id, { styles: { ...clip.styles }, responsive: clip.responsive ? JSON.parse(JSON.stringify(clip.responsive)) : undefined });
+      }
+      return pushHistory(state, blocks);
+    });
+    return ids.length;
+  },
+  // Reset to the global style: the block's own styles and device overrides go, so it follows the site's presets again.
+  // Kept: its text style (a preset it picked), its entrance animation and its hidden devices (visibility, not style).
+  resetStyle: (id) => set((state) => {
+    const b = findNodeById(state.blocks, id);
+    if (!b) return state;
+    const keep = {};
+    for (const k of ['textPreset', 'animation']) if (b.styles && b.styles[k] !== undefined) keep[k] = b.styles[k];
+    const hide = b.responsive && Array.isArray(b.responsive.hide) && b.responsive.hide.length ? { hide: [...b.responsive.hide] } : undefined;
+    return pushHistory(state, updateNode(state.blocks, id, { styles: keep, responsive: hide }));
   }),
   removeBlock: (id) => set((state) => {
     const historyState = pushHistory(state, removeNode(state.blocks, id));

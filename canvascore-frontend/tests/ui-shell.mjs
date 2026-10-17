@@ -880,6 +880,39 @@ try {
     check('…picking one sets the block\'s preset', st().blocks.find((b) => b.id === 'bt1').content.preset === 'outline');
   }
 
+  console.log('\nCOPY STYLE');
+  {
+    const byId = (id) => st().blocks.find((b) => b.id === id);
+    const look = { color: 'red', margin: '4px' };
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false, pastBlocks: [], futureBlocks: [],
+      blocks: [{ id: 'cs1', type: 'TEXT', styles: { ...look }, responsive: { tablet: { fontSize: '12px' } }, content: { text: '<p>a</p>' } },
+        { id: 'cs2', type: 'TEXT', styles: {}, content: { text: '<p>b</p>' } },
+        { id: 'cs3', type: 'TEXT', styles: { padding: '9px' }, content: { text: '<p>c</p>' } },
+        { id: 'cs4', type: 'IMAGE', styles: {}, content: { src: 'a.jpg' } }],
+      selectedBlockId: 'cs1' });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(30);
+    check('the Style tab has the copy, paste and reset actions', !!btn('Copy style') && !!btn('Paste style') && !!btn('Reset to global style'));
+    check('paste is off until a style is copied', btn('Paste style').disabled === true || btn('Paste style').hasAttribute('disabled'));
+    click(btn('Copy style')); await sleep(20);
+    useStore.setState({ selectedBlockId: 'cs2' }); await sleep(40);
+    check('…and "Paste style" is on once one is copied', !btn('Paste style').disabled && !btn('Paste style').hasAttribute('disabled'));
+    click(btn('Paste style')); await sleep(30);
+    check('paste onto one block: its styles and tablet overrides are the copied ones', JSON.stringify(byId('cs2').styles) === JSON.stringify(look) && byId('cs2').responsive.tablet.fontSize === '12px', JSON.stringify(byId('cs2')));
+    useStore.setState({ selectedBlockId: 'cs3' }); await sleep(40);
+    check('"Paste to all Text blocks" appears when there are more blocks of the type', !!btnHas('Paste to all'));
+    click(btnHas('Paste to all')); await sleep(30);
+    check('…it pastes onto every block of the type, and not onto other blocks', JSON.stringify(byId('cs3').styles) === JSON.stringify(look) && JSON.stringify(byId('cs4').styles) === '{}');
+    useStore.getState().undo(); await sleep(20);
+    check('…and is ONE undo step', JSON.stringify(byId('cs3').styles) === '{"padding":"9px"}' && JSON.stringify(byId('cs2').styles) === JSON.stringify(look), JSON.stringify([byId('cs2').styles, byId('cs3').styles]));
+    useStore.setState({ selectedBlockId: 'cs1' }); await sleep(40);
+    click(btn('Reset to global style')); await sleep(20);
+    const dlg = await waitFor(() => btn('Reset style'));
+    check('reset asks first, in the app\'s dialog', !!dlg);
+    if (dlg) click(dlg); await sleep(40);
+    check('…then the block has no own styles or device overrides', JSON.stringify(byId('cs1').styles) === '{}' && !byId('cs1').responsive, JSON.stringify(byId('cs1')));
+  }
+
   console.log('\nCOLLECTIONS');
   {
     useStore.setState({ currentView: 'collections', userRole: 'admin', activePage: null });
