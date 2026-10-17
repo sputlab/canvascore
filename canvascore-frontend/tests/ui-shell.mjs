@@ -837,6 +837,49 @@ try {
     check('…and the editor\'s text styles follow', await waitFor(() => st().typography && st().typography.h1 && st().typography.h1.size === '4rem'));
   }
 
+  console.log('\nBUTTON AND FIELD STYLES');
+  {
+    const kit = await vite.ssrLoadModule('/src/render/kit.mjs');
+    const rb = await vite.ssrLoadModule('/src/render/renderBlock.mjs');
+    // the same literals as the PHP tests (server.php, security.php)
+    const k = kit.normalizeKit({ buttonStyles: { primary: { bg: '#112233', text: 'red;}body{', radius: '999px' }, outline: { border: 'var(--cc-color-accent, #f59e0b)', bg: 'transparent' }, nope: { bg: '#000' } },
+      fieldStyle: { bg: '#fafafa', border: 'javascript:x', radius: '4px;' } });
+    check('button presets and field style: only valid values are kept, in a fixed order', JSON.stringify(k) === '{"buttons":{"primary":{"bg":"#112233","radius":"999px"},"outline":{"bg":"transparent","border":"var(--cc-color-accent, #f59e0b)"}},"field":{"bg":"#fafafa"}}', JSON.stringify(k));
+    check('a button that picks a preset gets its variables, with the built-in look as fallback', kit.buttonPresetCss('primary') === "background: var(--cc-btn-primary-bg, var(--brand-color, #3b82f6)); color: var(--cc-btn-primary-text, #ffffff); border: 2px solid var(--cc-btn-primary-border, transparent); border-radius: var(--cc-btn-primary-radius, 6px); " && kit.buttonPresetCss('nope') === '');
+    check('the site\'s button presets and field style as CSS variables (only the values that are set)', kit.kitCss(k, ':root') === ':root{--cc-btn-primary-bg: #112233; --cc-btn-primary-radius: 999px; --cc-btn-outline-bg: transparent; --cc-btn-outline-border: var(--cc-color-accent, #f59e0b); --cc-field-bg: #fafafa;}' && kit.kitCss(kit.normalizeKit({}), ':root') === '');
+    const btnHtml = rb.renderBlock({ id: 'bq', type: 'BUTTON', styles: {}, content: { text: 'x', url: '#', preset: 'outline' } });
+    check('a BUTTON block with a preset uses the preset variables for its colours', btnHtml.includes('var(--cc-btn-outline-bg, transparent)') && btnHtml.includes('var(--cc-btn-outline-text, var(--brand-color, #3b82f6))'));
+    check('…and its own colours are not used', !rb.renderBlock({ id: 'bq2', type: 'BUTTON', styles: {}, content: { text: 'x', url: '#', preset: 'outline', bgColor: '#123456' } }).includes('#123456'));
+    check('the search field uses the field style variables, with the built-in look as fallback', rb.renderBlock({ id: 'sq', type: 'SEARCH', styles: {}, content: {} }).includes('background:var(--cc-field-bg, #fff)'));
+
+    // Global Options › Buttons & fields: a colour and a radius are saved
+    useStore.setState({ currentView: 'settings', palette: null, typography: null, kit: null });
+    calls.length = 0;
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/GlobalSettings.jsx')).default)));
+    const bg = await waitFor(() => btnHas('Save & Publish') && $('input[aria-label="Primary button background"]'));
+    check('Global Options shows the button presets and the form field style', !!bg && !!$('input[aria-label="Outline button border"]') && !!$('input[aria-label="Form field background"]'));
+    if (bg) typeIn(bg, '#112233');
+    const rad = $('input[aria-label="Primary button corner radius"]');
+    if (rad) { typeIn(rad, '999px'); rad.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true })); }
+    await sleep(30);
+    click(btnHas('Save & Publish'));
+    const sentK = await waitFor(() => calls.find((c) => c.u.includes('save_settings')));
+    const bodyK = sentK ? JSON.parse(sentK.body) : {};
+    check('saving sends the button preset and the field style', bodyK.buttonStyles && bodyK.buttonStyles.primary && bodyK.buttonStyles.primary.bg === '#112233' && bodyK.buttonStyles.primary.radius === '999px', sentK && sentK.body.slice(0, 200));
+    check('…and the editor gets them', await waitFor(() => st().kit && st().kit.buttons && st().kit.buttons.primary && st().kit.buttons.primary.bg === '#112233'));
+
+    // the BUTTON block's Button preset picker
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false,
+      blocks: [{ id: 'bt1', type: 'BUTTON', styles: {}, content: { text: 'Go', url: '#' } }], selectedBlockId: 'bt1' });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    if (!$('select[aria-label="Button preset"]')) { click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Content')); await sleep(30); }
+    const bp = $('select[aria-label="Button preset"]');
+    check('the Button block offers the presets (Custom, Primary, Secondary, Outline)', !!bp && bp.options.length === 4);
+    if (bp) { bp.value = 'outline'; bp.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(30);
+    check('…picking one sets the block\'s preset', st().blocks.find((b) => b.id === 'bt1').content.preset === 'outline');
+  }
+
   console.log('\nCOLLECTIONS');
   {
     useStore.setState({ currentView: 'collections', userRole: 'admin', activePage: null });

@@ -200,6 +200,12 @@ const fixtures = [
   { id: 'nl1', type: 'NEWSLETTER', styles: { width: '100%' }, content: { title: 'Join', text: 'a\nb', placeholder: 'Mail', emailLabel: 'E-mail', askName: true, nameLabel: 'Nome', namePlaceholder: 'Il tuo nome', consentText: 'Accetto', buttonText: 'Iscriviti', successMsg: 'Grazie', email: 'a@b.it', layout: 'plain', formLayout: 'stacked', accent: '#10b981' } },
   { id: 'nl2', type: 'NEWSLETTER', styles: {}, content: { title: '<b>x</b>', text: { o: 1 }, placeholder: '"><script>x</script>', emailLabel: '"><b>', askName: 'yes', consentText: '<i>c</i>', buttonText: '<u>b</u>', successMsg: '"><x>', customId: 'My Form!', formLayout: 'evil', accent: 'red;}' } },
   { id: 'nl3', type: 'NEWSLETTER', styles: {}, content: {} },
+  // button presets (Global Options › Buttons & fields): a block picks one; an unknown one is ignored; a hero's button
+  { id: 'bp1', type: 'BUTTON', styles: { textAlign: 'center' }, content: { text: 'Primo', url: '#', preset: 'primary' } },
+  { id: 'bp2', type: 'BUTTON', styles: { margin: '4px' }, content: { text: 'Secondo', url: '#', useGlobal: false, preset: 'outline' } },
+  { id: 'bp3', type: 'BUTTON', styles: {}, content: { text: 'Custom', url: '#', preset: 'nope' } },
+  { id: 'bp4', type: 'HERO', styles: {}, content: { title: '<h1>H</h1>', subtitle: '', buttons: [{ text: 'A', url: '#', bgColor: '#f00', textColor: '#fff', borderRadius: '4px', preset: 'secondary' },
+    { text: 'B', url: '#', bgColor: '#0f0', textColor: '#000', borderRadius: '4px', borderColor: '#00f' }] } },
 ];
 
 // Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.

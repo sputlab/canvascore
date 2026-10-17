@@ -3,6 +3,7 @@ import { SquareChartGantt, Palette, MousePointerClick } from 'lucide-react';
 import { PanelAccordion, ColorF, SelF } from '../fields';
 import { labelStyle, inputStyle } from '../helpers';
 import { BUTTON_EFFECTS } from '../../../render/effects.mjs';
+import { BUTTON_PRESETS } from '../../../render/kit.mjs';
 
 // Content panel: BUTTON
 export default function ButtonPanel({ ctx }) {
@@ -16,6 +17,11 @@ export default function ButtonPanel({ ctx }) {
       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#38bdf8', fontWeight: 'bold', marginBottom: '20px', cursor: 'pointer' }}>
         <input type="checkbox" checked={selectedBlock.content.useGlobal ?? true} onChange={e => handleContentChange('useGlobal', e.target.checked)} /> Use Global Style (Brand)
       </label>
+      <label style={labelStyle}>Button preset</label>
+      <select style={{ ...inputStyle, marginBottom: 4 }} value={c.preset || ''} aria-label="Button preset" onChange={e => handleContentChange('preset', e.target.value)}>
+        <option value="">Custom</option>{BUTTON_PRESETS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      </select>
+      <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 14px' }}>The preset sets the colours and corners of the site's button style (Global Options › Buttons &amp; fields). Colours set in the Colors section win over it.</p>
       <label style={labelStyle}>Button Size</label>
       <select style={inputStyle} value="" onChange={e => {
         if (e.target.value === 'sm') patchStyles({ padding: '8px 16px', fontSize: '14px' });

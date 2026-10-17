@@ -430,6 +430,12 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Global colours: only valid entries are kept; the primary colour is the brand colour
     // Text styles: only valid presets and values are kept
     if (isset($decoded['typography'])) $decoded['typography'] = cc_typography(['typography' => $decoded['typography']]);
+    // Button presets and field style: only valid values are kept
+    if (isset($decoded['buttonStyles']) || isset($decoded['fieldStyle'])) {
+        $kit = cc_kit($decoded);
+        $decoded['buttonStyles'] = (object)$kit['buttons'];
+        $decoded['fieldStyle'] = (object)$kit['field'];
+    }
     if (isset($decoded['colors'])) {
         $decoded['colors'] = cc_palette(['colors' => $decoded['colors'], 'brandColor' => $decoded['brandColor'] ?? '']);
         $decoded['brandColor'] = $decoded['colors'][0]['value'];

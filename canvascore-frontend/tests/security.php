@@ -148,6 +148,15 @@ $home = (string)@file_get_contents($web . '/404.html');
 check('published pages: text styles as CSS, and the font of a text style is loaded from Google Fonts', strpos($home, '--cc-type-h2-size: 2rem;') !== false && strpos($home, 'h2{font-size: var(--cc-type-h2-size);') !== false
     && strpos($home, 'family=Lato') !== false, substr($home, 0, 0));
 
+echo "\nBUTTON AND FIELD STYLES\n";
+$r = $own->api('save_settings', ['siteName' => 'Test', 'buttonStyles' => ['primary' => ['bg' => '#112233', 'text' => 'red;}body{']], 'fieldStyle' => ['bg' => '#fafafa', 'radius' => '4px;']]);
+$saved = json_decode((string)file_get_contents($data . '/settings.json'), true);
+check('saved button presets and field style: CSS in a value is dropped', !empty($r['json']['success']) && json_encode($saved['buttonStyles'] ?? null) === '{"primary":{"bg":"#112233"}}'
+    && json_encode($saved['fieldStyle'] ?? null) === '{"bg":"#fafafa"}', json_encode([$saved['buttonStyles'] ?? null, $saved['fieldStyle'] ?? null]));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$home = (string)@file_get_contents($web . '/404.html');
+check('published pages: the button preset and the field style as variables', strpos($home, '--cc-btn-primary-bg: #112233;') !== false && strpos($home, '--cc-field-bg: #fafafa;') !== false);
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { normalizePalette, paletteVars } from '../editor/palette';
 import { normalizeTypography, typeCanvasCss, typeFontsUsed } from '../render/typography.mjs';
+import { normalizeKit, kitCss } from '../render/kit.mjs';
 import SortableBlock from './SortableBlock';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -26,6 +27,7 @@ function useSiteLook() {
         const palette = normalizePalette(data);
         useStore.getState().setPalette(palette);
         useStore.getState().setTypography(normalizeTypography(data));
+        useStore.getState().setKit(normalizeKit(data));
         setLook({ brandColor: palette[0].value, fontFamily });
         // the site font and the fonts of the text styles
         const families = [fontFamily, ...typeFontsUsed(normalizeTypography(data)).filter((f) => f !== fontFamily)];
@@ -46,6 +48,7 @@ export default function Canvas() {
   const { blocks, moveBlock, activePage, viewport, setSelectedBlockId } = useStore();
   const palette = useStore((s) => s.palette);
   const typography = useStore((s) => s.typography);
+  const kit = useStore((s) => s.kit);
   const site = useSiteLook();
 
   const handleDragEnd = (event) => {
@@ -90,7 +93,7 @@ export default function Canvas() {
     <div style={{ padding: viewport !== 'desktop' ? '40px 0' : '0', minHeight: '100%', display: 'flex', justifyContent: 'center' }} onClick={() => setSelectedBlockId(null)}>
       <style>{EFFECTS_CSS}</style>
       {/* the text styles of the device being edited (Global Options › Text styles) */}
-      <style>{typeCanvasCss(typography, viewport)}</style>
+      <style>{typeCanvasCss(typography, viewport) + kitCss(kit || {}, '.cc-canvas')}</style>
       <div className="cc-canvas" style={wrapperStyle} onClick={(e) => {
         // Clicking the empty area of the page clears the selection
         if(e.target === e.currentTarget) setSelectedBlockId(null);

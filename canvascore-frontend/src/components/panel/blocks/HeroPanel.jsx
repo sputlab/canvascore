@@ -3,6 +3,7 @@ import { Layout, Sliders, Image as ImageIcon } from 'lucide-react';
 import { PanelAccordion, ItemCard, Fld, TxtF, SelF, ColorF } from '../fields';
 import { handleNumericKey, labelStyle, inputStyle, fldInput, lstAddBtn } from '../helpers';
 import { BUTTON_EFFECTS } from '../../../render/effects.mjs';
+import { BUTTON_PRESETS } from '../../../render/kit.mjs';
 
 // Quick looks for a hero button: filled, outlined (transparent with a border) or text only.
 const STYLE_PRESETS = [['solid', 'Solid'], ['outline', 'Outline'], ['ghost', 'Text only']];
@@ -43,6 +44,8 @@ export default function HeroPanel({ ctx }) {
           <ItemCard key={index} title={`Button ${index + 1}`} index={index} total={buttons.length}
             onMove={(d) => moveBtn(index, d)} onRemove={() => handleContentChange('buttons', buttons.filter((_, i) => i !== index))}>
             <TxtF label="Text" value={btn.text} onChange={v => patch(index, { text: v })} placeholder="Button text" />
+            <SelF label="Button preset" value={btn.preset || ''} onChange={v => patch(index, { preset: v })} options={[['', 'Custom'], ...BUTTON_PRESETS]} />
+            {btn.preset ? <p style={{ fontSize: '11px', color: '#64748b', margin: '-4px 0 8px' }}>Colours and corners come from the preset (Global Options › Buttons &amp; fields).</p> : null}
             <Fld label="Link">
               <select style={{...fldInput, marginBottom: '6px'}} value={btn.url ?? '#'} onChange={e => patch(index, { url: e.target.value })}>
                 <option value="#">Select internal page...</option>

@@ -260,7 +260,7 @@ function cc_share_nets() {
 }
 // Multi-step Form field types: the Form block's, plus choices. Twin of WIZARD_TYPES in src/render/renderBlock.mjs.
 const CC_WIZARD_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date', 'select', 'radio', 'checkboxes', 'consent'];
-const CC_WZ_INPUT = 'width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box;';
+const CC_WZ_INPUT = 'width:100%; padding:12px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:#0f172a; box-sizing:border-box;';
 const CC_WZ_BTN = 'padding:12px 24px; border-radius:8px; font:700 15px/1 inherit; cursor:pointer;';
 // A number as plain text: at most 4 decimals, no trailing zeros ("25", "0.5"). Twin of ccPlain() in blockRuntime.mjs.
 function cc_plain($v) {
@@ -1402,7 +1402,9 @@ function cc_render_block_body($block) {
             // excluding margin/textAlign, which the container handles.
             $btnOwn = $block['styles'] ?? [];
             unset($btnOwn['margin'], $btnOwn['textAlign'], $btnOwn['animation']);
-            $globalStyle = $useGlobal ? "background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; " : "";
+            // A button preset (Global Options › Buttons & fields) gives the colours and corners, as variables
+            $preset = cc_button_preset_css($block['content']['preset'] ?? '');
+            $globalStyle = $preset !== '' ? $preset . 'padding: 12px 24px; ' : ($useGlobal ? "background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; " : "");
             $c = $block['content'] ?? [];
             $hv = cc_button_hover($c['btnHoverBg'] ?? null, $c['btnHoverColor'] ?? null, $c['btnHoverBorder'] ?? null, $c['btnEffect'] ?? null);
             $btnStyle = "display:inline-block; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; " . $globalStyle . build_inline_style($btnOwn) . $hv['vars'];
@@ -1442,7 +1444,9 @@ function cc_render_block_body($block) {
                 $bRad = htmlspecialchars((string)($btn['borderRadius'] ?? ''));
                 $hv = cc_button_hover($btn['hoverBg'] ?? null, $btn['hoverColor'] ?? null, $btn['hoverBorder'] ?? null, $btn['effect'] ?? null);
                 $bBorder = !empty($btn['borderColor']) ? '2px solid ' . htmlspecialchars($btn['borderColor']) : 'none';
-                $buttonsHtml .= "<a href=\"$bUrl\" class=\"cc-btn{$hv['cls']}\" style=\"display:inline-block; padding:14px 28px; background:$bBg; color:$bColor; border-radius:$bRad; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); border:$bBorder; box-sizing:border-box; {$hv['vars']}\">$bText</a>";
+                // a button preset (Global Options › Buttons & fields) replaces the button's own colours and corners
+                $look = cc_button_preset_css($btn['preset'] ?? '') ?: "background:$bBg; color:$bColor; border-radius:$bRad; border:$bBorder; ";
+                $buttonsHtml .= "<a href=\"$bUrl\" class=\"cc-btn{$hv['cls']}\" style=\"display:inline-block; padding:14px 28px; {$look}text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; {$hv['vars']}\">$bText</a>";
             }
             $buttonsHtml .= "</div>";
             $html = "<section id=\"$innerId\" class=\"cc-hero$animClass$innerClass\" style=\"$styleAttr; $bg; min-height:$minHeight; display:flex; flex-direction:column; justify-content:center;\">\n<div>\n$title\n<div style=\"margin:20px 0;\">$subtitle</div>\n$buttonsHtml\n</div>\n</section>\n";
@@ -1503,9 +1507,9 @@ function cc_render_block_body($block) {
                 $html .= "<input type=\"hidden\" name=\"_label_$name\" value=\"$fLabel\">\n";
                 $html .= "<div style=\"margin-bottom:15px;\"><label style=\"display:block; margin-bottom:5px; font-weight:600;\">$fLabel</label>";
                 if ($fType === 'textarea') {
-                    $html .= "<textarea name=\"$name\" $fReq rows=\"4\" style=\"width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; background:#fff; box-sizing:border-box;\"></textarea>";
+                    $html .= "<textarea name=\"$name\" $fReq rows=\"4\" style=\"width:100%; padding:12px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 6px); font-family:inherit; background:var(--cc-field-bg, #fff); box-sizing:border-box;\"></textarea>";
                 } else {
-                    $html .= "<input type=\"$fType\" name=\"$name\" $fReq style=\"width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; background:#fff; box-sizing:border-box;\">";
+                    $html .= "<input type=\"$fType\" name=\"$name\" $fReq style=\"width:100%; padding:12px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 6px); font-family:inherit; background:var(--cc-field-bg, #fff); box-sizing:border-box;\">";
                 }
                 $html .= "</div>\n";
             }
@@ -2244,7 +2248,7 @@ function cc_render_block_body($block) {
             $limit = cc_int($c['limit'] ?? null, 10, 1, 50);
             $html = "<div id=\"$innerId\" class=\"cc-search$animClass$innerClass\" style=\"$styleAttr\" data-index=\"{{BASE_URL}}search-index.json\" data-empty=\"$empty\" data-limit=\"$limit\">\n";
             $html .= "<form class=\"cc-search-form\" role=\"search\" style=\"display:flex; gap:8px; flex-wrap:wrap;\">\n";
-            $html .= "<input type=\"search\" name=\"q\" aria-label=\"$ph\" placeholder=\"$ph\" style=\"flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:inherit; box-sizing:border-box;\">\n";
+            $html .= "<input type=\"search\" name=\"q\" aria-label=\"$ph\" placeholder=\"$ph\" style=\"flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:inherit; box-sizing:border-box;\">\n";
             $html .= "<button type=\"submit\" style=\"padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;\">$sbtn</button>\n";
             $html .= "</form>\n<div class=\"cc-search-results\" aria-live=\"polite\" style=\"margin-top:16px;\"></div>\n";
             $html .= "<script>" . str_replace('%ID%', $innerId, CC_SEARCH_SCRIPT) . "</script>\n</div>\n";
@@ -2914,7 +2918,7 @@ function cc_render_block_body($block) {
             $form_id = !empty($c['customId'])
                 ? 'f_' . preg_replace('/[^a-zA-Z0-9_-]/', '', cc_str($c['customId']))
                 : 'f_' . substr(sha1('n|' . ($block['id'] ?? '') . '|' . $raw_email), 0, 16);
-            $input = 'padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box; min-width:0; ' . ($inline ? 'flex:1 1 200px;' : 'width:100%;');
+            $input = 'padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:#0f172a; box-sizing:border-box; min-width:0; ' . ($inline ? 'flex:1 1 200px;' : 'width:100%;');
             $fi = 0; $fields = ''; $labels = [];
             if ($askName) { $fields .= '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($nameLabel) . '"><input type="text" name="field_' . $fi . '" required autocomplete="name" aria-label="' . htmlspecialchars($nameLabel) . '" placeholder="' . $text($c['namePlaceholder'] ?? '', $nameLabel, 100) . '" style="' . $input . '">'; $labels[] = $nameLabel; $fi++; }
             $fields .= '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($emailLabel) . '"><input type="email" name="field_' . $fi . '" required autocomplete="email" aria-label="' . htmlspecialchars($emailLabel) . '" placeholder="' . $text($c['placeholder'] ?? '', $emailLabel, 100) . '" style="' . $input . '">'; $labels[] = $emailLabel; $fi++;
