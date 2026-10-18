@@ -641,6 +641,56 @@ try {
   console.error('  ✗ EXCEPTION: ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));
 }
 
+// ---------------------------------------------------------------- on-canvas handles and the right-click menu
+console.log('\nCANVAS HANDLES AND MENU');
+try {
+  const hb = { id: 'hn1', type: 'TEXT', styles: { padding: '4px', margin: '0 auto' }, content: { text: '<p>x</p>' } };
+  useStore.setState({ blocks: [hb], selectedBlockId: 'hn1', viewport: 'desktop', pastBlocks: [], futureBlocks: [], contextMenu: null });
+  mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: ['hn1'] }, React.createElement(SortableBlock, { block: hb }))));
+  await sleep(40);
+  const at = (id) => st().blocks.find((b) => b.id === id);
+  const handles = [...doc.querySelectorAll('[data-handle]')];
+  check('the selected block has ten handles: margin, padding and width and height', handles.length === 10, String(handles.length));
+  useStore.setState({ selectedBlockId: null }); await sleep(40);
+  check('…and none on a block that is not selected', doc.querySelectorAll('[data-handle]').length === 0);
+  useStore.setState({ selectedBlockId: 'hn1' }); await sleep(30);
+  const pd = (id, x, y) => doc.querySelector(`[data-handle="${id}"]`).dispatchEvent(new w.MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+  const moveTo = (x, y) => w.dispatchEvent(new w.MouseEvent('pointermove', { clientX: x, clientY: y }));
+  const release = () => w.dispatchEvent(new w.MouseEvent('pointerup', {}));
+
+  pd('padding-top', 50, 100); moveTo(50, 112); release();
+  check('dragging the top padding edge down 12 px: the top padding grows, the other sides keep their values', at('hn1').styles.padding === '16px 4px 4px 4px', at('hn1').styles.padding);
+  pd('margin-left', 50, 100); moveTo(42, 100); release();
+  check('dragging the left margin edge keeps the centring of the other side (auto)', at('hn1').styles.margin === '0 auto 0 8px', at('hn1').styles.margin);
+  pd('width', 300, 200); moveTo(360, 200); release();
+  check('dragging the width handle sets the width in pixels', at('hn1').styles.width === '60px', at('hn1').styles.width);
+  pd('height', 300, 200); moveTo(300, 220); release();
+  check('dragging the height handle sets the height in pixels', at('hn1').styles.height === '20px', at('hn1').styles.height);
+
+  // a whole drag (several moves) is ONE undo step
+  const before = at('hn1').styles.padding;
+  pd('padding-right', 100, 50); moveTo(98, 50); moveTo(94, 50); moveTo(90, 50); release();
+  check('a drag over several moves ends where the pointer is (the right padding follows it)', at('hn1').styles.padding === '16px 14px 4px 4px', at('hn1').styles.padding);
+  st().undo();
+  check('…and one undo takes back the whole drag', at('hn1').styles.padding === before, at('hn1').styles.padding);
+
+  // the arrow keys nudge a handle (Shift: 10 px)
+  const key = (id, k, shift) => doc.querySelector(`[data-handle="${id}"]`).dispatchEvent(new w.KeyboardEvent('keydown', { key: k, shiftKey: !!shift, bubbles: true, cancelable: true }));
+  key('padding-left', 'ArrowRight', true);
+  check('the arrow keys move a handle: Shift + Right moves the left padding 10 px', at('hn1').styles.padding === '16px 4px 4px 14px', at('hn1').styles.padding);
+  key('padding-left', 'ArrowDown');
+  check('…and an arrow along the other axis does nothing', at('hn1').styles.padding === '16px 4px 4px 14px');
+
+  // the right-click on the block opens its menu for it
+  const frame = doc.querySelector('[data-handle]').parentElement;
+  frame.dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+  check('right-clicking a block opens its menu for that block', st().contextMenu && st().contextMenu.blockId === 'hn1' && st().contextMenu.x === 30 && st().contextMenu.y === 40, JSON.stringify(st().contextMenu));
+  st().closeContextMenu();
+} catch (e) {
+  failedRun = true; fails++; total++;
+  console.error('  ✗ EXCEPTION (handles): ' + ((e && e.stack) || e).toString().split('\n').slice(0, 6).join(' | '));
+}
+
 try { root?.unmount(); } catch { /* noop */ }
 await vite.close();
 console.log(`\n${fails === 0 ? 'PANELS UI OK' : fails + ' checks failed'} (${total} checks)${failedRun ? ' — aborted by an exception' : ''}`);

@@ -935,6 +935,56 @@ try {
     check('…then the block has no own styles or device overrides', JSON.stringify(byId('cs1').styles) === '{}' && !byId('cs1').responsive, JSON.stringify(byId('cs1')));
   }
 
+  console.log('\nCANVAS HANDLES: THE BOX MATHS');
+  {
+    const h = await vite.ssrLoadModule('/src/editor/handles.js');
+    check('a box value is read as its four sides, however it is written', JSON.stringify(h.boxSides('8px')) === '["8px","8px","8px","8px"]' && JSON.stringify(h.boxSides('0 auto')) === '["0","auto","0","auto"]' && JSON.stringify(h.boxSides('1px 2px 3px')) === '["1px","2px","3px","2px"]' && JSON.stringify(h.boxSides('')) === '["0","0","0","0"]');
+    check('dragging one side writes that side and keeps the others (auto stays auto)', h.setBoxSide('0 auto', 3, 12) === '0 auto 0 12px' && h.setBoxSide('', 0, 8) === '8px 0 0 0');
+    check('a drag never goes below zero, and follows the pointer with its sign', h.dragValue(10, 5, -1) === 5 && h.dragValue(2, -10, 1) === 0 && h.dragValue(4, 12, 1) === 16);
+    check('an "auto" side counts as 0 px when dragged', h.sidePx('auto') === 0 && h.sidePx('12px') === 12);
+  }
+
+  console.log('\nCANVAS MENU');
+  {
+    const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;
+    const labels = () => $$('[role="menuitem"]').map((b) => b.textContent.trim());
+    const item = (t) => $$('[role="menuitem"]').find((b) => b.textContent.trim() === t);
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false, pastBlocks: [], futureBlocks: [], styleClipboard: null, selectedBlockId: null, contextMenu: null,
+      blocks: [{ id: 'mx1', type: 'TEXT', styles: { color: 'red' }, content: { text: '<p>1</p>' } }, { id: 'mx2', type: 'TEXT', styles: {}, content: { text: '<p>2</p>' } }] });
+    mount(React.createElement(BlockContextMenu));
+    st().openContextMenu(50, 60, 'mx2'); await sleep(40);
+    check('the menu lists the block actions', ['Duplicate', 'Move up', 'Move down', 'Copy style', 'Paste style', 'Save as template'].every((l) => labels().includes(l)), labels().join('|'));
+    check('the menu is for the block it opened on: Move down is off (it is the last block), Paste style is off (nothing copied)', !item('Move up').disabled && item('Move down').disabled && item('Paste style').disabled);
+    click(item('Move up')); await sleep(30);
+    check('Move up moves the block, and the menu closes', st().blocks.map((b) => b.id).join() === 'mx2,mx1' && st().contextMenu === null, st().blocks.map((b) => b.id).join());
+    st().openContextMenu(50, 60, 'mx1'); await sleep(40);
+    click(item('Copy style')); await sleep(20);
+    check('Copy style copies that block\'s style', st().styleClipboard && st().styleClipboard.styles.color === 'red');
+    st().openContextMenu(50, 60, 'mx2'); await sleep(40);
+    check('…and Paste style is on now', !item('Paste style').disabled);
+    click(item('Paste style')); await sleep(20);
+    check('Paste style pastes onto the block the menu is for', st().blocks.find((b) => b.id === 'mx2').styles.color === 'red');
+    st().openContextMenu(50, 60, 'mx2'); await sleep(40);
+    click(item('Duplicate')); await sleep(20);
+    check('Duplicate adds a copy right after the block', st().blocks.length === 3 && st().blocks[1].id !== 'mx2' && st().blocks[1].id !== 'mx1' && st().blocks[1].styles.color === 'red', st().blocks.map((b) => b.id).join());
+    st().openContextMenu(50, 60, 'mx1'); await sleep(40);
+    doc.body.dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+    await sleep(20);
+    check('a click outside closes the menu', st().contextMenu === null && $$('[role="menu"]').length === 0);
+    st().openContextMenu(50, 60, 'mx1'); await sleep(40);
+    doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(20);
+    check('Escape closes the menu', st().contextMenu === null);
+    st().openContextMenu(50, 60, 'mx1'); await sleep(40);
+    calls.length = 0;
+    click(item('Save as template')); await sleep(20);
+    const tpl = await waitFor(() => $('[role="dialog"].ui-dialog'));
+    check('Save as template asks for a name first', !!tpl && /Save as template/.test(tpl.textContent));
+    if (tpl) { typeIn(tpl.querySelector('input'), 'My block'); tpl.querySelector('input').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); }
+    const saved = await waitFor(() => calls.find((c) => c.u.includes('save_template')));
+    check('…and the block is sent as a template under that name', !!saved && JSON.parse(saved.body).name === 'My block' && JSON.parse(saved.body).content_json.includes('"id":"mx1"'), saved && saved.body.slice(0, 120));
+  }
+
   console.log('\nCOLLECTIONS');
   {
     useStore.setState({ currentView: 'collections', userRole: 'admin', activePage: null });
