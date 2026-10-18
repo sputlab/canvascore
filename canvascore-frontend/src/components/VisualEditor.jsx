@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore, readBlockClipboard } from '../store/useStore';
 import PropertyPanel from './PropertyPanel';
+import BlockContextMenu from './BlockContextMenu';
 import Canvas from './Canvas';
 import LayerNavigator from './LayerNavigator';
 import EditorDraftStatus from './EditorDraftStatus';
@@ -321,6 +322,7 @@ export default function VisualEditor() {
         </button>
         <aside className="cc-ed-right" data-open={panels.right} aria-label="Settings">
           <PropertyPanel />
+          <BlockContextMenu />
         </aside>
       </div>
 

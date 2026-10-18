@@ -143,7 +143,8 @@ try {
     // Block effects and button hovers (shared with the editor canvas)
     $effects_file = __DIR__ . '/effects.css';
     $template = str_replace('{{COLOR_VARS}}', cc_palette_css($palette), $template);   // global colours, in :root
-    $template = str_replace('{{TYPE_CSS}}', cc_type_css($typo), $template);   // text styles (Global Options › Text styles)
+    // text styles (Global Options › Text styles) and button and field styles (Buttons & fields), as variables
+    $template = str_replace('{{TYPE_CSS}}', cc_type_css($typo) . cc_kit_css(cc_kit($settings), ':root'), $template);
     $template = str_replace('{{EFFECTS_CSS}}', file_exists($effects_file) ? file_get_contents($effects_file) : '', $template);
 
     // Only published/modified pages (the live version is always the parent row).

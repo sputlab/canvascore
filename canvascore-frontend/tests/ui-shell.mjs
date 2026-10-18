@@ -837,6 +837,154 @@ try {
     check('…and the editor\'s text styles follow', await waitFor(() => st().typography && st().typography.h1 && st().typography.h1.size === '4rem'));
   }
 
+  console.log('\nBUTTON AND FIELD STYLES');
+  {
+    const kit = await vite.ssrLoadModule('/src/render/kit.mjs');
+    const rb = await vite.ssrLoadModule('/src/render/renderBlock.mjs');
+    // the same literals as the PHP tests (server.php, security.php)
+    const k = kit.normalizeKit({ buttonStyles: { primary: { bg: '#112233', text: 'red;}body{', radius: '999px' }, outline: { border: 'var(--cc-color-accent, #f59e0b)', bg: 'transparent' }, nope: { bg: '#000' } },
+      fieldStyle: { bg: '#fafafa', border: 'javascript:x', radius: '4px;' } });
+    check('button presets and field style: only valid values are kept, in a fixed order', JSON.stringify(k) === '{"buttons":{"primary":{"bg":"#112233","radius":"999px"},"outline":{"bg":"transparent","border":"var(--cc-color-accent, #f59e0b)"}},"field":{"bg":"#fafafa"}}', JSON.stringify(k));
+    check('a button that picks a preset gets its variables, with the built-in look as fallback', kit.buttonPresetCss('primary') === "background: var(--cc-btn-primary-bg, var(--brand-color, #3b82f6)); color: var(--cc-btn-primary-text, #ffffff); border: 2px solid var(--cc-btn-primary-border, transparent); border-radius: var(--cc-btn-primary-radius, 6px); " && kit.buttonPresetCss('nope') === '');
+    check('the site\'s button presets and field style as CSS variables (only the values that are set)', kit.kitCss(k, ':root') === ':root{--cc-btn-primary-bg: #112233; --cc-btn-primary-radius: 999px; --cc-btn-outline-bg: transparent; --cc-btn-outline-border: var(--cc-color-accent, #f59e0b); --cc-field-bg: #fafafa;}' && kit.kitCss(kit.normalizeKit({}), ':root') === '');
+    const btnHtml = rb.renderBlock({ id: 'bq', type: 'BUTTON', styles: {}, content: { text: 'x', url: '#', preset: 'outline' } });
+    check('a BUTTON block with a preset uses the preset variables for its colours', btnHtml.includes('var(--cc-btn-outline-bg, transparent)') && btnHtml.includes('var(--cc-btn-outline-text, var(--brand-color, #3b82f6))'));
+    check('…and its own colours are not used', !rb.renderBlock({ id: 'bq2', type: 'BUTTON', styles: {}, content: { text: 'x', url: '#', preset: 'outline', bgColor: '#123456' } }).includes('#123456'));
+    check('the search field uses the field style variables, with the built-in look as fallback', rb.renderBlock({ id: 'sq', type: 'SEARCH', styles: {}, content: {} }).includes('background:var(--cc-field-bg, #fff)'));
+
+    // Global Options › Buttons & fields: a colour and a radius are saved
+    useStore.setState({ currentView: 'settings', palette: null, typography: null, kit: null });
+    calls.length = 0;
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/GlobalSettings.jsx')).default)));
+    const bg = await waitFor(() => btnHas('Save & Publish') && $('input[aria-label="Primary button background"]'));
+    check('Global Options shows the button presets and the form field style', !!bg && !!$('input[aria-label="Outline button border"]') && !!$('input[aria-label="Form field background"]'));
+    if (bg) typeIn(bg, '#112233');
+    const rad = $('input[aria-label="Primary button corner radius"]');
+    if (rad) { typeIn(rad, '999px'); rad.dispatchEvent(new w.FocusEvent('focusout', { bubbles: true })); }
+    await sleep(30);
+    click(btnHas('Save & Publish'));
+    const sentK = await waitFor(() => calls.find((c) => c.u.includes('save_settings')));
+    const bodyK = sentK ? JSON.parse(sentK.body) : {};
+    check('saving sends the button preset and the field style', bodyK.buttonStyles && bodyK.buttonStyles.primary && bodyK.buttonStyles.primary.bg === '#112233' && bodyK.buttonStyles.primary.radius === '999px', sentK && sentK.body.slice(0, 200));
+    check('…and the editor gets them', await waitFor(() => st().kit && st().kit.buttons && st().kit.buttons.primary && st().kit.buttons.primary.bg === '#112233'));
+
+    // the BUTTON block's Button preset picker
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false,
+      blocks: [{ id: 'bt1', type: 'BUTTON', styles: {}, content: { text: 'Go', url: '#' } }], selectedBlockId: 'bt1' });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    if (!$('select[aria-label="Button preset"]')) { click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Content')); await sleep(30); }
+    const bp = $('select[aria-label="Button preset"]');
+    check('the Button block offers the presets (Custom, Primary, Secondary, Outline)', !!bp && bp.options.length === 4);
+    if (bp) { bp.value = 'outline'; bp.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(30);
+    check('…picking one sets the block\'s preset', st().blocks.find((b) => b.id === 'bt1').content.preset === 'outline');
+  }
+
+  console.log('\nCOPY STYLE');
+  {
+    const byId = (id) => (function find(list) { for (const b of list) { if (b.id === id) return b; const r = b.children && find(b.children); if (r) return r; } return null; })(st().blocks);
+    const openCP = async () => { if (!btn('Copy style')) { click(btnHas('Copy & paste style')); await sleep(30); } };
+    const look = { color: 'red', margin: '4px' };
+    const hero = (id, styles, n) => ({ id, type: 'HERO', styles, content: { title: `<h1>${n}</h1>`, buttons: [] } });
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false, pastBlocks: [], futureBlocks: [], styleClipboard: null,
+      blocks: [{ id: 'cs1', type: 'TEXT', styles: { ...look }, responsive: { tablet: { fontSize: '12px' } }, content: { text: '<p>a</p>' } },
+        { id: 'cs2', type: 'TEXT', styles: {}, content: { text: '<p>b</p>' } },
+        { id: 'cs3', type: 'TEXT', styles: { padding: '9px' }, content: { text: '<p>c</p>' } },
+        { id: 'cs4', type: 'IMAGE', styles: {}, content: { src: 'a.jpg' } },
+        { id: 'sec1', type: 'SECTION', styles: {}, content: {}, children: [hero('hr1', { padding: '10px' }, 1), hero('hr2', {}, 2)] },
+        hero('hr3', { color: 'blue' }, 3)],
+      selectedBlockId: 'cs1' });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(30);
+    await openCP();
+    check('the Style tab has a "Copy & paste style" accordion', !!btnHas('Copy & paste style'));
+    check('paste is off until a style is copied', !!btn('Paste onto this block').disabled);
+    click(btn('Copy style')); await sleep(20);
+    check('…and on once one is copied', !btn('Paste onto this block').disabled);
+    check('the other blocks of the page are listed, nested ones too (Hero 1 is inside a section)', !!$('input[aria-label="Paste onto Hero 1"]') && !!$('input[aria-label="Paste onto Hero 3"]') && !!$('input[aria-label="Paste onto Text 2"]'));
+
+    useStore.setState({ selectedBlockId: 'cs2' }); await sleep(60);
+    await openCP();
+    click(btn('Paste onto this block')); await sleep(30);
+    check('paste onto this block: its styles and tablet overrides are the copied ones', JSON.stringify(byId('cs2').styles) === JSON.stringify(look) && byId('cs2').responsive.tablet.fontSize === '12px', JSON.stringify(byId('cs2')));
+
+    // copy from the blue Hero 3, then paste onto Hero 1 (nested in a section) and Hero 2, from another block
+    useStore.setState({ selectedBlockId: 'hr3' }); await sleep(60);
+    await openCP();
+    click(btn('Copy style')); await sleep(20);
+    useStore.setState({ selectedBlockId: 'cs1' }); await sleep(60);
+    await openCP();
+    click($('input[aria-label="Paste onto Hero 1"]')); await sleep(20);
+    click($('input[aria-label="Paste onto Hero 2"]')); await sleep(20);
+    check('two boxes ticked: the button says how many', !!btnHas('Paste onto selected (2)'));
+    click(btnHas('Paste onto selected (2)')); await sleep(30);
+    check('…the ticked blocks (a nested hero too) take the copied style', JSON.stringify(byId('hr1').styles) === '{"color":"blue"}' && JSON.stringify(byId('hr2').styles) === '{"color":"blue"}', JSON.stringify([byId('hr1').styles, byId('hr2').styles]));
+    check('…the Hero that was not ticked, and the text, keep theirs', JSON.stringify(byId('hr3').styles) === '{"color":"blue"}' && JSON.stringify(byId('cs3').styles) === '{"padding":"9px"}');
+    useStore.getState().undo(); await sleep(20);
+    check('…and that paste is ONE undo step', JSON.stringify(byId('hr1').styles) === '{"padding":"10px"}' && JSON.stringify(byId('hr2').styles) === '{}', JSON.stringify([byId('hr1').styles, byId('hr2').styles]));
+
+    click(btnHas('Select all Text blocks')); await sleep(30);
+    check('"Select all Text blocks" ticks the other text blocks', !!btnHas('Paste onto selected (2)') && !$('input[aria-label="Paste onto Image 1"]').checked);
+    click(btnHas('Paste onto selected (2)')); await sleep(30);
+    check('…and they take the style that is copied now (the blue Hero\'s)', JSON.stringify(byId('cs2').styles) === '{"color":"blue"}' && JSON.stringify(byId('cs3').styles) === '{"color":"blue"}', JSON.stringify([byId('cs2').styles, byId('cs3').styles]));
+
+    click(btn('Reset to global style')); await sleep(20);
+    const dlg = await waitFor(() => btn('Reset style'));
+    check('reset asks first, in the app\'s dialog', !!dlg);
+    if (dlg) click(dlg); await sleep(40);
+    check('…then the block has no own styles or device overrides', JSON.stringify(byId('cs1').styles) === '{}' && !byId('cs1').responsive, JSON.stringify(byId('cs1')));
+  }
+
+  console.log('\nCANVAS HANDLES: THE BOX MATHS');
+  {
+    const h = await vite.ssrLoadModule('/src/editor/handles.js');
+    check('a box value is read as its four sides, however it is written', JSON.stringify(h.boxSides('8px')) === '["8px","8px","8px","8px"]' && JSON.stringify(h.boxSides('0 auto')) === '["0","auto","0","auto"]' && JSON.stringify(h.boxSides('1px 2px 3px')) === '["1px","2px","3px","2px"]' && JSON.stringify(h.boxSides('')) === '["0","0","0","0"]');
+    check('dragging one side writes that side and keeps the others (auto stays auto)', h.setBoxSide('0 auto', 3, 12) === '0 auto 0 12px' && h.setBoxSide('', 0, 8) === '8px 0 0 0');
+    check('a drag never goes below zero, and follows the pointer with its sign', h.dragValue(10, 5, -1) === 5 && h.dragValue(2, -10, 1) === 0 && h.dragValue(4, 12, 1) === 16);
+    check('an "auto" side counts as 0 px when dragged', h.sidePx('auto') === 0 && h.sidePx('12px') === 12);
+  }
+
+  console.log('\nCANVAS MENU');
+  {
+    const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;
+    const labels = () => $$('[role="menuitem"]').map((b) => b.textContent.trim());
+    const item = (t) => $$('[role="menuitem"]').find((b) => b.textContent.trim() === t);
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false, pastBlocks: [], futureBlocks: [], styleClipboard: null, selectedBlockId: null, contextMenu: null,
+      blocks: [{ id: 'mx1', type: 'TEXT', styles: { color: 'red' }, content: { text: '<p>1</p>' } }, { id: 'mx2', type: 'TEXT', styles: {}, content: { text: '<p>2</p>' } }] });
+    mount(React.createElement(BlockContextMenu));
+    st().openContextMenu(50, 60, 'mx2'); await sleep(40);
+    check('the menu lists the block actions', ['Duplicate', 'Move up', 'Move down', 'Copy style', 'Paste style', 'Save as template'].every((l) => labels().includes(l)), labels().join('|'));
+    check('the menu is for the block it opened on: Move down is off (it is the last block), Paste style is off (nothing copied)', !item('Move up').disabled && item('Move down').disabled && item('Paste style').disabled);
+    click(item('Move up')); await sleep(30);
+    check('Move up moves the block, and the menu closes', st().blocks.map((b) => b.id).join() === 'mx2,mx1' && st().contextMenu === null, st().blocks.map((b) => b.id).join());
+    st().openContextMenu(50, 60, 'mx1'); await sleep(40);
+    click(item('Copy style')); await sleep(20);
+    check('Copy style copies that block\'s style', st().styleClipboard && st().styleClipboard.styles.color === 'red');
+    st().openContextMenu(50, 60, 'mx2'); await sleep(40);
+    check('…and Paste style is on now', !item('Paste style').disabled);
+    click(item('Paste style')); await sleep(20);
+    check('Paste style pastes onto the block the menu is for', st().blocks.find((b) => b.id === 'mx2').styles.color === 'red');
+    st().openContextMenu(50, 60, 'mx2'); await sleep(40);
+    click(item('Duplicate')); await sleep(20);
+    check('Duplicate adds a copy right after the block', st().blocks.length === 3 && st().blocks[1].id !== 'mx2' && st().blocks[1].id !== 'mx1' && st().blocks[1].styles.color === 'red', st().blocks.map((b) => b.id).join());
+    st().openContextMenu(50, 60, 'mx1'); await sleep(40);
+    doc.body.dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+    await sleep(20);
+    check('a click outside closes the menu', st().contextMenu === null && $$('[role="menu"]').length === 0);
+    st().openContextMenu(50, 60, 'mx1'); await sleep(40);
+    doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(20);
+    check('Escape closes the menu', st().contextMenu === null);
+    st().openContextMenu(50, 60, 'mx1'); await sleep(40);
+    calls.length = 0;
+    click(item('Save as template')); await sleep(20);
+    const tpl = await waitFor(() => $('[role="dialog"].ui-dialog'));
+    check('Save as template asks for a name first', !!tpl && /Save as template/.test(tpl.textContent));
+    if (tpl) { typeIn(tpl.querySelector('input'), 'My block'); tpl.querySelector('input').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); }
+    const saved = await waitFor(() => calls.find((c) => c.u.includes('save_template')));
+    check('…and the block is sent as a template under that name', !!saved && JSON.parse(saved.body).name === 'My block' && JSON.parse(saved.body).content_json.includes('"id":"mx1"'), saved && saved.body.slice(0, 120));
+  }
+
   console.log('\nCOLLECTIONS');
   {
     useStore.setState({ currentView: 'collections', userRole: 'admin', activePage: null });

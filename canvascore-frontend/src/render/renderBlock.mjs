@@ -11,6 +11,7 @@
 import { effectClasses, buttonHover } from './effects.mjs';
 import { ccPlain } from './blockRuntime.mjs';
 import { withTextPreset } from './typography.mjs';
+import { buttonPresetCss } from './kit.mjs';
 
 export function escapeHtml(s) {
   return String(s ?? '')
@@ -149,7 +150,7 @@ const SHARE_NETS = [
 ];
 // Multi-step Form field types: the Form block's, plus choices. Twin of CC_WIZARD_TYPES in compiler.php.
 const WIZARD_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date', 'select', 'radio', 'checkboxes', 'consent'];
-const WZ_INPUT = 'width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box;';
+const WZ_INPUT = 'width:100%; padding:12px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:#0f172a; box-sizing:border-box;';
 const WZ_BTN = 'padding:12px 24px; border-radius:8px; font:700 15px/1 inherit; cursor:pointer;';
 // An amount: rounded half up at `dec` decimals, thousands separators, "1,234.56" or "1.234,56" (eu), the currency before
 // or after (with a no-break space). Twin of cc_money() in compiler.php and of money() in blockRuntime.mjs.
@@ -359,7 +360,9 @@ function renderBlockBody(block, opts = {}) {
       const useGlobal = content.useGlobal !== false;
       const own = { ...styles };
       delete own.margin; delete own.textAlign; delete own.animation;
-      const globalStyle = useGlobal ? 'background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; ' : '';
+      // A button preset (Global Options › Buttons & fields) gives the colours and corners, as variables
+      const preset = buttonPresetCss(content.preset);
+      const globalStyle = preset ? preset + 'padding: 12px 24px; ' : (useGlobal ? 'background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; ' : '');
       const hv = buttonHover({ bg: content.btnHoverBg, color: content.btnHoverColor, border: content.btnHoverBorder, effect: content.btnEffect });
       const btnStyle = 'display:inline-block; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; ' + globalStyle + buildInlineStyle(own) + escapeHtml(hv.vars);
       return customCss + `<div id="${innerId}" class="cc-btn-wrap${animClass}${innerClass}" style="text-align:${align}; margin:${margin};">\n<a href="${url}" class="cc-btn${hv.cls}" style="${btnStyle}">${text}</a>\n</div>\n`;
@@ -388,7 +391,9 @@ function renderBlockBody(block, opts = {}) {
         const bUrl = escapeHtml(resolveInternalUrl(btn.url));
         const hv = buttonHover({ bg: btn.hoverBg, color: btn.hoverColor, border: btn.hoverBorder, effect: btn.effect });
         const bBorder = btn.borderColor ? `2px solid ${escapeHtml(btn.borderColor)}` : 'none';
-        buttonsHtml += `<a href="${bUrl}" class="cc-btn${hv.cls}" style="display:inline-block; padding:14px 28px; background:${escapeHtml(btn.bgColor)}; color:${escapeHtml(btn.textColor)}; border-radius:${escapeHtml(btn.borderRadius)}; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); border:${bBorder}; box-sizing:border-box; ${escapeHtml(hv.vars)}">${escapeHtml(btn.text)}</a>`;
+        // a button preset (Global Options › Buttons & fields) replaces the button's own colours and corners
+        const look = buttonPresetCss(btn.preset) || `background:${escapeHtml(btn.bgColor)}; color:${escapeHtml(btn.textColor)}; border-radius:${escapeHtml(btn.borderRadius)}; border:${bBorder}; `;
+        buttonsHtml += `<a href="${bUrl}" class="cc-btn${hv.cls}" style="display:inline-block; padding:14px 28px; ${look}text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; ${escapeHtml(hv.vars)}">${escapeHtml(btn.text)}</a>`;
       }
       buttonsHtml += `</div>`;
       return customCss + `<section id="${innerId}" class="cc-hero${animClass}${innerClass}" style="${styleAttr} ${bg} min-height:${minHeight}; display:flex; flex-direction:column; justify-content:center;">\n<div>\n${opts.fields ? `<div${field('title', 'Title')}>${title}</div>` : title}\n<div style="margin:20px 0;"${field('subtitle', 'Subtitle')}>${subtitle}</div>\n${buttonsHtml}\n</div>\n</section>\n`;
@@ -503,8 +508,8 @@ function renderBlockBody(block, opts = {}) {
         const name = 'field_' + i;
         fieldsHtml += `<input type="hidden" name="_label_${name}" value="${fLabel}">\n`;
         fieldsHtml += `<div style="margin-bottom:15px;"><label style="display:block; margin-bottom:5px; font-weight:600;">${fLabel}</label>`;
-        if (fType === 'textarea') fieldsHtml += `<textarea name="${name}" ${req} rows="4" style="width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; background:#fff; box-sizing:border-box;"></textarea>`;
-        else fieldsHtml += `<input type="${fType}" name="${name}" ${req} style="width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; background:#fff; box-sizing:border-box;">`;
+        if (fType === 'textarea') fieldsHtml += `<textarea name="${name}" ${req} rows="4" style="width:100%; padding:12px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 6px); font-family:inherit; background:var(--cc-field-bg, #fff); box-sizing:border-box;"></textarea>`;
+        else fieldsHtml += `<input type="${fType}" name="${name}" ${req} style="width:100%; padding:12px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 6px); font-family:inherit; background:var(--cc-field-bg, #fff); box-sizing:border-box;">`;
         fieldsHtml += `</div>\n`;
       });
       return customCss + `<div id="${innerId}" class="cc-form-block${animClass}${innerClass}"${styleString}>\n<div style="margin-bottom:20px;"${field('title', 'Form title')}>${title}</div>\n<form id="${formId}" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST">\n<input type="hidden" name="_form" value="${formId}">\n<input type="hidden" name="_success" value="${successMsg}">\n<input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">\n${fieldsHtml}<button type="submit" style="padding:12px 24px; background:var(--brand-color, #3b82f6); color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">${btnText}</button>\n</form>\n</div>\n`;
@@ -1030,7 +1035,7 @@ function renderBlockBody(block, opts = {}) {
       const limit = ccInt(content.limit, 10, 1, 50);
       html = `<div id="${innerId}" class="cc-search${animClass}${innerClass}" style="${styleAttr}" data-index="{{BASE_URL}}search-index.json" data-empty="${empty}" data-limit="${limit}">\n`;
       html += `<form class="cc-search-form" role="search" style="display:flex; gap:8px; flex-wrap:wrap;">\n`;
-      html += `<input type="search" name="q" aria-label="${ph}" placeholder="${ph}" style="flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:inherit; box-sizing:border-box;">\n`;
+      html += `<input type="search" name="q" aria-label="${ph}" placeholder="${ph}" style="flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:inherit; box-sizing:border-box;">\n`;
       html += `<button type="submit" style="padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;">${btn}</button>\n`;
       html += `</form>\n<div class="cc-search-results" aria-live="polite" style="margin-top:16px;"></div>\n</div>\n`;
       return customCss + html;
@@ -1668,7 +1673,7 @@ function renderBlockBody(block, opts = {}) {
       const askName = c.askName === true;
       const successMsg = ccStr(c.successMsg).trim() || 'Thank you for subscribing!';
       const formId = c.customId ? 'f_' + String(c.customId).replace(/[^a-zA-Z0-9_-]/g, '') : 'f_' + String(block.id ?? '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
-      const input = `padding:12px 14px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; color:#0f172a; box-sizing:border-box; min-width:0; ${inline ? 'flex:1 1 200px;' : 'width:100%;'}`;
+      const input = `padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:#0f172a; box-sizing:border-box; min-width:0; ${inline ? 'flex:1 1 200px;' : 'width:100%;'}`;
       let fi = 0, fields = '';
       if (askName) { fields += `<input type="hidden" name="_label_field_${fi}" value="${escapeHtml(nameLabel)}"><input type="text" name="field_${fi}" required autocomplete="name" aria-label="${escapeHtml(nameLabel)}" placeholder="${text(c.namePlaceholder, nameLabel, 100)}" style="${input}">`; fi++; }
       fields += `<input type="hidden" name="_label_field_${fi}" value="${escapeHtml(emailLabel)}"><input type="email" name="field_${fi}" required autocomplete="email" aria-label="${escapeHtml(emailLabel)}" placeholder="${text(c.placeholder, emailLabel, 100)}" style="${input}">`; fi++;

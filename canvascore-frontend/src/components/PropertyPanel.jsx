@@ -19,7 +19,7 @@ import { confirmDialog, promptDialog } from '../ui/dialog';
 const TABS = [['content', 'Content', Sliders], ['style', 'Style', Palette], ['advanced', 'Advanced', Shield]];
 
 export default function PropertyPanel() {
-  const { blocks, selectedBlockId, setSelectedBlockId, updateBlock, removeBlock, activePage, updateActivePage, pages, fetchTemplates, enterMasterEditMode, saveAsMaster, userRole, duplicateBlock, copyBlock, moveBlockBy, viewport } = useStore();
+  const { blocks, selectedBlockId, setSelectedBlockId, updateBlock, removeBlock, activePage, updateActivePage, pages, enterMasterEditMode, saveAsMaster, userRole, duplicateBlock, copyBlock, moveBlockBy, viewport } = useStore();
 
   // Blocks from templates, imports or older pages may have no "content"/"styles" (e.g. SECTION/CONTAINER):
   // the panel reads them directly, so it always gets objects (a crash here blanks the whole editor).
@@ -34,14 +34,8 @@ export default function PropertyPanel() {
   const coverInputRef = useRef(null);
   useEffect(() => { fetch('api.php?action=get_collections').then(r => r.json()).then(d => { if (Array.isArray(d)) setCollections(d); }).catch(() => {}); }, []);
 
-  const handleSaveTemplate = async () => {
-    const name = await promptDialog({ title: 'Save as template', message: 'A reusable copy of this block, under Add › My templates.', label: 'Template name', placeholder: 'e.g. Pricing table', confirmLabel: 'Save template' });
-    if (!name || name.trim() === '') return;
-    try {
-      await fetch('api.php?action=save_template', { method: 'POST', body: JSON.stringify({ name, content_json: JSON.stringify(selectedBlock) }) });
-      fetchTemplates(); notify(`Template "${name}" saved. Find it under Add › My templates.`);
-    } catch { notify('Could not save the template.', 'error'); }
-  };
+  // one implementation, shared with the canvas menu (store: saveBlockAsTemplate)
+  const handleSaveTemplate = () => useStore.getState().saveBlockAsTemplate(selectedBlock.id);
   const handleCreateMaster = async () => {
     const name = await promptDialog({ title: 'Make a global master', message: 'The block becomes shared: edit it once and it changes on every page that uses it.', label: 'Master name', placeholder: 'e.g. Main Header', confirmLabel: 'Create master' });
     if (!name || name.trim() === '') return;

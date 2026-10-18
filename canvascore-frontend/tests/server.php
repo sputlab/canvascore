@@ -87,6 +87,14 @@ $blk = cc_with_text_preset(['textPreset' => 'h2', 'fontSize' => '', 'color' => '
 check('a block with a text preset gets the preset variables; its own values win, emptied ones fall back', json_encode($blk) === '{"fontFamily":"var(--cc-type-h2-font)","fontSize":"var(--cc-type-h2-size)","fontWeight":"var(--cc-type-h2-weight)","lineHeight":"var(--cc-type-h2-line)","color":"red"}', json_encode($blk));
 check('…an unknown text preset is ignored (and never printed as a CSS property)', cc_with_text_preset(['textPreset' => 'nope', 'color' => 'red']) === ['color' => 'red']);
 
+echo "\nBUTTON AND FIELD STYLES\n";
+$kit = cc_kit(['buttonStyles' => ['primary' => ['bg' => '#112233', 'text' => 'red;}body{', 'radius' => '999px'], 'outline' => ['border' => 'var(--cc-color-accent, #f59e0b)', 'bg' => 'transparent'], 'nope' => ['bg' => '#000']],
+    'fieldStyle' => ['bg' => '#fafafa', 'border' => 'javascript:x', 'radius' => '4px;']]);
+// the same literals as the JavaScript test (ui-shell.mjs)
+check('button presets and field style: only valid values are kept, in a fixed order', json_encode($kit) === '{"buttons":{"primary":{"bg":"#112233","radius":"999px"},"outline":{"bg":"transparent","border":"var(--cc-color-accent, #f59e0b)"}},"field":{"bg":"#fafafa"}}', json_encode($kit));
+check('a button that picks a preset gets its variables, with the built-in look as fallback', cc_button_preset_css('primary') === "background: var(--cc-btn-primary-bg, var(--brand-color, #3b82f6)); color: var(--cc-btn-primary-text, #ffffff); border: 2px solid var(--cc-btn-primary-border, transparent); border-radius: var(--cc-btn-primary-radius, 6px); " && cc_button_preset_css('nope') === '');
+check('the site\'s button presets and field style as CSS variables (only the values that are set)', cc_kit_css($kit, ':root') === ':root{--cc-btn-primary-bg: #112233; --cc-btn-primary-radius: 999px; --cc-btn-outline-bg: transparent; --cc-btn-outline-border: var(--cc-color-accent, #f59e0b); --cc-field-bg: #fafafa;}' && cc_kit_css(cc_kit([]), ':root') === '');
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

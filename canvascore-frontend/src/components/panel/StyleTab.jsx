@@ -3,6 +3,7 @@ import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, Palette, Type } 
 import { PanelAccordion, SpacingControl, ColorInput } from './fields';
 import { handleNumericKey, labelStyle, inputStyle } from './helpers';
 import DeviceBar from './DeviceBar';
+import CopyPasteStyle from './CopyPasteStyle';
 import { blockLabel } from '../../editor/blockCatalog';
 import { TYPE_PRESETS } from '../../render/typography.mjs';
 
@@ -28,6 +29,8 @@ export default function StyleTab({ ctx }) {
         These styles apply to the whole {blockLabel(selectedBlock.type)} block. Its buttons have their own colours and style in the <strong>Content</strong> tab.
       </p>
     )}
+
+    <CopyPasteStyle block={selectedBlock} />
 
     <PanelAccordion title="Size & Dimensions" icon={Layout} defaultOpen={false}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>

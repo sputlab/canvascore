@@ -10,6 +10,7 @@ import { initCodeBlock, initShareBlock, initTocBlock, initCalcBlock, initWizardB
 import { safeHtml } from '../utils/safeHtml';
 import { forViewport } from '../editor/devicePreview';
 import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
+import BlockHandles from './BlockHandles';
 
 const CONTAINERS = CONTAINER_TYPES;
 // Blocks whose canonical HTML is interactive in the canvas too (native details/radio, no JS):
@@ -138,6 +139,15 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
   const commitField = useCallback((key, value) => {
     updateBlock(block.id, { content: { ...block.content, [key]: value } });
   }, [block.id, block.content, updateBlock]);
+
+  // Right-click: the block is selected and its menu opens (the innermost block of a container gets it)
+  const handleContextMenu = (e) => {
+    if (isMasterPreview) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedBlockId(block.id);
+    useStore.getState().openContextMenu(e.clientX, e.clientY, block.id);
+  };
 
   const handleContentChange = (key, value) => {
     updateBlock(block.id, { content: { ...block.content, [key]: value } });
@@ -273,8 +283,9 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
   };
 
   return (
-    <div ref={(el) => { setNodeRef(el); frameRef.current = el; }} style={wrapperStyle} onClick={handleClick}>
+    <div ref={(el) => { setNodeRef(el); frameRef.current = el; }} style={wrapperStyle} onClick={handleClick} onContextMenu={handleContextMenu}>
       {dragHandle}
+      {isSelected && !isDragging && block.type !== 'MASTER' && <BlockHandles block={block} frameRef={frameRef} />}
       {hiddenHere && <div className="cc-hidden-badge" style={{ position: 'absolute', top: 4, right: 4, zIndex: 40, background: '#334155', color: '#f8fafc', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', pointerEvents: 'none' }}>Hidden on {DEVICE_NAMES[viewport]}</div>}
       {block.content?.customCss && <style>{String(block.content.customCss).replace(/__THIS__/g, `#${innerId}`)}</style>}
       {renderBody()}

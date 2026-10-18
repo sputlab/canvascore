@@ -10,6 +10,34 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-18 — Button and field presets, copy & paste style, on-canvas handles
+
+### Added
+- **Button presets** (Global Options › **Buttons & fields**): **Primary**, **Secondary** and **Outline**, each with a
+  background, a text colour, a border and a corner radius, colours can be global colours. The Button block (Content
+  tab) and every button of a Hero pick one with **Button preset**; the buttons that use a preset follow it when it changes.
+  The colours set in a block's own Colors section still win.
+- **Field style** (Global Options › Buttons & fields): the background, border and corner radius of the input fields of
+  forms, wizards, newsletter sign-ups and site search. Without a value, the fields keep their look.
+- **Copy & paste style** (an accordion at the top of the Style tab): copy the look of a block (its styles and its tablet
+  and phone overrides), paste it onto this block, or onto any other blocks of the page, nested ones too, ticked from a
+  list; **Select all … blocks** ticks every block of a type. A paste is one undo step.
+- **Reset to global style**: removes a block's own styles and device overrides so it follows the site's styles again
+  (it keeps its text style, its entrance animation and its hidden devices). It asks first.
+- **On-canvas handles** on the selected block: drag the margin (outside its edges), the padding (inside), the width
+  (right edge) and the height (bottom edge). Values are set for the device being previewed, a side you don't drag keeps
+  its value (a centred block stays centred), and each drag is one undo step. The arrow keys nudge a focused handle
+  (Shift: 10 px).
+- **Right-click menu** on a block: Duplicate, Move up, Move down, Copy style, Paste style and Save as template.
+
+### Changed
+- **Save as template** is one action in the store, shared by the settings panel header and the canvas menu.
+- Copy & paste style lists every other block of the page as a target, instead of only blocks of the same type.
+
+### Documentation
+- The user guide, block reference, administrator guide and developer guide cover the text styles, global colours,
+  button presets and field style, copy & paste style, the canvas handles and the block menu. The manuals index is at 0.18.0.
+
 ## [0.17.0] - 2026-10-17 — Styles per device, global colours and text styles
 
 ### Added

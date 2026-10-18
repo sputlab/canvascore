@@ -367,6 +367,56 @@ function cc_with_text_preset($styles) {
     return $out;
 }
 
+// ---------------------------------------------------------------------------
+// Button and field styles (Global Options › Buttons & fields), reused across blocks: button presets (primary,
+// secondary, outline) as CSS variables (--cc-btn-<id>-<prop>), and the field style (--cc-field-<prop>) of the form
+// inputs. Mirrors src/render/kit.mjs.
+// ---------------------------------------------------------------------------
+const CC_BTN_PRESETS = ['primary', 'secondary', 'outline'];
+const CC_BTN_PROPS = ['bg', 'text', 'border', 'radius'];
+const CC_FIELD_PROPS = ['bg', 'border', 'radius'];
+// The built-in look of each preset: background, text, border, radius
+const CC_BTN_DEFAULTS = [
+    'primary' => ['var(--brand-color, #3b82f6)', '#ffffff', 'transparent', '6px'],
+    'secondary' => ['#0f172a', '#ffffff', 'transparent', '6px'],
+    'outline' => ['transparent', 'var(--brand-color, #3b82f6)', 'var(--brand-color, #3b82f6)', '6px'],
+];
+// One value of one property, or '' when it is not valid
+function cc_kit_clean($prop, $v) {
+    $s = trim(is_scalar($v) ? (string)$v : '');
+    if ($prop === 'radius') return preg_match('/^\d{1,3}(\.\d{1,2})?(px|rem|em|%)?$/', $s) ? $s : '';
+    if ($s === 'transparent') return $s;
+    if (preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $s)) return strtolower($s);
+    return preg_match(CC_COLOR_REF, $s) ? $s : '';
+}
+// The tidy form of the saved styles: ['buttons' => [id => [bg, text, border, radius]], 'field' => [bg, border, radius]]
+function cc_kit($settings) {
+    $settings = is_array($settings) ? $settings : [];
+    $raw = is_array($settings['buttonStyles'] ?? null) ? $settings['buttonStyles'] : [];
+    $pick = function ($src, $props) {
+        $o = [];
+        if (is_array($src)) foreach ($props as $k) { $v = cc_kit_clean($k, $src[$k] ?? ''); if ($v !== '') $o[$k] = $v; }
+        return $o;
+    };
+    $buttons = [];
+    foreach (CC_BTN_PRESETS as $id) { $o = $pick($raw[$id] ?? null, CC_BTN_PROPS); if ($o) $buttons[$id] = $o; }
+    return ['buttons' => $buttons, 'field' => $pick($settings['fieldStyle'] ?? null, CC_FIELD_PROPS)];
+}
+// The declarations of a button that picks a preset ('' for an unknown one)
+function cc_button_preset_css($id) {
+    if (!in_array($id, CC_BTN_PRESETS, true)) return '';
+    [$bg, $text, $border, $radius] = CC_BTN_DEFAULTS[$id];
+    return "background: var(--cc-btn-{$id}-bg, {$bg}); color: var(--cc-btn-{$id}-text, {$text}); "
+        . "border: 2px solid var(--cc-btn-{$id}-border, {$border}); border-radius: var(--cc-btn-{$id}-radius, {$radius}); ";
+}
+// The variables for a scope (':root' on published pages, '.cc-canvas' in the editor): only the values that are set
+function cc_kit_css($kit, $scope) {
+    $vars = [];
+    foreach (CC_BTN_PRESETS as $id) foreach (CC_BTN_PROPS as $p) { $v = $kit['buttons'][$id][$p] ?? ''; if ($v !== '') $vars[] = "--cc-btn-{$id}-{$p}: {$v};"; }
+    foreach (CC_FIELD_PROPS as $p) { $v = $kit['field'][$p] ?? ''; if ($v !== '') $vars[] = "--cc-field-{$p}: {$v};"; }
+    return $vars ? $scope . '{' . implode(' ', $vars) . '}' : '';
+}
+
 // Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
 // (a page published there would replace or redirect the admin, the images or the data).
 function cc_reserved_slugs() {

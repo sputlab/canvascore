@@ -580,6 +580,8 @@ Every page, feed and data file the publisher writes stays inside the site folder
 name (`.html`, `.xml`, `.json` or `.txt`); anything else counts as a file that could not be
 written.
 
+The Google Fonts link on every page loads the site font and each font chosen for a text style (Global Options › Text styles). Visitors' browsers therefore need access to `fonts.googleapis.com`, as before.
+
 ### 7.2 Removal of stale pages
 
 After a fully successful publish, CanvasCore compares the files it just wrote with the

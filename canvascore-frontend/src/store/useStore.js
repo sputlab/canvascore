@@ -3,7 +3,7 @@ import { normalizePalette } from '../editor/palette';
 import { flushDrafts, setDraftUser } from '../session/drafts';
 import { CONTAINER_TYPES } from '../editor/blockCatalog';
 import { notify } from '../ui/notify';
-import { confirmDialog } from '../ui/dialog';
+import { confirmDialog, promptDialog } from '../ui/dialog';
 let paletteRequest = null;   // one settings request for all the colour fields
 
 // Unique ids even for many blocks created in the same millisecond (templates, masters, imports)
@@ -32,7 +32,7 @@ const removeNode = (blocks, id) => {
 };
 
 const isContainerNode = (b) => Array.isArray(b.children) || CONTAINER_TYPES.includes(b.type);
-const findNodeById = (list, id) => {
+export const findNodeById = (list, id) => {
   for (const b of list || []) { if (b.id === id) return b; const r = findNodeById(b.children, id); if (r) return r; }
   return null;
 };
@@ -154,6 +154,14 @@ export const readBlockClipboard = () => {
   try { const v = JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || 'null'); return v && v.block && v.block.type ? v : null; } catch { return null; }
 };
 
+// The ids of every block of a type on the page (nested blocks too), in page order
+export const blockIdsOfType = (blocks, type) => {
+  const out = [];
+  const walk = (list) => { for (const b of list || []) { if (b.type === type) out.push(b.id); walk(b.children); } };
+  walk(blocks);
+  return out;
+};
+
 export const useStore = create((set, get) => ({
   isAuthenticated: false,
   userRole: 'editor',
@@ -165,6 +173,7 @@ export const useStore = create((set, get) => ({
   serverVersion: null,
   palette: null,              // the global colours (Global Options), loaded once by the colour fields: [{id, name, value}]
   typography: null,           // the text styles (Global Options › Text styles), as normalizeTypography() returns them
+  kit: null,                  // button presets and the field style (Global Options › Buttons & fields), as normalizeKit() returns them
   branding: { siteName: '', faviconUrl: '' },   // site name + favicon (Global Options) for the login and the sidebar
   demo: null,   // demo mode only: { username, password, resetMinutes, nextResetIn, resetAt, maxNewPages, maxNewItems }
 
@@ -203,6 +212,7 @@ export const useStore = create((set, get) => ({
   },
   setPalette: (list) => set({ palette: Array.isArray(list) ? list : null }),
   setTypography: (t) => set({ typography: t && typeof t === 'object' ? t : null }),
+  setKit: (k) => set({ kit: k && typeof k === 'object' ? k : null }),
   loadPalette: () => {
     if (paletteRequest) return paletteRequest;
     paletteRequest = fetch('api.php?action=get_settings').then((r) => r.json())
@@ -537,6 +547,8 @@ export const useStore = create((set, get) => ({
   // Restore an older version of the page's blocks (one undo step; saved only with Save Draft / Publish)
   replaceBlocks: (blocks) => set((state) => ({ ...pushHistory(state, Array.isArray(blocks) ? blocks : []), selectedBlockId: null })),
 
+  // The next edit starts a new undo step, even right after another one (a drag starts one of its own)
+  breakUndoMerge: () => { lastEdit.sig = null; },
   updateBlock: (id, updates) => set((state) => {
     const sig = id + '|' + Object.keys(updates || {}).map((k) => k + ':' + (updates[k] && typeof updates[k] === 'object' ? Object.keys(updates[k]).sort().join(',') : '')).join(';');
     const now = Date.now();
@@ -544,6 +556,58 @@ export const useStore = create((set, get) => ({
     const blocks = updateNode(state.blocks, id, updates);
     lastEdit.sig = sig; lastEdit.t = now; lastEdit.blocks = blocks;
     return merge ? { blocks, futureBlocks: [] } : pushHistory(state, blocks);
+  }),
+  // Copy style: the look of one block (its styles and its tablet and phone overrides), to paste onto others.
+  // Held in memory for the session; a paste is one undo step, however many blocks it changes.
+  styleClipboard: null,
+  // The right-click menu of a block on the canvas: where it opened and which block it is for (null when closed)
+  contextMenu: null,
+  openContextMenu: (x, y, blockId) => set({ contextMenu: { x, y, blockId } }),
+  closeContextMenu: () => set((state) => (state.contextMenu ? { contextMenu: null } : state)),
+  // Save as template: a reusable copy of a block, under Add › My templates (the name is asked first)
+  saveBlockAsTemplate: async (id) => {
+    const block = findNodeById(get().blocks, id);
+    if (!block) return false;
+    const name = await promptDialog({ title: 'Save as template', message: 'A reusable copy of this block, under Add › My templates.', label: 'Template name', placeholder: 'e.g. Pricing table', confirmLabel: 'Save template' });
+    if (!name || name.trim() === '') return false;
+    try {
+      await fetch('api.php?action=save_template', { method: 'POST', body: JSON.stringify({ name, content_json: JSON.stringify(block) }) });
+      get().fetchTemplates();
+      notify(`Template "${name}" saved. Find it under Add › My templates.`);
+      return true;
+    } catch {
+      notify('Could not save the template.', 'error');
+      return false;
+    }
+  },
+  copyStyle: (id) => {
+    const b = findNodeById(get().blocks, id);
+    if (!b) return null;
+    const clip = { type: b.type, styles: { ...(b.styles || {}) }, responsive: b.responsive ? JSON.parse(JSON.stringify(b.responsive)) : undefined };
+    set({ styleClipboard: clip });
+    return clip;
+  },
+  pasteStyle: (ids) => {
+    const clip = get().styleClipboard;
+    if (!clip || !Array.isArray(ids) || !ids.length) return 0;
+    set((state) => {
+      let blocks = state.blocks;
+      for (const id of ids) {
+        blocks = updateNode(blocks, id, { styles: { ...clip.styles }, responsive: clip.responsive ? JSON.parse(JSON.stringify(clip.responsive)) : undefined });
+      }
+      return pushHistory(state, blocks);
+    });
+    return ids.length;
+  },
+  // Reset to the global style: the block's own styles and device overrides go, so it follows the site's presets again.
+  // Kept: its text style (a preset it picked), its entrance animation and its hidden devices (visibility, not style).
+  resetStyle: (id) => set((state) => {
+    const b = findNodeById(state.blocks, id);
+    if (!b) return state;
+    const keep = {};
+    for (const k of ['textPreset', 'animation']) if (b.styles && b.styles[k] !== undefined) keep[k] = b.styles[k];
+    const hide = b.responsive && Array.isArray(b.responsive.hide) && b.responsive.hide.length ? { hide: [...b.responsive.hide] } : undefined;
+    return pushHistory(state, updateNode(state.blocks, id, { styles: keep, responsive: hide }));
   }),
   removeBlock: (id) => set((state) => {
     const historyState = pushHistory(state, removeNode(state.blocks, id));
