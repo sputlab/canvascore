@@ -3,7 +3,7 @@ import { AlignLeft, AlignCenter, AlignRight, Layout, BoxSelect, Palette, Type } 
 import { PanelAccordion, SpacingControl, ColorInput } from './fields';
 import { handleNumericKey, labelStyle, inputStyle } from './helpers';
 import DeviceBar from './DeviceBar';
-import StyleToolbar from './StyleToolbar';
+import CopyPasteStyle from './CopyPasteStyle';
 import { blockLabel } from '../../editor/blockCatalog';
 import { TYPE_PRESETS } from '../../render/typography.mjs';
 
@@ -23,14 +23,14 @@ export default function StyleTab({ ctx }) {
   return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
 
-    <StyleToolbar block={selectedBlock} />
-
     <DeviceBar block={selectedBlock} />
     {OWN_BUTTONS.includes(selectedBlock.type) && (
       <p className="cc-style-note" style={{ margin: '0 0 6px', padding: '8px 10px', borderRadius: 8, background: 'rgba(56,189,248,.08)', border: '1px solid rgba(56,189,248,.25)', fontSize: 11.5, color: '#cbd5e1', lineHeight: 1.45 }}>
         These styles apply to the whole {blockLabel(selectedBlock.type)} block. Its buttons have their own colours and style in the <strong>Content</strong> tab.
       </p>
     )}
+
+    <CopyPasteStyle block={selectedBlock} />
 
     <PanelAccordion title="Size & Dimensions" icon={Layout} defaultOpen={false}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>

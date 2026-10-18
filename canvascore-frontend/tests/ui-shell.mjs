@@ -882,30 +882,52 @@ try {
 
   console.log('\nCOPY STYLE');
   {
-    const byId = (id) => st().blocks.find((b) => b.id === id);
+    const byId = (id) => (function find(list) { for (const b of list) { if (b.id === id) return b; const r = b.children && find(b.children); if (r) return r; } return null; })(st().blocks);
+    const openCP = async () => { if (!btn('Copy style')) { click(btnHas('Copy & paste style')); await sleep(30); } };
     const look = { color: 'red', margin: '4px' };
-    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false, pastBlocks: [], futureBlocks: [],
+    const hero = (id, styles, n) => ({ id, type: 'HERO', styles, content: { title: `<h1>${n}</h1>`, buttons: [] } });
+    useStore.setState({ currentView: 'editor', activePage: { ...PAGES[2] }, viewport: 'desktop', userRole: 'admin', isEditingMaster: false, pastBlocks: [], futureBlocks: [], styleClipboard: null,
       blocks: [{ id: 'cs1', type: 'TEXT', styles: { ...look }, responsive: { tablet: { fontSize: '12px' } }, content: { text: '<p>a</p>' } },
         { id: 'cs2', type: 'TEXT', styles: {}, content: { text: '<p>b</p>' } },
         { id: 'cs3', type: 'TEXT', styles: { padding: '9px' }, content: { text: '<p>c</p>' } },
-        { id: 'cs4', type: 'IMAGE', styles: {}, content: { src: 'a.jpg' } }],
+        { id: 'cs4', type: 'IMAGE', styles: {}, content: { src: 'a.jpg' } },
+        { id: 'sec1', type: 'SECTION', styles: {}, content: {}, children: [hero('hr1', { padding: '10px' }, 1), hero('hr2', {}, 2)] },
+        hero('hr3', { color: 'blue' }, 3)],
       selectedBlockId: 'cs1' });
     mount(React.createElement(PropertyPanel)); await sleep(60);
     click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Style')); await sleep(30);
-    check('the Style tab has the copy, paste and reset actions', !!btn('Copy style') && !!btn('Paste style') && !!btn('Reset to global style'));
-    check('paste is off until a style is copied', btn('Paste style').disabled === true || btn('Paste style').hasAttribute('disabled'));
+    await openCP();
+    check('the Style tab has a "Copy & paste style" accordion', !!btnHas('Copy & paste style'));
+    check('paste is off until a style is copied', !!btn('Paste onto this block').disabled);
     click(btn('Copy style')); await sleep(20);
-    useStore.setState({ selectedBlockId: 'cs2' }); await sleep(40);
-    check('…and "Paste style" is on once one is copied', !btn('Paste style').disabled && !btn('Paste style').hasAttribute('disabled'));
-    click(btn('Paste style')); await sleep(30);
-    check('paste onto one block: its styles and tablet overrides are the copied ones', JSON.stringify(byId('cs2').styles) === JSON.stringify(look) && byId('cs2').responsive.tablet.fontSize === '12px', JSON.stringify(byId('cs2')));
-    useStore.setState({ selectedBlockId: 'cs3' }); await sleep(40);
-    check('"Paste to all Text blocks" appears when there are more blocks of the type', !!btnHas('Paste to all'));
-    click(btnHas('Paste to all')); await sleep(30);
-    check('…it pastes onto every block of the type, and not onto other blocks', JSON.stringify(byId('cs3').styles) === JSON.stringify(look) && JSON.stringify(byId('cs4').styles) === '{}');
+    check('…and on once one is copied', !btn('Paste onto this block').disabled);
+    check('the other blocks of the page are listed, nested ones too (Hero 1 is inside a section)', !!$('input[aria-label="Paste onto Hero 1"]') && !!$('input[aria-label="Paste onto Hero 3"]') && !!$('input[aria-label="Paste onto Text 2"]'));
+
+    useStore.setState({ selectedBlockId: 'cs2' }); await sleep(60);
+    await openCP();
+    click(btn('Paste onto this block')); await sleep(30);
+    check('paste onto this block: its styles and tablet overrides are the copied ones', JSON.stringify(byId('cs2').styles) === JSON.stringify(look) && byId('cs2').responsive.tablet.fontSize === '12px', JSON.stringify(byId('cs2')));
+
+    // copy from the blue Hero 3, then paste onto Hero 1 (nested in a section) and Hero 2, from another block
+    useStore.setState({ selectedBlockId: 'hr3' }); await sleep(60);
+    await openCP();
+    click(btn('Copy style')); await sleep(20);
+    useStore.setState({ selectedBlockId: 'cs1' }); await sleep(60);
+    await openCP();
+    click($('input[aria-label="Paste onto Hero 1"]')); await sleep(20);
+    click($('input[aria-label="Paste onto Hero 2"]')); await sleep(20);
+    check('two boxes ticked: the button says how many', !!btnHas('Paste onto selected (2)'));
+    click(btnHas('Paste onto selected (2)')); await sleep(30);
+    check('…the ticked blocks (a nested hero too) take the copied style', JSON.stringify(byId('hr1').styles) === '{"color":"blue"}' && JSON.stringify(byId('hr2').styles) === '{"color":"blue"}', JSON.stringify([byId('hr1').styles, byId('hr2').styles]));
+    check('…the Hero that was not ticked, and the text, keep theirs', JSON.stringify(byId('hr3').styles) === '{"color":"blue"}' && JSON.stringify(byId('cs3').styles) === '{"padding":"9px"}');
     useStore.getState().undo(); await sleep(20);
-    check('…and is ONE undo step', JSON.stringify(byId('cs3').styles) === '{"padding":"9px"}' && JSON.stringify(byId('cs2').styles) === JSON.stringify(look), JSON.stringify([byId('cs2').styles, byId('cs3').styles]));
-    useStore.setState({ selectedBlockId: 'cs1' }); await sleep(40);
+    check('…and that paste is ONE undo step', JSON.stringify(byId('hr1').styles) === '{"padding":"10px"}' && JSON.stringify(byId('hr2').styles) === '{}', JSON.stringify([byId('hr1').styles, byId('hr2').styles]));
+
+    click(btnHas('Select all Text blocks')); await sleep(30);
+    check('"Select all Text blocks" ticks the other text blocks', !!btnHas('Paste onto selected (2)') && !$('input[aria-label="Paste onto Image 1"]').checked);
+    click(btnHas('Paste onto selected (2)')); await sleep(30);
+    check('…and they take the style that is copied now (the blue Hero\'s)', JSON.stringify(byId('cs2').styles) === '{"color":"blue"}' && JSON.stringify(byId('cs3').styles) === '{"color":"blue"}', JSON.stringify([byId('cs2').styles, byId('cs3').styles]));
+
     click(btn('Reset to global style')); await sleep(20);
     const dlg = await waitFor(() => btn('Reset style'));
     check('reset asks first, in the app\'s dialog', !!dlg);
