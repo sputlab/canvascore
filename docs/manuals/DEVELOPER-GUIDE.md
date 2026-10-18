@@ -455,6 +455,33 @@ parents behave like on the site.
 | `escapeHtml(s)` | `htmlspecialchars()` | every attribute and plain-text value |
 | `ccColor`, `ccNum`, `ccFmtNum`, `ccExtUrl`, `ccLines`, `ccBr`, `ccInitials`, `ccEnc` | `cc_color`, `cc_num`, `cc_fmt_num`, `cc_ext_url`, `cc_lines`, `cc_br`, `cc_initials`, `cc_enc` | twins for the content blocks |
 | `resolveBlockUrl` | `cc_block_url` | internal URL → `{{BASE_URL}}…`, `mailto:`/`tel:` intact |
+| `normalizePalette`, `paletteVars`, `colorRef`, `resolveColor` (`src/editor/palette.js`) | `cc_palette`, `cc_palette_css`, `cc_is_color_ref` (`config.php`) | global colours: the five built-in ones first, then the custom ones; hex only; a colour field may store `var(--cc-color-<id>, <hex>)` |
+| `normalizeTypography`, `typeCanvasCss`, `withTextPreset` (`src/render/typography.mjs`) | `cc_typography`, `cc_type_css`, `cc_with_text_preset` (`config.php`) | text styles: known presets, fonts, sizes, weights and line heights only; a block's `textPreset` becomes `var(--cc-type-…)` values |
+| `normalizeKit`, `kitCss`, `buttonPresetCss`, `cleanKitValue` (`src/render/kit.mjs`) | `cc_kit`, `cc_kit_css`, `cc_button_preset_css`, `cc_kit_clean` (`config.php`) | button presets and the field style: colours (hex, `transparent` or a colour reference) and corner radii only |
+
+### Presets and global variables
+
+Global colours, text styles and button and field styles are CSS custom properties, so a change in Global Options
+reaches every block without republishing them one by one:
+
+| Variable | Set by | Used by |
+| --- | --- | --- |
+| `--cc-color-<id>` (and `--brand-color`, the Primary colour) | `cc_palette_css()` in `master.html` `{{COLOR_VARS}}` | any colour field that stores `var(--cc-color-<id>, <hex>)` |
+| `--cc-type-<preset>-font` / `-size` / `-weight` / `-line` | `cc_type_css()` in `{{TYPE_CSS}}`; the desktop values on `:root`, tablet and phone in `@media` | the site's `h1`–`h6`, `body`, `small`, `.cc-btn` rules; a block's text style (`cc_with_text_preset()`) |
+| `--cc-btn-<preset>-bg` / `-text` / `-border` / `-radius` | `cc_kit_css()` on `:root` | `cc_button_preset_css()`: a button that picks a preset |
+| `--cc-field-bg` / `-border` / `-radius` | `cc_kit_css()` on `:root` | the input fields of forms, wizards, newsletter and site search, each with its built-in value as the fallback |
+
+In the editor the same variables are written on `.cc-canvas` (`typeCanvasCss()` for the device being edited, and
+`kitCss()`), so the canvas shows what the site shows without the editor's own interface being restyled.
+
+Rules that keep this safe and in step:
+
+- A value that is not set emits nothing: the built-in look stays. Every fallback in a `var()` is the built-in look.
+- Colour and length values are validated on the server (`cc_kit_clean()`, `cc_type_clean()`) and in the editor
+  (`cleanKitValue()`, `cleanTypeValue()`); a value that is not a colour, a length or a known font is dropped at save time.
+- A text style or a button preset is stored as a name (`textPreset`, `preset`), never as CSS. The renderers turn it into
+  variables in both `renderBlock.mjs` and `compiler.php`, and `tests/parity.mjs` checks the two agree.
+- Fonts used by a text style are added to the Google Fonts link on every page (`rebuild_all.php`, `$families`).
 
 Escaping rules:
 
@@ -742,6 +769,25 @@ edits into **one** step, so typing in a field makes one undo step instead of one
 
 **Selection**: `selectedBlockId` / `setSelectedBlockId` (Esc deselects). `removeBlock` clears it when the
 selected block is deleted; `duplicateBlock` and `pasteBlock` select the new block.
+
+**Global options in the editor**: `palette`, `typography` and `kit` (button presets and field style) hold the normalised
+Global Options (`normalizePalette()`, `normalizeTypography()`, `normalizeKit()`). `Canvas` (`useSiteLook`) and
+`GlobalSettings` set them when they load and when the options are saved, so the editor follows a saved change at once.
+`loadPalette()` fetches the palette once for the colour fields that need it.
+
+**Style clipboard**: `styleClipboard` holds the style copied from a block (`{ type, styles, responsive }`), for the
+session only. `copyStyle(id)`, `pasteStyle(ids)` (one undo step for all the blocks) and `resetStyle(id)` (keeps the
+block's `textPreset`, `animation` and hidden devices) are used by the Copy & paste style accordion
+(`components/panel/CopyPasteStyle.jsx`) and by the canvas menu.
+
+**Canvas menu**: `contextMenu` (`{ x, y, blockId }` or `null`) is opened by `openContextMenu()` from a right-click on
+a block (`SortableBlock`) and drawn once, by `BlockContextMenu.jsx`, which closes it on Esc, a click outside, scroll
+or resize. `saveBlockAsTemplate(id)` asks for a name and posts the block to `save_template`; the Style tab and the
+menu both use it.
+
+**Drags and undo**: `breakUndoMerge()` makes the next edit a new undo step. The canvas handles
+(`components/BlockHandles.jsx`, maths in `editor/handles.js`) call it when a drag or a key press starts, so one drag
+is one step even though it writes on every move.
 
 **Master edit mode**: `enterMasterEditMode(masterId)` saves the page (`editingMaster.pageBackup`,
 `activePageBackup`) and loads the master as `blocks = [master]`. `exitMasterEditMode(true)` posts

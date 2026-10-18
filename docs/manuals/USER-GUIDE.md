@@ -247,6 +247,29 @@ When a block is selected, a small blue label with the block's type appears above
 
 You can also move the selected block one step up or down among its neighbours with **Alt+↑** and **Alt+↓** (**Option** on a Mac), or with the **Move up** and **Move down** arrows under the settings panel header.
 
+### Resizing and spacing on the canvas
+
+When a block is selected, small handles appear on its edges. Drag one to change the value; the number appears beside the handle while you drag.
+
+- **Orange handles, outside the block**: the **margin** (the space around it), on all four sides.
+- **Green handles, inside the block**: the **padding** (the space between its edge and its content), on all four sides.
+- **Blue handle on the right edge**: the **width**. **Blue handle on the bottom edge**: the **height**.
+
+The values are set for the device you are previewing (**Desktop**, **Tablet** or **Phone**, as in the Style tab). A side you don't drag keeps its value, so a block centred with **Block Alignment** stays centred when you change its padding. Each drag is one undo step: **Ctrl/Cmd+Z** takes the whole drag back.
+
+With the keyboard: press **Tab** until a handle is focused, then use the arrow keys along its direction (**Left** and **Right** for a side on the left or right, **Up** and **Down** for the others). Hold **Shift** to move 10 px instead of 1 px.
+
+### The block menu (right-click)
+
+Right-click a block on the canvas to open its menu. It selects the block first, and acts on that block:
+
+- **Duplicate**: a copy right below it (as **Ctrl/Cmd+D**).
+- **Move up** and **Move down**: one place among its neighbours (as **Alt+↑** and **Alt+↓**). Off when the block is already first or last among its neighbours.
+- **Copy style**, then **Paste style**: copy the look of the block and paste it onto this one. See [Copy & paste style](#style-tab).
+- **Save as template**: asks for a name and keeps a copy under **Add › My templates**.
+
+Press **Esc**, click elsewhere, or scroll the page to close the menu.
+
 ### Duplicating, copying and pasting blocks
 
 **Duplicate** makes a copy of the selected block, with everything inside it, right below the original. The copy is selected so you can change it straight away. Press **Ctrl/Cmd+D**, or click **Duplicate** in the settings panel (under the header) or on the block's row in **Layers**.
@@ -401,6 +424,16 @@ If the image has a description in the Media Library and the block's description 
 
 ### Style tab
 
+**Edit styles for: Desktop, Tablet, Phone.** At the top of the tab, this chooses the device you are styling. It is the same as the preview size in the editor. On **Desktop**, the values apply everywhere. On **Tablet** and **Phone**, they override the desktop values only on those screens (up to 1024 px and up to 767 px). A value set back to what the screen would get anyway is removed, and **Reset** gives a device the inherited styles again. Hidden devices are also set here, in **Advanced › Visibility**.
+
+**Copy & paste style** (an accordion at the top of the tab):
+- **Copy style** keeps this block's look: its styles, and its tablet and phone overrides.
+- **Paste onto this block** applies the copied look to this block.
+- The list of **other blocks on the page** (nested ones too, such as a Hero inside a section): tick the blocks to paste onto and press **Paste onto selected**. **Select all … blocks** ticks every block of the same type.
+- **Reset to global style** removes this block's own styles and device overrides, so it follows the site's styles again. It asks first. Its text style and its entrance animation stay, and so do the devices it is hidden on.
+
+A paste is one undo step. The copied look is kept until you copy another one.
+
 **Size & Dimensions**
 - **Width**, **Height**, **Max Width**, **Min Height**. Type values such as `100%`, `500px` or `50vh`.
 - **Block Alignment (Centering)**: places the block left, centered or right.
@@ -410,6 +443,7 @@ If the image has a description in the Media Library and the block's description 
 - Each has four boxes: TOP, RIGHT, BOT (bottom) and LEFT. You can use `px`, `rem` or `%`.
 
 **Typography**
+- **Text style**: a text style from **Global Options › Text styles** (Heading 1 to Heading 6, Body, Small or Button). The font, size, weight and line height come from it. The values you set below win over it.
 - **Font Size**, **Line Height**, **Font Weight**, **Text Transform**, **Text Color** and **Letter Spacing**.
 
 **Background & Alignment**
@@ -451,11 +485,14 @@ The **Button** block has its own settings in the **Content** tab:
 - **Button Settings**: **Use Global Style (Brand)**, **Button Size** (**Small**, **Medium**, **Large**), **Text** and **Link**. Pick a page from **Select internal page...** or type a **Custom URL...**.
 - **Colors**: **Background** (when Use Global Style is on, leave it empty to use the brand color), **Text color** and **Border**.
   - To make an **outline button**, set Background to **Transparent** and choose a Border and a Text color.
+- **Button preset**: **Custom** (the colours above), or **Primary**, **Secondary** or **Outline**. A preset gives the button the colours and corners of the site's button style (see [Buttons & fields](#buttons--fields)), and the buttons that use it follow it when it changes. The colours set in the **Colors** section win over the preset.
 - **Hover**: **Background on hover**, **Text color on hover**, **Border on hover** (only if the button has a border) and **Hover effect**.
 
 The **Hover effect** choices for buttons are: **Color change only**, **Lift**, **Grow**, **Press**, **Shadow**, **Glow**, **Shine sweep**, **Outline ring**, **Pulse**.
 
 **Hero buttons.** In a **Hero** block, open **Hero Buttons**. Each button has **Text**, **Link** and a **Style**: **Solid**, **Outline** or **Text only**. It also has **Background**, **Text color**, **Border**, **Corner radius** and an **ON HOVER** part with its own colors and **Effect** (the same list as above). Use **+ Add Button** to add one, and the arrows or bin to reorder or remove buttons.
+
+Each Hero button also has a **Button preset** (**Custom**, **Primary**, **Secondary** or **Outline**). With a preset, the button's colours and corner radius come from the site's button style, and the **Background**, **Text color**, **Border** and **Corner radius** fields of that button are not used.
 
 ---
 
@@ -784,9 +821,29 @@ Click **Global Options** in the sidebar for settings that apply to the whole sit
 
 ### Brand & typography
 
-- **Primary brand color**: used by buttons, links, the **Site** color in the text editor and the **Glow (brand color)** hover effect.
 - **Primary font (Google Fonts)**: the site's main font.
 - **Let the menu inherit the brand color on hover**: when it's off, the menu uses only its own colors from the Menu Builder.
+
+The brand color is set in **Global colours** below (its **Primary** colour).
+
+### Global colours
+
+The site's palette: five built-in colours, **Primary** (the brand colour, used by buttons, links, the **Site** colour in the text editor and the **Glow (brand color)** hover effect), **Secondary**, **Accent**, **Text** and **Background**. Rename a colour, change it with the swatch or type a hex value (such as `#1e293b`), and add or delete your own colours with **Add colour** and the bin icon. The built-in colours can't be deleted.
+
+Every colour field in the editor shows the palette as swatches, under **Global colours**. A field set to a global colour shows its name and follows the palette when you change it. **Unlink** keeps the colour it has now as a fixed colour.
+
+### Text styles
+
+Named text styles for the whole site: **Heading 1** to **Heading 6**, **Body**, **Small** and **Button**. For each one set the **Font**, **Size**, **Weight** and **Line height**. Leave a field empty to keep the browser's or the site's default for it.
+
+- The **Tablet** and **Phone** buttons above the table set the sizes and spacing for those screens. A tablet or phone value you leave empty uses the desktop one.
+- The headings, body text, small text and buttons of the site use these styles. A block uses one of them when you pick it in the **Style** tab, under **Typography › Text style**.
+- Sizes are CSS lengths such as `2.5rem` or `18px`. Line height is a number such as `1.2`.
+
+### Buttons & fields
+
+- **Button presets**: **Primary**, **Secondary** and **Outline**. For each, set the **Background**, the **Text** colour, the **Border** (leave it empty for no border) and the **Corner radius** (such as `6px` or `999px`). A button that uses a preset (see [Button colors and hover](#button-colors-and-hover)) follows it when you change it here.
+- **Form fields**: the **Background**, **Border** and **Corner radius** of the input boxes on your forms, wizards, newsletter sign-ups and site search. The text colour of the fields is not changed.
 
 ### Site identity & SEO
 

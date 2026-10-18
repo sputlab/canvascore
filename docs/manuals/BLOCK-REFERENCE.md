@@ -191,6 +191,7 @@ A link styled as a button.
 **Colors**
 - **Background**, **Text color** and **Border** (empty = no border). With **Use Global Style (Brand)** on, the field reads **Background (empty = brand color)**: new buttons leave it empty, so they follow your brand color.
 - For an outline button: set Background to transparent, then pick a Border and a Text color.
+- **Button preset** (Content tab, above **Button Size**): **Custom**, **Primary**, **Secondary** or **Outline**. A preset gives the button the colours and corners of the site's button style (Global Options › Buttons & fields), and it follows that style when it changes. The colours set in **Colors** win over the preset.
 
 **Hover**
 - **Background on hover**, **Text color on hover** and, when the button has a border, **Border on hover**.
@@ -288,6 +289,7 @@ The large banner at the top of a page: title, subtitle, buttons, optional backgr
 - **Style**: **Solid**, **Outline** or **Text only**, a quick starting look.
 - **Background**, **Text color**, **Border (empty = no border)**, **Corner radius (↑/↓)**.
 - **On hover**: **Background**, **Text color**, **Border** (only when the button has a border) and **Effect** (same list as the Button block).
+- **Button preset**: **Custom**, **Primary**, **Secondary** or **Outline**. With a preset, the button takes the site's button style (its colours and corner radius), and the fields above are not used for it.
 - **+ Add Button** adds a green "New Button".
 
 **On the canvas**: click the hero and type the title and subtitle directly.
