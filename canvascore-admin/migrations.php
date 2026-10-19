@@ -188,6 +188,12 @@ function cc_db_migrations() {
             }
             cc_sanitize_all_content($pdo);
         },
+
+        // v9 — custom fields per collection: the field definitions (collections.fields) and each item's values (field_values)
+        9 => function ($pdo) {
+            cc_add_col($pdo, 'collections', 'fields', "TEXT DEFAULT '[]'");
+            cc_add_col($pdo, 'collection_items', 'field_values', "TEXT DEFAULT '{}'");
+        },
     ];
 }
 

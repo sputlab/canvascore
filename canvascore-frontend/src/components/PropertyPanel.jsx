@@ -175,6 +175,8 @@ export default function PropertyPanel() {
     pickTo: (target) => () => setMediaPickerTarget({ type: 'into', ...target }),
     ARS: [['16 / 9', '16:9'], ['4 / 3', '4:3'], ['3 / 2', '3:2'], ['1 / 1', '1:1'], ['21 / 9', '21:9']],
     pages, collections, lstOf, lstPatch, lstRemove, lstAdd, lstMove, userRole,
+    // the custom fields of the collection item being edited (Item Field block)
+    fieldDefs: activePage?.__fieldDefs || [],
   };
 
   return (

@@ -779,6 +779,19 @@
         "padding": "20px 0"
       }
     },
+    "ITEM_FIELD": {
+      "content": {
+        "field": "",
+        "showLabel": false,
+        "decimals": 0,
+        "dateFormat": "long"
+      },
+      "styles": {
+        "width": "100%",
+        "margin": "0",
+        "padding": "8px 0"
+      }
+    },
     "BENTO": {
       "content": {
         "columns": 3,

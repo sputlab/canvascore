@@ -944,6 +944,62 @@ try {
     check('an "auto" side counts as 0 px when dragged', h.sidePx('auto') === 0 && h.sidePx('12px') === 12);
   }
 
+  console.log('\nCUSTOM FIELDS');
+  {
+    const CF = (await vite.ssrLoadModule('/src/components/CollectionFields.jsx')).default;
+    calls.length = 0;
+    mount(React.createElement(CF, { collection: { id: 'col_x', name: 'Team', slug: 'team', fields: [] }, collections: [], canEdit: true }));
+    await sleep(30);
+    click(btnHas('Add field')); await sleep(30);
+    typeIn($('input[aria-label="Field 1 label"]'), 'Colour'); await sleep(20);
+    const type = $('select[aria-label="Field 1 type"]');
+    type.value = 'choice'; type.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
+    const ch = $('textarea[aria-label="Colour choices"]');
+    check('a choice field has a box for its choices', !!ch);
+    if (ch) { Object.getOwnPropertyDescriptor(w.HTMLTextAreaElement.prototype, 'value').set.call(ch, 'red\nBlue | Azure'); ch.dispatchEvent(new w.Event('input', { bubbles: true })); }
+    await sleep(20);
+    click(btnHas('Save fields')); await sleep(20);
+    const sentF = await waitFor(() => calls.find((c) => c.u.includes('save_collection')));
+    const bodyF = sentF ? JSON.parse(sentF.body) : {};
+    check('saving sends the fields: a key from the label, and the choices as values and labels', bodyF.fields && bodyF.fields.length === 1 && bodyF.fields[0].key === 'colour' && bodyF.fields[0].type === 'choice'
+      && JSON.stringify(bodyF.fields[0].options) === '[{"value":"red","label":"red"},{"value":"blue","label":"Azure"}]' && !('_choices' in bodyF.fields[0]), JSON.stringify(bodyF.fields));
+    check('the collection keeps its name and address when its fields are saved', bodyF.name === 'Team' && bodyF.slug === 'team' && bodyF.id === 'col_x');
+    COL_SAVES.length = 0;   // this save is not the rename tested below
+
+    // the item editor: one input per field, typed to the field
+    const defs = [
+      { id: 'nm', key: 'name', label: 'Name', type: 'text', required: true },
+      { id: 'st', key: 'story', label: 'Story', type: 'richtext', required: false },
+      { id: 'tr', key: 'tier', label: 'Tier', type: 'choice', multiple: true, options: [{ value: 'gold', label: 'Gold' }, { value: 'silver', label: 'Silver' }] },
+      { id: 'lk', key: 'site', label: 'Site', type: 'link', required: false },
+    ];
+    useStore.setState({ currentView: 'editor', selectedBlockId: null, blocks: [], pastBlocks: [], futureBlocks: [],
+      activePage: { id: 'it1', __item: true, collection_id: 'col_x', title: 'Ada', slug: 'ada', excerpt: '', cover_image: '', date: '2026-10-19', status: 'draft', seo_title: '', seo_description: '', __fieldDefs: defs, field_values: {} } });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    const nameIn = await waitFor(() => $('input[aria-label="Name"]'));
+    check('the item editor has an input for each field of the collection', !!nameIn && !!$('input[aria-label="Site address"]') && $$('input[type="checkbox"]').length >= 2);
+    if (nameIn) typeIn(nameIn, 'Ada Lovelace');
+    await sleep(20);
+    check('…and a typed value is kept with the item', st().activePage.field_values.nm === 'Ada Lovelace', JSON.stringify(st().activePage.field_values));
+    const gold = $$('label').find((l) => l.textContent.trim() === 'Gold');
+    if (gold) click(gold.querySelector('input')); await sleep(30);
+    check('a multiple choice keeps the boxes ticked', JSON.stringify(st().activePage.field_values.tr) === '["gold"]', JSON.stringify(st().activePage.field_values.tr));
+    const addr = $('input[aria-label="Site address"]');
+    if (addr) typeIn(addr, 'https://example.com'); await sleep(20);
+    check('a link keeps its address', st().activePage.field_values.lk && st().activePage.field_values.lk.url === 'https://example.com', JSON.stringify(st().activePage.field_values.lk));
+
+    // the Item Field block: its field is chosen from the collection's fields
+    useStore.setState({ selectedBlockId: 'if1', blocks: [{ id: 'if1', type: 'ITEM_FIELD', styles: {}, content: { field: '' } }] });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    if (!$$('label').find((l) => l.textContent.trim() === 'Field')) { click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Content')); await sleep(30); }
+    const fieldLabel = $$('label').find((l) => l.textContent.trim() === 'Field');
+    const fieldSel = fieldLabel && fieldLabel.parentElement.querySelector('select');
+    check('the Item Field block lists the collection\'s fields', !!fieldSel && [...fieldSel.options].some((o) => /Story \(Rich text\)/.test(o.textContent)));
+    if (fieldSel) { fieldSel.value = 'st'; fieldSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(30);
+    check('…choosing one sets the block\'s field', st().blocks.find((b) => b.id === 'if1').content.field === 'st');
+  }
+
   console.log('\nCANVAS MENU');
   {
     const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;

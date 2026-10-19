@@ -200,6 +200,9 @@ const fixtures = [
   { id: 'nl1', type: 'NEWSLETTER', styles: { width: '100%' }, content: { title: 'Join', text: 'a\nb', placeholder: 'Mail', emailLabel: 'E-mail', askName: true, nameLabel: 'Nome', namePlaceholder: 'Il tuo nome', consentText: 'Accetto', buttonText: 'Iscriviti', successMsg: 'Grazie', email: 'a@b.it', layout: 'plain', formLayout: 'stacked', accent: '#10b981' } },
   { id: 'nl2', type: 'NEWSLETTER', styles: {}, content: { title: '<b>x</b>', text: { o: 1 }, placeholder: '"><script>x</script>', emailLabel: '"><b>', askName: 'yes', consentText: '<i>c</i>', buttonText: '<u>b</u>', successMsg: '"><x>', customId: 'My Form!', formLayout: 'evil', accent: 'red;}' } },
   { id: 'nl3', type: 'NEWSLETTER', styles: {}, content: {} },
+  // Item Field: shows a field of the collection item being published; on any other page it shows nothing (both renderers)
+  { id: 'if1', type: 'ITEM_FIELD', styles: { width: '100%' }, content: { field: '', showLabel: false, decimals: 0, dateFormat: 'long' } },
+  { id: 'if2', type: 'ITEM_FIELD', styles: {}, content: { field: 'price', showLabel: true, decimals: 2, dateFormat: 'iso' } },
   // button presets (Global Options › Buttons & fields): a block picks one; an unknown one is ignored; a hero's button
   { id: 'bp1', type: 'BUTTON', styles: { textAlign: 'center' }, content: { text: 'Primo', url: '#', preset: 'primary' } },
   { id: 'bp2', type: 'BUTTON', styles: { margin: '4px' }, content: { text: 'Secondo', url: '#', useGlobal: false, preset: 'outline' } },

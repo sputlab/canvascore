@@ -55,6 +55,7 @@ function canonicalHtml(block, viewport) {
 export default function SortableBlock({ block, isMasterPreview = false }) {
   const { selectedBlockId, setSelectedBlockId, updateBlock, viewport, masters } = useStore();
   const revealBlockId = useStore((s) => s.revealBlockId);
+  const fieldDefs = useStore((s) => s.activePage && s.activePage.__fieldDefs);
   const frameRef = useRef(null);
   const isSelected = selectedBlockId === block.id && !isMasterPreview;
 
@@ -239,6 +240,12 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
           <div style={{ marginTop: '8px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>Live items are generated on publish.</div>
         </div>
       );
+    }
+
+    // ITEM_FIELD: the page shows the value only on a collection item; the canvas shows which field it is
+    if (block.type === 'ITEM_FIELD') {
+      const d = (fieldDefs || []).find((x) => x.id === block.content?.field);
+      return emptyPlaceholder(d ? `Item field: ${d.label}. Shown on each collection item page.` : 'Item field: choose a field in the settings panel.');
     }
 
     // CONTAINER: canonical root (with sizing neutralized) + interactive React children

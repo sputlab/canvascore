@@ -157,6 +157,33 @@ $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 $home = (string)@file_get_contents($web . '/404.html');
 check('published pages: the button preset and the field style as variables', strpos($home, '--cc-btn-primary-bg: #112233;') !== false && strpos($home, '--cc-field-bg: #fafafa;') !== false);
 
+echo "\nCUSTOM FIELDS\n";
+$r = $own->api('save_collection', ['id' => 'col_team', 'name' => 'Team', 'slug' => 'team-members', 'fields' => [
+    ['id' => 'name', 'key' => 'name', 'label' => 'Name', 'type' => 'text', 'required' => true],
+    ['id' => 'price', 'key' => 'price', 'label' => 'Price', 'type' => 'number'],
+    ['id' => 'site', 'key' => 'site', 'label' => 'Site', 'type' => 'link'],
+    ['id' => 'pic', 'key' => 'pic', 'label' => 'Photo', 'type' => 'image']]]);
+$cols = $own->api('get_collections');
+$team = array_values(array_filter($cols['json'] ?? [], function ($c) { return $c['id'] === 'col_team'; }))[0] ?? [];
+check('an admin defines the custom fields of a collection, and the list gives them back', !empty($r['json']['success']) && count($team['fields'] ?? []) === 4 && $team['fields'][0]['type'] === 'text', json_encode($r['json'] ?? null));
+$blocks = [['id' => 'tf1', 'type' => 'ITEM_FIELD', 'styles' => [], 'content' => ['field' => 'price', 'showLabel' => false, 'decimals' => 0]],
+    ['id' => 'tf2', 'type' => 'ITEM_FIELD', 'styles' => [], 'content' => ['field' => 'name', 'showLabel' => false]]];
+$r = $own->api('save_item', ['id' => 'ti1', 'collection_id' => 'col_team', 'title' => 'Ada', 'slug' => 'ada', 'status' => 'draft', 'blocks' => $blocks,
+    'field_values' => ['name' => '', 'price' => '12', 'site' => ['url' => 'javascript:x', 'text' => ''], 'pic' => 'https://x.test/a.jpg']]);
+check('a draft item can leave a required field empty', !empty($r['json']['success']), $r['code']);
+$r = $own->api('save_item', ['id' => 'ti1', 'collection_id' => 'col_team', 'title' => 'Ada', 'slug' => 'ada', 'status' => 'published', 'blocks' => $blocks,
+    'field_values' => ['name' => '  ', 'price' => '12']]);
+check('publishing with a required field empty is refused, and the message names the field', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'required' && strpos($r['json']['message'] ?? '', 'Name') !== false, json_encode($r['json'] ?? null));
+$r = $own->api('save_item', ['id' => 'ti1', 'collection_id' => 'col_team', 'title' => 'Ada', 'slug' => 'ada', 'status' => 'published', 'blocks' => $blocks,
+    'field_values' => ['name' => 'Ada Lovelace', 'price' => '12', 'site' => ['url' => 'javascript:x', 'text' => ''], 'pic' => 'https://x.test/a.jpg']]);
+check('with the required field filled in, the item is published', !empty($r['json']['success']), json_encode($r['json'] ?? null));
+$got = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=ti1');
+$stored = json_decode((string)($got['json']['field_values'] ?? '{}'), true) ?: [];
+check('the item keeps its values, cleaned (the javascript link is emptied)', ($stored['name'] ?? '') === 'Ada Lovelace' && ($stored['site']['url'] ?? 'x') === '', json_encode($stored));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$item_page = (string)@file_get_contents($web . '/team-members/ada/index.html');
+check('the published item page shows its field values', strpos($item_page, 'Ada Lovelace') !== false && strpos($item_page, 'cc-field-value">12</div>') !== false);
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

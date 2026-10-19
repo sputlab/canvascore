@@ -779,7 +779,10 @@ if ($action === 'clear_submissions' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ---- Collections (management: admin) ----
 if ($action === 'get_collections') {
-    echo json_encode($pdo->query("SELECT id, name, slug, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC)); exit;
+    $rows = $pdo->query("SELECT id, name, slug, fields, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as &$r) { $r['fields'] = cc_field_defs(json_decode((string)($r['fields'] ?? '[]'), true), $pdo); }
+    unset($r);
+    echo json_encode($rows); exit;
 }
 if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can manage collections.']); exit; }
@@ -788,6 +791,9 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim((string)($d['name'] ?? ''));
     if ($name === '') { echo json_encode(['success' => false, 'message' => 'The collection needs a name.']); exit; }
     $name = mb_substr($name, 0, 120);
+    // Custom fields: sent with the collection (a save without them keeps the ones it has)
+    $fields_json = null;
+    if (array_key_exists('fields', $d)) $fields_json = json_encode(cc_field_defs($d['fields'], $pdo));
     $chk = $pdo->prepare("SELECT id, slug FROM collections WHERE id = ?"); $chk->execute([$id]);
     $existing = $chk->fetch(PDO::FETCH_ASSOC);
     // Renaming keeps the address unless a new slug is sent explicitly
@@ -799,6 +805,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         try {
             $pdo->prepare("UPDATE collections SET name=?, slug=? WHERE id=?")->execute([$name, $slug, $id]);
+            if ($fields_json !== null) $pdo->prepare("UPDATE collections SET fields=? WHERE id=?")->execute([$fields_json, $id]);
             // New address: every published item forwards from its old URL (the files move at the next publish)
             if ($existing['slug'] !== $slug) {
                 $its = $pdo->prepare("SELECT slug FROM collection_items WHERE collection_id = ? AND status = 'published'"); $its->execute([$id]);
@@ -813,7 +820,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'message' => 'Could not rename the collection: ' . $e->getMessage()]); exit;
         }
     } else {
-        $pdo->prepare("INSERT INTO collections (id, name, slug) VALUES (?,?,?)")->execute([$id, $name, $slug]);
+        $pdo->prepare("INSERT INTO collections (id, name, slug, fields) VALUES (?,?,?,?)")->execute([$id, $name, $slug, $fields_json ?? '[]']);
     }
     echo json_encode(['success' => true, 'id' => $id, 'name' => $name, 'slug' => $slug, 'moved' => $existing && $existing['slug'] !== $slug]); exit;
 }
@@ -873,6 +880,15 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $date = preg_match('/^[0-9TZ:+. -]{0,40}$/', (string)$date) ? (string)$date : '';
     $cschema = cc_version()['content_schema'];
     $now = date('Y-m-d H:i:s');
+    // Custom field values (only when sent: a save without them keeps the stored ones)
+    $fv_sent = array_key_exists('field_values', $d);
+    $fv_clean = null;
+    if ($fv_sent) {
+        $fdst = $pdo->prepare("SELECT fields FROM collections WHERE id = ?"); $fdst->execute([$cid]);
+        $defs = cc_field_defs(json_decode((string)($fdst->fetchColumn() ?: '[]'), true), $pdo);
+        [$fv_clean, $missing] = cc_field_values($defs, $d['field_values'], $pdo, $status === 'published');
+        if ($missing) { echo json_encode(['success' => false, 'code' => 'required', 'message' => 'Fill in the required fields before publishing: ' . implode(', ', $missing) . '.']); exit; }
+    }
 
     if ($status === 'published') {
         $dup = $pdo->prepare("SELECT title FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id IS NOT ?");
@@ -881,26 +897,27 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL slug \"$slug\" is already used by \"$t\" in this collection. Change it and publish again."]); exit;
         }
     }
-    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id FROM collection_items WHERE id = ?"); $chk->execute([$id]);
+    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id, field_values FROM collection_items WHERE id = ?"); $chk->execute([$id]);
     $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
+    $fv_json = $fv_clean !== null ? json_encode($fv_clean) : (string)($existing_item['field_values'] ?? '{}');
     if ($existing_item) {
         // A client that does not send the flag must never reset it: the saved value is kept
         if (!$archived_sent) $archived = (int)($existing_item['archived'] ?? 0);
         if ($blocks !== null) {
             if (!$is_admin) cc_keep_code_surfaces($blocks, $existing_item['content_json'] ?? '[]');
-            $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, content_json=?, content_schema=?, updated_at=? WHERE id=?")
-                ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($blocks), $cschema, $now, $id]);
+            $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, content_json=?, content_schema=?, field_values=?, updated_at=? WHERE id=?")
+                ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($blocks), $cschema, $fv_json, $now, $id]);
         } else {
-            $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, updated_at=? WHERE id=?")
-                ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, $now, $id]);
+            $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, field_values=?, updated_at=? WHERE id=?")
+                ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, $fv_json, $now, $id]);
         }
     } else {
         $b = $blocks ?? [];
         if (!$is_admin) cc_keep_code_surfaces($b, []);
         // Demo mode: a new item uses up one of the visitors' items
         if (!$is_admin && !cc_demo_take('items')) { echo json_encode(['success' => false, 'message' => 'The demo allows ' . cc_demo_config()['maxNewItems'] . ' new collection items until the next reset. Edit an existing item instead.']); exit; }
-        $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-            ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $now]);
+        $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $fv_json, $now]);
     }
     // A published item that changed its address: the old one forwards to the new one
     if ($status === 'published') {

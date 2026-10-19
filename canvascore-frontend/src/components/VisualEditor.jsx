@@ -113,7 +113,8 @@ export default function VisualEditor() {
           title: activePage.title, slug: activePage.slug, excerpt: activePage.excerpt,
           cover_image: activePage.cover_image, date: activePage.date, archived: activePage.archived ? 1 : 0,
           status: publish ? 'published' : (activePage.status || 'draft'),
-          seo_title: activePage.seo_title, seo_description: activePage.seo_description, blocks
+          seo_title: activePage.seo_title, seo_description: activePage.seo_description, blocks,
+          field_values: activePage.field_values || {}
         }) });
         const data = await res.json();
         if (data.success && publish) updateActivePage({ status: 'published' });
@@ -170,6 +171,8 @@ export default function VisualEditor() {
     try {
       const saved = await savePage(true);
       if (!saved || !saved.success) {
+        // a required field of a collection item is empty: say which one (the item stays a draft)
+        if (saved && saved.code === 'required') { notify(saved.message, 'error'); setIsPublishing(false); return; }
         notify('Not published: saving the page failed' + (saved && saved.message ? ' (' + saved.message + ')' : '') + '.\nYour changes are still here and backed up on this device.', 'error');
         setIsPublishing(false);
         return;

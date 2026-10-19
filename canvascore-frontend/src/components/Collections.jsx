@@ -7,6 +7,13 @@ import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
 import StarterPickerDialog from './StarterPickerDialog';
 import { starterBlocks } from '../editor/starters';
+import CollectionFields from './CollectionFields';
+
+// An item's custom field values as an object (the server keeps them as JSON text)
+const parseFieldValues = (raw) => {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  try { const v = JSON.parse(raw || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; }
+};
 
 export default function Collections() {
   const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync, activePage } = useStore();
@@ -101,7 +108,7 @@ export default function Collections() {
         if (!data || !data.id) { notify('This item no longer exists (deleted elsewhere?).', 'error'); loadItems(active.id); return; }
         let blocks = [];
         try { blocks = JSON.parse(data.content_json || '[]'); } catch { blocks = []; }
-        full = { ...data, blocks };
+        full = { ...data, blocks, field_values: parseFieldValues(data.field_values) };
       } catch { notify('Could not open the item (connection problem).', 'error'); return; }
     }
     // open the block editor on the item's content
@@ -112,6 +119,8 @@ export default function Collections() {
       date: full.date, status: full.status === 'published' ? 'published' : 'draft',
       archived: Number(full.archived) ? 1 : 0,
       seo_title: full.seo_title || '', seo_description: full.seo_description || '',
+      // the custom fields: their definitions (for the inputs and the Item Field block) and this item's values
+      __fieldDefs: active.fields || [], field_values: full.field_values || {},
       layout: 'full', bg_color: '#ffffff', boxed_width: '1100px',
     });
     setBlocks(Array.isArray(full.blocks) ? full.blocks : []);
@@ -286,6 +295,9 @@ export default function Collections() {
                   <Button variant="primary" size="sm" icon={Plus} onClick={() => setPicking(true)}>New Item</Button>
                 </span>
               </div>
+
+              <CollectionFields key={active.id} collection={active} collections={collections} canEdit={userRole === 'admin'}
+                onSaved={() => loadCollections().then((d) => { if (Array.isArray(d)) { const c = d.find((x) => x.id === active.id); if (c) setActive(c); } })} />
 
               {n > 0 && (
                 <div className="cc-media-selbar" role="toolbar" aria-label="Selected items" style={{ marginBottom: 12 }}>

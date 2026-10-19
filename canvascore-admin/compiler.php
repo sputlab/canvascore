@@ -1285,6 +1285,70 @@ function cc_device_css($block, $id) {
     return $css !== '' ? '<style data-cc-device>' . $css . "</style>\n" : '';
 }
 
+// The item being published: its cleaned field values (by field id), the definitions of its collection and the items a
+// reference can point to. rebuild_all.php sets it around each item's blocks and clears it afterwards; on other pages it
+// is null and the Item Field block shows nothing.
+function cc_item_context($ctx = false) {
+    static $current = null;
+    if ($ctx !== false) $current = $ctx;
+    return $current;
+}
+// The HTML of one field's value (no label), for its type. '' when the value is empty.
+function cc_field_html($d, $v, $c, $ctx) {
+    switch ($d['type']) {
+        case 'text':
+            return $v === '' || $v === null ? '' : '<div class="cc-field-value">' . nl2br(htmlspecialchars((string)$v)) . '</div>';
+        case 'richtext':
+            return (string)$v === '' ? '' : '<div class="cc-field-value">' . $v . '</div>';   // rich text is cleaned when it is saved
+        case 'number':
+            if ($v === null) return '';
+            return '<div class="cc-field-value">' . htmlspecialchars(cc_fmt_num($v, cc_int($c['decimals'] ?? null, 0, 0, 4))) . '</div>';
+        case 'date':
+            if ($v === '' || $v === null) return '';
+            $shown = ($c['dateFormat'] ?? 'long') === 'iso' ? (string)$v : date('F j, Y', strtotime($v . ' 12:00:00'));
+            return '<div class="cc-field-value"><time datetime="' . htmlspecialchars((string)$v) . '">' . htmlspecialchars($shown) . '</time></div>';
+        case 'image':
+            if ($v === '' || $v === null) return '';
+            return '<img class="cc-field-image" src="' . htmlspecialchars((string)$v) . '" alt="" loading="lazy" style="max-width:100%; height:auto; display:block;">';
+        case 'gallery':
+            if (!is_array($v) || !$v) return '';
+            $imgs = '';
+            foreach ($v as $u) $imgs .= '<img src="' . htmlspecialchars((string)$u) . '" alt="" loading="lazy" style="width:100%; height:auto; display:block; border-radius:8px;">';
+            return '<div class="cc-field-gallery-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px;">' . $imgs . '</div>';
+        case 'link':
+            if (!is_array($v) || $v['url'] === '') return '';
+            $text = $v['text'] !== '' ? $v['text'] : $v['url'];
+            return '<a class="cc-field-link" href="' . htmlspecialchars(cc_block_url($v['url'])) . '">' . htmlspecialchars($text) . '</a>';
+        case 'choice':
+            $names = [];
+            foreach ((array)$v as $x) {
+                foreach ($d['options'] ?? [] as $o) { if ($o['value'] === $x) { $names[] = htmlspecialchars($o['label']); break; } }
+            }
+            return $names ? '<div class="cc-field-value">' . implode(', ', $names) . '</div>' : '';
+        case 'reference':
+            $it = is_string($v) && $v !== '' ? ($ctx['items'][$v] ?? null) : null;
+            if (!$it) return '';
+            $title = htmlspecialchars($it['title']);
+            return $it['live']
+                ? '<a class="cc-field-ref" href="{{BASE_URL}}' . htmlspecialchars($it['col_slug'] . '/' . $it['slug'] . '/') . '">' . $title . '</a>'
+                : '<span class="cc-field-ref">' . $title . '</span>';
+    }
+    return '';
+}
+// The Item Field block: one field of the item being published, with its label when asked
+function cc_render_item_field($block) {
+    $ctx = cc_item_context();
+    $c = $block['content'] ?? [];
+    $fid = is_string($c['field'] ?? null) ? $c['field'] : '';
+    if ($ctx === null || !isset($ctx['defs'][$fid])) return '';
+    $d = $ctx['defs'][$fid];
+    $inner = cc_field_html($d, $ctx['values'][$fid] ?? null, $c, $ctx);
+    if ($inner === '') return '';
+    $label = !empty($c['showLabel']) ? '<div class="cc-field-label">' . htmlspecialchars($d['label']) . '</div>' : '';
+    $style = build_inline_style($block['styles'] ?? []);
+    return '<div class="cc-field cc-field-' . $d['type'] . '" data-field="' . htmlspecialchars($d['key']) . '"' . ($style !== '' ? ' style="' . $style . '"' : '') . '>' . $label . $inner . "</div>\n";
+}
+
 function render_block($block) {
     if (!$block || !is_array($block)) return '';
     $html = cc_render_block_body($block);
@@ -1348,6 +1412,9 @@ function cc_render_block_body($block) {
     }
 
     switch ($block['type']) {
+        case 'ITEM_FIELD':
+            // A field of the item being published (rebuild_all.php sets the item); nothing on any other page
+            return $customCss . cc_render_item_field($block);
         case 'SECTION':
             $html = "<section id=\"$innerId\" class=\"cc-section$animClass$innerClass\"$styleString>\n$childrenHtml\n</section>\n";
             return $customCss . $html;

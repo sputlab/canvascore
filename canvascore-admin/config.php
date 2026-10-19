@@ -417,6 +417,145 @@ function cc_kit_css($kit, $scope) {
     return $vars ? $scope . '{' . implode(' ', $vars) . '}' : '';
 }
 
+// ---------------------------------------------------------------------------
+// Custom fields of a collection (Collections › Fields). The definitions are on the collection (collections.fields: a
+// list of {id, key, label, type, required, options, multiple, target}); each item keeps its values (collection_items.
+// field_values: an object keyed by the field's id). Nine types. Every definition and every value is cleaned here, so
+// nothing that is not a text, a rich text, a number, a date, an image, a link, a choice or an item reaches the page.
+// ---------------------------------------------------------------------------
+const CC_FIELD_TYPES = ['text', 'richtext', 'number', 'date', 'image', 'gallery', 'link', 'choice', 'reference'];
+const CC_FIELD_MAX = 50;
+const CC_FIELD_OPTIONS_MAX = 100;
+const CC_GALLERY_MAX = 60;
+// A text: no control characters, trimmed, at most $max characters
+function cc_field_text($v, $max) {
+    $s = trim(preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', is_scalar($v) ? (string)$v : ''));
+    return mb_substr($s, 0, $max);
+}
+// A link: http(s), mailto or tel, or an address on this site (a path or a page); never another scheme (no javascript:)
+function cc_field_link($u) {
+    $u = trim(is_scalar($u) ? (string)$u : '');
+    if ($u === '' || strlen($u) > 2000 || preg_match('/[\x00-\x20\x7f<>"\'`\\\\]/', $u)) return '';
+    if (preg_match('~^(?:https?://|mailto:|tel:)~i', $u)) return $u;
+    if (preg_match('/^[A-Za-z0-9\/#?][A-Za-z0-9\/._~?=&%#+-]*$/', $u)) return $u;
+    return '';
+}
+// An image address: a web address, a path on the site or an embedded raster image; any other scheme is refused.
+// The same rule as cc_img_url() in compiler.php (this file is loaded by the API without the renderer)
+function cc_field_image($u) {
+    $u = trim(is_scalar($u) ? (string)$u : '');
+    $probe = strtolower(preg_replace('/[\x00-\x20\x7f]+/', '', $u));
+    if (preg_match('/^[a-z][a-z0-9+.-]*:/', $probe) && !preg_match('#^(https?:|data:image/(png|jpe?g|gif|webp|avif);)#', $probe)) return '';
+    return $u;
+}
+function cc_collection_exists($pdo, $id) {
+    $st = $pdo->prepare("SELECT 1 FROM collections WHERE id = ?");
+    $st->execute([$id]);
+    return (bool)$st->fetchColumn();
+}
+// The tidy field definitions of a collection: valid ids and keys (unique), known types, choices with unique values,
+// a reference to a collection that exists. Anything else is dropped.
+function cc_field_defs($raw, $pdo) {
+    if (!is_array($raw)) return [];
+    $out = []; $ids = []; $keys = [];
+    foreach ($raw as $f) {
+        if (count($out) >= CC_FIELD_MAX) break;
+        if (!is_array($f)) continue;
+        $id = strtolower(trim(is_scalar($f['id'] ?? null) ? (string)$f['id'] : ''));
+        $key = strtolower(trim(is_scalar($f['key'] ?? null) ? (string)$f['key'] : ''));
+        $type = is_string($f['type'] ?? null) ? $f['type'] : '';
+        if (!preg_match('/^[a-z0-9_]{1,40}$/', $id) || isset($ids[$id])) continue;
+        if (!preg_match('/^[a-z][a-z0-9_]{0,39}$/', $key) || isset($keys[$key])) continue;
+        if (!in_array($type, CC_FIELD_TYPES, true)) continue;
+        $label = cc_field_text($f['label'] ?? '', 80);
+        $def = ['id' => $id, 'key' => $key, 'label' => $label !== '' ? $label : $key, 'type' => $type, 'required' => !empty($f['required'])];
+        if ($type === 'choice') {
+            $opts = []; $vals = [];
+            foreach ((is_array($f['options'] ?? null) ? $f['options'] : []) as $o) {
+                if (count($opts) >= CC_FIELD_OPTIONS_MAX) break;
+                if (!is_array($o)) continue;
+                $ov = strtolower(trim(is_scalar($o['value'] ?? null) ? (string)$o['value'] : ''));
+                if (!preg_match('/^[a-z0-9_-]{1,40}$/', $ov) || isset($vals[$ov])) continue;
+                $vals[$ov] = true;
+                $ol = cc_field_text($o['label'] ?? '', 80);
+                $opts[] = ['value' => $ov, 'label' => $ol !== '' ? $ol : $ov];
+            }
+            $def['options'] = $opts;
+            $def['multiple'] = !empty($f['multiple']);
+        }
+        if ($type === 'reference') {
+            $target = is_scalar($f['target'] ?? null) ? (string)$f['target'] : '';
+            $def['target'] = ($target !== '' && $pdo && cc_collection_exists($pdo, $target)) ? $target : '';
+        }
+        $ids[$id] = true; $keys[$key] = true;
+        $out[] = $def;
+    }
+    return $out;
+}
+// One value, cleaned for its field's type. Empty is '' (text, date, reference), null (number), [] (gallery, multiple
+// choice) or a link with an empty url and text.
+function cc_field_clean($d, $v, $pdo) {
+    switch ($d['type']) {
+        case 'text': return cc_field_text($v, 500);
+        case 'richtext': return is_string($v) ? cc_sanitize_html(mb_substr($v, 0, 20000)) : '';
+        case 'number':
+            if ($v === '' || $v === null || !is_scalar($v) || !is_numeric($v)) return null;
+            return is_finite((float)$v) ? (float)$v : null;
+        case 'date':
+            $s = is_string($v) ? trim($v) : '';
+            if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s, $m) || !checkdate((int)$m[2], (int)$m[3], (int)$m[1])) return '';
+            return $s;
+        case 'image': return cc_field_image(cc_field_text($v, 2000));
+        case 'gallery':
+            $out = [];
+            foreach ((is_array($v) ? $v : []) as $u) {
+                if (count($out) >= CC_GALLERY_MAX) break;
+                $c = cc_field_image(cc_field_text($u, 2000));
+                if ($c !== '') $out[] = $c;
+            }
+            return $out;
+        case 'link':
+            $a = is_array($v) ? $v : [];
+            return ['url' => cc_field_link($a['url'] ?? ''), 'text' => cc_field_text($a['text'] ?? '', 200)];
+        case 'choice':
+            $values = array_column($d['options'] ?? [], 'value');
+            if (!empty($d['multiple'])) {
+                $out = [];
+                foreach ((is_array($v) ? $v : []) as $x) {
+                    $x = strtolower(trim(is_scalar($x) ? (string)$x : ''));
+                    if (in_array($x, $values, true) && !in_array($x, $out, true)) $out[] = $x;
+                }
+                return $out;
+            }
+            $x = strtolower(trim(is_scalar($v) ? (string)$v : ''));
+            return in_array($x, $values, true) ? $x : '';
+        case 'reference':
+            $x = is_scalar($v) ? trim((string)$v) : '';
+            if ($x === '' || $d['target'] === '' || !$pdo) return '';
+            $st = $pdo->prepare("SELECT 1 FROM collection_items WHERE id = ? AND collection_id = ?");
+            $st->execute([$x, $d['target']]);
+            return $st->fetchColumn() ? $x : '';
+    }
+    return null;
+}
+function cc_field_empty($c) {
+    if ($c === null || $c === '' || $c === []) return true;
+    if (is_array($c) && array_key_exists('url', $c)) return $c['url'] === '' && $c['text'] === '';
+    return false;
+}
+// The values of an item, cleaned against its collection's fields, keyed by field id. $missing lists the labels of the
+// required fields left empty; it counts only when the item is being published.
+function cc_field_values($defs, $raw, $pdo, $publishing) {
+    $raw = is_array($raw) ? $raw : [];
+    $vals = []; $missing = [];
+    foreach ($defs as $d) {
+        $c = cc_field_clean($d, $raw[$d['id']] ?? null, $pdo);
+        $vals[$d['id']] = $c;
+        if ($d['required'] && $publishing && cc_field_empty($c)) $missing[] = $d['label'];
+    }
+    return [$vals, $missing];
+}
+
 // Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
 // (a page published there would replace or redirect the admin, the images or the data).
 function cc_reserved_slugs() {

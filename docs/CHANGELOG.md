@@ -10,6 +10,15 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **Custom fields per collection** (Collections › Fields, admins define them): text, rich text, number, date, image,
+  gallery, link, choice (one or several) and reference to an item of another collection. Each field can be required
+  to publish: a collection item with a required field left empty stays a draft, and the message names the field. Every
+  item fills them in its settings (Page Settings › Item fields), with the media library for images and galleries.
+- **Item Field block**: shows one field of the collection item being published on its page, with its label if asked
+  (numbers: decimals; dates: long or ISO format). Pages that are not collection items show nothing.
+- Database schema 9: `collections.fields` and `collection_items.field_values` (added on update).
+
 ## [0.18.0] - 2026-10-18 — Button and field presets, copy & paste style, on-canvas handles
 
 ### Added

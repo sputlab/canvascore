@@ -4,6 +4,7 @@ import { Layout, Globe, FileEdit, Upload } from 'lucide-react';
 import { PanelAccordion, ImgF, ChkF } from './fields';
 import { labelStyle, inputStyle } from './helpers';
 import { slugify, slugOwner, uniqueSlug } from '../../utils/slug';
+import ItemFieldsSection from './ItemFieldsSection';
 
 // Page settings, shown when no block is selected: page info, URL, structure, SEO (and item fields for collection items).
 export default function PageSettings({ ctx }) {
@@ -53,6 +54,8 @@ export default function PageSettings({ ctx }) {
             <textarea style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }} value={activePage.excerpt || ''} onChange={e => updateActivePage({ excerpt: e.target.value })} placeholder="Short summary shown in lists" />
           </PanelAccordion>
         )}
+
+        {activePage?.__item && <ItemFieldsSection activePage={activePage} updateActivePage={updateActivePage} />}
 
         <PanelAccordion title="Page Info" icon={FileEdit} defaultOpen={!activePage?.__item}>
           <label style={labelStyle}>Internal Title</label>

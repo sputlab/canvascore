@@ -95,6 +95,52 @@ check('button presets and field style: only valid values are kept, in a fixed or
 check('a button that picks a preset gets its variables, with the built-in look as fallback', cc_button_preset_css('primary') === "background: var(--cc-btn-primary-bg, var(--brand-color, #3b82f6)); color: var(--cc-btn-primary-text, #ffffff); border: 2px solid var(--cc-btn-primary-border, transparent); border-radius: var(--cc-btn-primary-radius, 6px); " && cc_button_preset_css('nope') === '');
 check('the site\'s button presets and field style as CSS variables (only the values that are set)', cc_kit_css($kit, ':root') === ':root{--cc-btn-primary-bg: #112233; --cc-btn-primary-radius: 999px; --cc-btn-outline-bg: transparent; --cc-btn-outline-border: var(--cc-color-accent, #f59e0b); --cc-field-bg: #fafafa;}' && cc_kit_css(cc_kit([]), ':root') === '');
 
+echo "\nCUSTOM FIELDS\n";
+$fpdo = new PDO('sqlite::memory:');
+$fpdo->exec("CREATE TABLE collections (id TEXT, name TEXT, slug TEXT, fields TEXT)");
+$fpdo->exec("CREATE TABLE collection_items (id TEXT, collection_id TEXT, title TEXT, slug TEXT, status TEXT, archived INTEGER, field_values TEXT)");
+$fpdo->exec("INSERT INTO collections VALUES ('team','Team','team','[]')");
+$fpdo->exec("INSERT INTO collection_items VALUES ('ada','team','Ada','ada','published',0,'{}')");
+$fdefs = cc_field_defs([
+    ['id' => 't1', 'key' => 'name', 'label' => 'Name', 'type' => 'text', 'required' => true],
+    ['id' => 'r1', 'key' => 'body', 'label' => 'Body', 'type' => 'richtext'],
+    ['id' => 'n1', 'key' => 'price', 'label' => 'Price', 'type' => 'number'],
+    ['id' => 'd1', 'key' => 'when', 'label' => 'When', 'type' => 'date'],
+    ['id' => 'g1', 'key' => 'pic', 'label' => 'Pic', 'type' => 'image'],
+    ['id' => 'g2', 'key' => 'gal', 'label' => 'Gallery', 'type' => 'gallery'],
+    ['id' => 'l1', 'key' => 'site', 'label' => 'Site', 'type' => 'link'],
+    ['id' => 'c1', 'key' => 'tier', 'label' => 'Tier', 'type' => 'choice', 'multiple' => true, 'options' => [['value' => 'gold', 'label' => 'Gold'], ['value' => 'silver', 'label' => 'Silver']]],
+    ['id' => 'x1', 'key' => 'lead', 'label' => 'Lead', 'type' => 'reference', 'target' => 'team'],
+], $fpdo);
+check('custom fields: all nine types are kept, in order', implode(',', array_column($fdefs, 'type')) === 'text,richtext,number,date,image,gallery,link,choice,reference', implode(',', array_column($fdefs, 'type')));
+check('custom fields: a bad id, key or type, a duplicate key and a choice without a valid value are dropped', count(cc_field_defs([
+    ['id' => 'BAD ID', 'key' => 'ok', 'type' => 'text'], ['id' => 'a', 'key' => 'Bad Key', 'type' => 'text'], ['id' => 'b', 'key' => 'ok', 'type' => 'script'],
+    ['id' => 'c', 'key' => 'dup', 'type' => 'text'], ['id' => 'd', 'key' => 'dup', 'type' => 'text'],
+    ['id' => 'e', 'key' => 'opts', 'type' => 'choice', 'options' => [['value' => 'Not Valid', 'label' => 'x'], ['value' => 'ok-one', 'label' => 'One']]],
+], $fpdo)) === 2);
+check('custom fields: a reference to a collection that does not exist loses its target', cc_field_defs([['id' => 'r', 'key' => 'r', 'type' => 'reference', 'target' => 'nope']], $fpdo)[0]['target'] === '');
+$fraw = ['t1' => '  <b>Ada</b>  ', 'r1' => '<p>ok</p><script>x()</script>', 'n1' => '12.5', 'd1' => '2026-02-30', 'g1' => 'javascript:alert(1)',
+    'g2' => ['a.jpg', 'javascript:x', 'b.png'], 'l1' => ['url' => 'javascript:alert(1)', 'text' => 'Bad'], 'c1' => ['gold', 'bronze'], 'x1' => 'ada'];
+[$fvals, $fmiss] = cc_field_values($fdefs, $fraw, $fpdo, false);
+check('custom field values: rich text loses its script, a bad date and a javascript image are emptied', strpos($fvals['r1'], 'script') === false && $fvals['d1'] === '' && $fvals['g1'] === '' && $fvals['n1'] === 12.5, json_encode([$fvals['r1'], $fvals['d1'], $fvals['g1']]));
+check('custom field values: a gallery keeps its valid images; a link keeps no javascript address; a choice keeps only its options', $fvals['g2'] === ['a.jpg', 'b.png'] && $fvals['l1']['url'] === '' && $fvals['l1']['text'] === 'Bad' && $fvals['c1'] === ['gold'], json_encode([$fvals['g2'], $fvals['l1'], $fvals['c1']]));
+check('custom field values: a reference keeps an item of its collection', $fvals['x1'] === 'ada');
+[, $fmiss2] = cc_field_values($fdefs, ['t1' => ''], $fpdo, true);
+check('a required field left empty blocks a publish (named), but not a draft', $fmiss2 === ['Name'] && $fmiss === []);
+check('a link is only kept as a web address, mail, phone or a path of this site', cc_field_link('https://example.com/a') === 'https://example.com/a' && cc_field_link('mailto:a@b.c') === 'mailto:a@b.c' && cc_field_link('chi-siamo/index.html') === 'chi-siamo/index.html' && cc_field_link('data:text/html,x') === '' && cc_field_link('java script:x') === '');
+// The Item Field block: the value of the item being published, escaped; nothing without an item
+$fitems = ['ada' => ['title' => 'Ada <Lovelace>', 'slug' => 'ada', 'col_slug' => 'team', 'live' => true]];
+cc_item_context(['defs' => array_combine(array_column($fdefs, 'id'), $fdefs), 'values' => array_merge($fvals, ['t1' => '"><img onerror=x>']), 'items' => $fitems]);
+$fpage = cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 'n1', 'showLabel' => true, 'decimals' => 2]]);
+check('the Item Field block shows its field with the label, rounded as asked', strpos($fpage, 'cc-field-label">Price<') !== false && strpos($fpage, '12.50') !== false, $fpage);
+$fesc = cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 't1']]);
+check('…and escapes a value (no markup from a visitor-facing text)', strpos($fesc, '<img onerror') === false && strpos($fesc, '&quot;&gt;&lt;img') !== false, $fesc);
+$fref = cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 'x1']]);
+check('…a reference links to the item it points to, on the published site', strpos($fref, 'href="{{BASE_URL}}team/ada/"') !== false && strpos($fref, 'Ada &lt;Lovelace&gt;') !== false, $fref);
+check('…and a field that is empty or unknown shows nothing', cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 'g1']]) === '' && cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 'zzz']]) === '');
+cc_item_context(null);
+check('…and on a page that is not a collection item it shows nothing', cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 't1']]) === '');
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);
