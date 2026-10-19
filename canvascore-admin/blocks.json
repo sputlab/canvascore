@@ -792,6 +792,26 @@
         "padding": "8px 0"
       }
     },
+    "RELATED": {
+      "content": {
+        "collectionId": "",
+        "fieldId": "",
+        "limit": 3,
+        "columns": 3,
+        "title": "",
+        "showCover": true,
+        "showDate": true,
+        "showExcerpt": true,
+        "cardFields": [],
+        "sortBy": "",
+        "sortDir": "asc"
+      },
+      "styles": {
+        "width": "100%",
+        "margin": "0",
+        "padding": "8px 0"
+      }
+    },
     "BENTO": {
       "content": {
         "columns": 3,

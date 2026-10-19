@@ -38,3 +38,11 @@ export function isEmptyFieldValue(v) {
   if (typeof v === 'object' && 'url' in v) return !v.url && !v.text;
   return false;
 }
+
+// Structured data for search engines (mirror of CC_SCHEMA_TYPES in canvascore-admin/config.php): the schema.org type
+// of a collection's items, and for each property the field types that can give it
+export const SCHEMA_TYPES = {
+  Product: { label: 'Product (a shop item)', props: { image: ['Image', ['image', 'gallery']], description: ['Description', ['text', 'richtext']], price: ['Price', ['number']], sku: ['SKU', ['text']] } },
+  Event: { label: 'Event', props: { startDate: ['Start date', ['date']], location: ['Location', ['text']], image: ['Image', ['image', 'gallery']], description: ['Description', ['text', 'richtext']] } },
+  Person: { label: 'Person', props: { jobTitle: ['Job title', ['text', 'choice']], image: ['Photo', ['image', 'gallery']], description: ['Bio', ['text', 'richtext']] } },
+};

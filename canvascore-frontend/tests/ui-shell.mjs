@@ -1000,6 +1000,63 @@ try {
     check('…choosing one sets the block\'s field', st().blocks.find((b) => b.id === 'if1').content.field === 'st');
   }
 
+  console.log('\nLISTS, RELATED AND STRUCTURED DATA');
+  {
+    const LP = (await vite.ssrLoadModule('/src/components/panel/blocks/CollectionListPanel.jsx')).default;
+    const RP = (await vite.ssrLoadModule('/src/components/panel/blocks/RelatedPanel.jsx')).default;
+    const CF = (await vite.ssrLoadModule('/src/components/CollectionFields.jsx')).default;
+    const cols = [
+      { id: 'col_s', name: 'Staff', slug: 'staff', fields: [
+        { id: 'dept', key: 'dept', label: 'Department', type: 'reference', target: 'col_d' },
+        { id: 'role', key: 'role', label: 'Role', type: 'choice', multiple: false, options: [{ value: 'a', label: 'A' }] },
+        { id: 'pay', key: 'pay', label: 'Pay', type: 'number' }] },
+      { id: 'col_d', name: 'Departments', slug: 'departments', fields: [] }];
+    const changes = [];
+    let content = { collectionId: 'col_s', collectionName: 'Staff', cardFields: [] };
+    const ctxL = () => ({ selectedBlock: { id: 'lb', type: 'COLLECTION_LIST', content, styles: {} },
+      handleContentChange: (k, v) => { changes.push([k, v]); content = { ...content, [k]: v }; }, patchContent: (p) => { content = { ...content, ...p }; }, collections: cols });
+    mount(React.createElement(LP, { ctx: ctxL() })); await sleep(30);
+    const box = $('[aria-label="Fields on each card"]');
+    check('the list panel offers the fields of the chosen collection for the cards', !!box && box.querySelectorAll('input').length === 3);
+    if (box) click(box.querySelectorAll('input')[1]);
+    check('…ticking one sets the card fields', JSON.stringify(changes.find((c) => c[0] === 'cardFields')) === '["cardFields",["role"]]', JSON.stringify(changes));
+    const selWith = (text) => $$('select').find((x) => [...x.options].some((o) => o.textContent.startsWith(text)));
+    const sortSel = selWith('Newest first');
+    if (sortSel) { sortSel.value = 'pay'; sortSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    check('the list can be sorted by a field (number, date, text or single choice)', changes.some((c) => c[0] === 'sortBy' && c[1] === 'pay') && !!sortSel && [...sortSel.options].some((o) => o.textContent === 'Pay'));
+    const filtSel = selWith('None');
+    if (filtSel) { filtSel.value = 'role'; filtSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    check('a choice field gives the filter buttons', changes.some((c) => c[0] === 'filterField' && c[1] === 'role') && !!filtSel && [...filtSel.options].every((o) => o.value !== 'pay'));
+
+    // Related items: the reference must point to the collection of the item being edited
+    let rcontent = { collectionId: 'col_s', fieldId: '' };
+    const rchanges = [];
+    const rctx = (itemCol) => ({ selectedBlock: { id: 'rb', type: 'RELATED', content: rcontent, styles: {} },
+      handleContentChange: (k, v) => { rchanges.push([k, v]); rcontent = { ...rcontent, [k]: v }; }, patchContent: (p) => { rcontent = { ...rcontent, ...p }; }, collections: cols, itemCollectionId: itemCol });
+    mount(React.createElement(RP, { ctx: rctx('col_d') })); await sleep(30);
+    check('a Related block offers the reference fields that point to the item\'s collection', !!$$('select').find((x) => [...x.options].some((o) => o.textContent === 'Department')));
+    mount(React.createElement(RP, { ctx: rctx(null) })); await sleep(30);
+    check('…and says so when it is not used on a collection item', /collection item page/.test(doc.body.textContent));
+
+    // Structured data: the type, and which field gives each property
+    COL_SAVES.length = 0; calls.length = 0;
+    mount(React.createElement(CF, { collection: { id: 'col_s', name: 'Staff', slug: 'staff', fields: cols[0].fields, schema: {} }, collections: cols, canEdit: true })); await sleep(30);
+    // the Fields section is closed when the collection has fields: open it
+    if (!$('select[aria-label="Structured data type"]')) { click($$('button').find((b) => /^Fields \(/.test(b.textContent.trim()))); await sleep(30); }
+    const typeSel = $('select[aria-label="Structured data type"]');
+    if (typeSel) { typeSel.value = 'Person'; typeSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(30);
+    const jobSel = $('select[aria-label="Structured data Job title"]');
+    check('the structured data offers the properties of its type, with the fields that fit', !!jobSel && [...jobSel.options].some((o) => o.value === 'role') && ![...jobSel.options].some((o) => o.value === 'pay'));
+    if (jobSel) { jobSel.value = 'role'; jobSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(20);
+    click(btnHas('Save fields')); await sleep(20);
+    const sentS = await waitFor(() => calls.find((c) => c.u.includes('save_collection')));
+    const bodyS = sentS ? JSON.parse(sentS.body) : {};
+    check('saving sends the structured data of the collection', JSON.stringify(bodyS.schema) === '{"type":"Person","map":{"jobTitle":"role"},"currency":""}', JSON.stringify(bodyS.schema));
+    COL_SAVES.length = 0;
+  }
+
   console.log('\nCANVAS MENU');
   {
     const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;

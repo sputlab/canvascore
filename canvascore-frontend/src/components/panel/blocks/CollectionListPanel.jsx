@@ -2,6 +2,7 @@ import React from 'react';
 import { Library } from 'lucide-react';
 import { PanelAccordion } from '../fields';
 import { labelStyle, inputStyle } from '../helpers';
+import { SortOptions, CardFieldsBox } from './listFields';
 
 // Content panel: COLLECTION_LIST
 export default function CollectionListPanel({ ctx }) {
@@ -55,6 +56,15 @@ export default function CollectionListPanel({ ctx }) {
           </label>
         ))}
       </div>
+
+      <CardFieldsBox ctx={ctx} />
+      <SortOptions ctx={ctx} />
+      <label style={{ ...labelStyle, marginTop: '12px' }}>Filter buttons (by a choice field)</label>
+      <select style={inputStyle} value={selectedBlock.content.filterField || ''} onChange={e => handleContentChange('filterField', e.target.value)}>
+        <option value="">None</option>
+        {((collections.find(c => c.id === selectedBlock.content.collectionId) || {}).fields || []).filter(f => f.type === 'choice').map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+      </select>
+      <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>Visitors pick a choice to show only the matching items. The fields are set on each item.</p>
     </PanelAccordion>
   );
 }

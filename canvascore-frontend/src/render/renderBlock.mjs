@@ -1692,6 +1692,7 @@ function renderBlockBody(block, opts = {}) {
 
     // a field of the collection item being published: the editor shows a placeholder, the page is built on the server
     case 'ITEM_FIELD':
+    case 'RELATED':
       return '';
 
     default:

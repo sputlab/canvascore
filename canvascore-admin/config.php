@@ -556,6 +556,33 @@ function cc_field_values($defs, $raw, $pdo, $publishing) {
     return [$vals, $missing];
 }
 
+// ---------------------------------------------------------------------------
+// Structured data for search engines (schema.org, JSON-LD on the item pages of a collection). A collection picks a type
+// and the field that gives each property; the property accepts only fields of the right type.
+// ---------------------------------------------------------------------------
+const CC_SCHEMA_TYPES = [
+    'Product' => ['image' => ['image', 'gallery'], 'description' => ['text', 'richtext'], 'price' => ['number'], 'sku' => ['text']],
+    'Event' => ['startDate' => ['date'], 'location' => ['text'], 'image' => ['image', 'gallery'], 'description' => ['text', 'richtext']],
+    'Person' => ['jobTitle' => ['text', 'choice'], 'image' => ['image', 'gallery'], 'description' => ['text', 'richtext']],
+];
+// The tidy schema of a collection: {type, map: {property: field id}, currency (ISO 4217, for a Product's price)}
+function cc_schema_clean($raw, $defs) {
+    $raw = is_array($raw) ? $raw : [];
+    $type = is_string($raw['type'] ?? null) ? $raw['type'] : '';
+    if (!isset(CC_SCHEMA_TYPES[$type])) return ['type' => '', 'map' => [], 'currency' => ''];
+    $byId = [];
+    foreach ($defs as $d) $byId[$d['id']] = $d;
+    $sent = is_array($raw['map'] ?? null) ? $raw['map'] : [];
+    $map = [];
+    foreach (CC_SCHEMA_TYPES[$type] as $prop => $allowed) {
+        $fid = is_string($sent[$prop] ?? null) ? $sent[$prop] : '';
+        if ($fid !== '' && isset($byId[$fid]) && in_array($byId[$fid]['type'], $allowed, true)) $map[$prop] = $fid;
+    }
+    $cur = strtoupper(is_string($raw['currency'] ?? null) ? trim($raw['currency']) : '');
+    if (!preg_match('/^[A-Z]{3}$/', $cur)) $cur = '';
+    return ['type' => $type, 'map' => $map, 'currency' => $cur];
+}
+
 // Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
 // (a page published there would replace or redirect the admin, the images or the data).
 function cc_reserved_slugs() {

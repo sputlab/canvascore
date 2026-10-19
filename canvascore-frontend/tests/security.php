@@ -184,6 +184,34 @@ $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 $item_page = (string)@file_get_contents($web . '/team-members/ada/index.html');
 check('the published item page shows its field values', strpos($item_page, 'Ada Lovelace') !== false && strpos($item_page, 'cc-field-value">12</div>') !== false);
 
+echo "\nRELATED ITEMS AND STRUCTURED DATA (published)\n";
+$own->api('save_collection', ['id' => 'col_dept', 'name' => 'Departments', 'slug' => 'departments', 'fields' => []]);
+$r = $own->api('save_collection', ['id' => 'col_staff', 'name' => 'Staff', 'slug' => 'staff', 'fields' => [
+    ['id' => 'dept', 'key' => 'dept', 'label' => 'Department', 'type' => 'reference', 'target' => 'col_dept']]]);
+check('a reference field can point to another collection', !empty($r['json']['success']));
+$r = $own->api('save_collection', ['id' => 'col_shop', 'name' => 'Shop', 'slug' => 'shop', 'fields' => [
+    ['id' => 'photo', 'key' => 'photo', 'label' => 'Photo', 'type' => 'image'],
+    ['id' => 'price', 'key' => 'price', 'label' => 'Price', 'type' => 'number']],
+    'schema' => ['type' => 'Product', 'map' => ['image' => 'photo', 'price' => 'price'], 'currency' => 'EUR']]);
+$cols = $own->api('get_collections');
+$shop = array_values(array_filter($cols['json'] ?? [], function ($c) { return $c['id'] === 'col_shop'; }))[0] ?? [];
+check('the structured data of a collection is saved and given back', !empty($r['json']['success']) && ($shop['schema']['type'] ?? '') === 'Product' && ($shop['schema']['map']['price'] ?? '') === 'price' && ($shop['schema']['currency'] ?? '') === 'EUR', json_encode($shop['schema'] ?? null));
+$own->api('save_item', ['id' => 'dep1', 'collection_id' => 'col_dept', 'title' => 'Design', 'slug' => 'design', 'status' => 'published',
+    'blocks' => [['id' => 'rl1', 'type' => 'RELATED', 'styles' => [], 'content' => ['collectionId' => 'col_staff', 'fieldId' => 'dept', 'limit' => 5, 'title' => 'Our people', 'columns' => 2]]]]);
+$own->api('save_item', ['id' => 'st1', 'collection_id' => 'col_staff', 'title' => 'Ana Rossi', 'slug' => 'ana-rossi', 'status' => 'published', 'blocks' => [], 'field_values' => ['dept' => 'dep1']]);
+$own->api('save_item', ['id' => 'st2', 'collection_id' => 'col_staff', 'title' => 'Luca Bianchi', 'slug' => 'luca-bianchi', 'status' => 'published', 'blocks' => [], 'field_values' => ['dept' => '']]);
+$own->api('save_item', ['id' => 'sh1', 'collection_id' => 'col_shop', 'title' => 'Green Tea', 'slug' => 'green-tea', 'status' => 'published',
+    'blocks' => [['id' => 'sf1', 'type' => 'ITEM_FIELD', 'styles' => [], 'content' => ['field' => 'price']]],
+    'field_values' => ['photo' => 'https://x.test/tea.jpg', 'price' => 12]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$dept_page = (string)@file_get_contents($web . '/departments/design/index.html');
+check('a department page lists the people who point to it (and not the others)', strpos($dept_page, 'Ana Rossi') !== false && strpos($dept_page, 'Our people') !== false && strpos($dept_page, 'Luca Bianchi') === false, substr($dept_page, 0, 0));
+$shop_page = (string)@file_get_contents($web . '/shop/green-tea/index.html');
+preg_match('#<script type="application/ld\+json">(.*?)</script>#s', $shop_page, $sm);
+$sld = json_decode($sm[1] ?? '', true);
+check('an item page of a Product collection carries its structured data (name, photo, price in EUR)', ($sld['@type'] ?? '') === 'Product' && ($sld['name'] ?? '') === 'Green Tea' && ($sld['image'] ?? '') === 'https://x.test/tea.jpg' && ($sld['offers']['priceCurrency'] ?? '') === 'EUR' && ($sld['offers']['price'] ?? 0) == 12, json_encode($sld));
+check('…and a page without structured data has no JSON-LD', strpos((string)@file_get_contents($web . '/departments/design/index.html'), 'application/ld+json') === false);
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

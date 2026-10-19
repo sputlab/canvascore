@@ -5,7 +5,7 @@ import { ListChecks, ArrowUp, ArrowDown, Trash2, Plus, Save } from 'lucide-react
 import { Button, Section, Field, Input, Select } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
-import { FIELD_TYPES, newFieldId, keyFromLabel, optionValue } from '../editor/itemFields';
+import { FIELD_TYPES, FIELD_TYPE_LABEL, SCHEMA_TYPES, newFieldId, keyFromLabel, optionValue } from '../editor/itemFields';
 
 // Choices, one per line: "label" or "value | label"
 const choicesText = (options) => (options || []).map((o) => (o.value === optionValue(o.label) ? o.label : `${o.value} | ${o.label}`)).join('\n');
@@ -32,6 +32,10 @@ const twoCols = { display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax
 export default function CollectionFields({ collection, collections, canEdit, onSaved }) {
   const [defs, setDefs] = useState(() => (collection.fields || []).map((f) => ({ ...f, _choices: choicesText(f.options) })));
   const [busy, setBusy] = useState(false);
+  // structured data for search engines: the schema.org type of the items and the field behind each property
+  const [sType, setSType] = useState((collection.schema && collection.schema.type) || '');
+  const [sMap, setSMap] = useState((collection.schema && collection.schema.map) || {});
+  const [sCur, setSCur] = useState((collection.schema && collection.schema.currency) || '');
   const others = (collections || []).filter((c) => c.id !== collection.id);
   const update = (id, patch) => setDefs((list) => list.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   const move = (i, dir) => setDefs((list) => {
@@ -57,7 +61,8 @@ export default function CollectionFields({ collection, collections, canEdit, onS
       return { ...f, key, ...(f.type === 'choice' ? { options: parseChoices(_choices) } : {}) };
     });
     try {
-      const data = await (await fetch('api.php?action=save_collection', { method: 'POST', body: JSON.stringify({ id: collection.id, name: collection.name, slug: collection.slug, fields }) })).json();
+      const schema = { type: sType, map: sType ? sMap : {}, currency: sType === 'Product' ? sCur : '' };
+      const data = await (await fetch('api.php?action=save_collection', { method: 'POST', body: JSON.stringify({ id: collection.id, name: collection.name, slug: collection.slug, fields, schema }) })).json();
       if (!data || !data.success) { notify((data && data.message) || 'Could not save the fields.', 'error'); return; }
       notify('Fields saved.');
       if (onSaved) onSaved();
@@ -115,6 +120,30 @@ export default function CollectionFields({ collection, collections, canEdit, onS
             )}
           </div>
         ))}
+      </div>
+      <div style={{ ...rowStyle, marginTop: 12 }}>
+        <Field label="Structured data for search engines (Google and others)">
+          <Select aria-label="Structured data type" value={sType} onChange={(e) => { setSType(e.target.value); setSMap({}); }}
+            options={[['', 'None'], ...Object.entries(SCHEMA_TYPES).map(([id, t]) => [id, t.label])]} />
+        </Field>
+        {sType && (
+          <>
+            <p className="ui-cell-muted" style={{ margin: 0, fontSize: 12 }}>Each item page gets this data. The name and the address come from the item; the other properties come from these fields:</p>
+            <div style={twoCols}>
+              {Object.entries(SCHEMA_TYPES[sType].props).map(([prop, [label, allowed]]) => (
+                <Field key={prop} label={label}>
+                  <Select aria-label={`Structured data ${label}`} value={sMap[prop] || ''} onChange={(e) => setSMap((m) => ({ ...m, [prop]: e.target.value || undefined }))}
+                    options={[['', '— none —'], ...defs.filter((d) => allowed.includes(d.type)).map((d) => [d.id, `${d.label} (${FIELD_TYPE_LABEL[d.type] || d.type})`])]} />
+                </Field>
+              ))}
+            </div>
+            {sType === 'Product' && (
+              <Field label="Currency (ISO code, for the price)">
+                <Input value={sCur} maxLength={3} aria-label="Structured data currency" placeholder="EUR" onChange={(e) => setSCur(e.target.value.toUpperCase())} />
+              </Field>
+            )}
+          </>
+        )}
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         <Button size="sm" icon={Plus} onClick={add}>Add field</Button>

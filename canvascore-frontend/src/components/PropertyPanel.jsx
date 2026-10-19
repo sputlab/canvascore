@@ -177,6 +177,8 @@ export default function PropertyPanel() {
     pages, collections, lstOf, lstPatch, lstRemove, lstAdd, lstMove, userRole,
     // the custom fields of the collection item being edited (Item Field block)
     fieldDefs: activePage?.__fieldDefs || [],
+    // the collection of the item being edited (a Related block needs a reference to it)
+    itemCollectionId: activePage?.__item ? activePage.collection_id : null,
   };
 
   return (

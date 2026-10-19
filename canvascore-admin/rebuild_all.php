@@ -240,13 +240,15 @@ try {
             $item_index[$ii['id']] = ['title' => (string)$ii['title'], 'slug' => cc_safe_slug($ii['slug']), 'col_slug' => cc_safe_slug($ii['col_slug']),
                 'live' => $ii['status'] === 'published' && (int)($ii['archived'] ?? 0) !== 1];
         }
-        $cols = $pdo->query("SELECT id, slug, fields FROM collections")->fetchAll(PDO::FETCH_ASSOC);
+        $cols = $pdo->query("SELECT id, slug, fields, schema_json FROM collections")->fetchAll(PDO::FETCH_ASSOC);
         foreach ($cols as $col) {
             $col_slug = cc_safe_slug($col['slug']);
             if (cc_slug_reserved($col_slug)) { $warnings[] = 'Not published: a collection uses the reserved address /' . $col_slug . '/'; continue; }
             // The collection's custom fields, by id
             $defs_by_id = [];
             foreach (cc_field_defs(json_decode((string)($col['fields'] ?? '[]'), true), $pdo) as $fd) $defs_by_id[$fd['id']] = $fd;
+            // Structured data of the items (schema.org), from the collection's schema
+            $col_schema = cc_schema_clean(json_decode((string)($col['schema_json'] ?? '{}'), true), array_values($defs_by_id));
             $its = $pdo->prepare("SELECT * FROM collection_items WHERE collection_id = ? AND status = 'published'");
             $its->execute([$col['id']]);
             foreach ($its->fetchAll(PDO::FETCH_ASSOC) as $it) {
@@ -259,7 +261,7 @@ try {
                 $i_raw = json_decode((string)($it['field_values'] ?? '{}'), true);
                 $i_values = [];
                 foreach ($defs_by_id as $fid => $fd) $i_values[$fid] = cc_field_clean($fd, is_array($i_raw) ? ($i_raw[$fid] ?? null) : null, $pdo);
-                cc_item_context(['defs' => $defs_by_id, 'values' => $i_values, 'items' => $item_index]);
+                cc_item_context(['defs' => $defs_by_id, 'values' => $i_values, 'items' => $item_index, 'item' => (string)$it['id'], 'collection_id' => (string)$col['id']]);
                 $i_content = '';
                 if (is_array($i_blocks)) foreach ($i_blocks as $b) $i_content .= render_block($b);
                 cc_item_context(null);
@@ -277,6 +279,8 @@ try {
                 if ($og_image !== '') $i_seo_head .= '<meta property="og:image" content="' . htmlspecialchars($og_image) . '">' . "\n";
                 if ($i_abs !== '') $i_seo_head .= '<meta property="og:url" content="' . htmlspecialchars($i_abs) . '">' . "\n";
                 $i_seo_head .= '<meta name="twitter:card" content="' . ($og_image !== '' ? 'summary_large_image' : 'summary') . '">' . "\n";
+                // structured data for search engines (the collection's schema), with the item's own values
+                $i_seo_head .= cc_item_jsonld($col_schema, $defs_by_id, $i_values, (string)$it['title'], $i_abs, $abs);
 
                 $ihtml = str_replace('{{PAGE_TITLE}}', $i_seo_title, $template);
                 $ihtml = str_replace('{{META_DESCRIPTION}}', $i_seo_desc, $ihtml);

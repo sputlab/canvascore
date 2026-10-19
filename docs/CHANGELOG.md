@@ -18,6 +18,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - **Item Field block**: shows one field of the collection item being published on its page, with its label if asked
   (numbers: decimals; dates: long or ISO format). Pages that are not collection items show nothing.
 - Database schema 9: `collections.fields` and `collection_items.field_values` (added on update).
+- **Collection List: fields on the cards**, a **sort** (title, date, or a field) and a **filter** by a choice field
+  (buttons above the list, shown without a reload).
+- **Related Items block**: on an item page, lists the items of a collection that point to it through a reference field
+  (a department page listing its people, a client page listing its projects).
+- **Structured data for search engines**: a collection can be Product, Event or Person (Collections › Fields). Its item
+  pages get schema.org JSON-LD from the fields chosen for each property (price in the currency chosen, photo, dates...).
+- Database schema 10: `collections.schema_json` (added on update).
 
 ## [0.18.0] - 2026-10-18 — Button and field presets, copy & paste style, on-canvas handles
 

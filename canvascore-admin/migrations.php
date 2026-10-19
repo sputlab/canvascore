@@ -194,6 +194,11 @@ function cc_db_migrations() {
             cc_add_col($pdo, 'collections', 'fields', "TEXT DEFAULT '[]'");
             cc_add_col($pdo, 'collection_items', 'field_values', "TEXT DEFAULT '{}'");
         },
+
+        // v10 — structured data (schema.org) per collection: the type and which field gives each property
+        10 => function ($pdo) {
+            cc_add_col($pdo, 'collections', 'schema_json', "TEXT DEFAULT '{}'");
+        },
     ];
 }
 

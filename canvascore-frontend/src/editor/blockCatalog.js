@@ -6,7 +6,7 @@ import {
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
   Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
   StarHalf, MessagesSquare, SquareMousePointer, ScrollText, MapPinned, TableOfContents, Share2, Code2,
-  Calculator, ListChecks, Film, Headphones, Megaphone, MailPlus, Braces,
+  Calculator, ListChecks, Film, Headphones, Megaphone, MailPlus, Braces, Link2,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -80,6 +80,7 @@ export const BLOCKS = [
   { type: 'SHARE_BAR', label: 'Share Bar', icon: Share2, category: 'business', color: '#22d3ee', keywords: 'social share facebook whatsapp copy link print' },
   { type: 'SEARCH', label: 'Site Search', icon: Search, category: 'business', color: '#22d3ee', keywords: 'search find query results' },
   { type: 'ITEM_FIELD', label: 'Item Field', icon: Braces, category: 'business', color: '#a78bfa', keywords: 'field custom data value collection item' },
+  { type: 'RELATED', label: 'Related Items', icon: Link2, category: 'business', color: '#f472b6', keywords: 'related items references team projects backlinks' },
 ];
 
 const BY_TYPE = Object.fromEntries(BLOCKS.map((b) => [b.type, b]));

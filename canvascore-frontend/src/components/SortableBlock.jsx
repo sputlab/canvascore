@@ -248,6 +248,12 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
       return emptyPlaceholder(d ? `Item field: ${d.label}. Shown on each collection item page.` : 'Item field: choose a field in the settings panel.');
     }
 
+    // RELATED: the items that point to the collection item being published (listed on the published item page)
+    if (block.type === 'RELATED') {
+      const cname = block.content?.collectionName;
+      return emptyPlaceholder(cname ? `Related items from ${cname}. Shown on each collection item page.` : 'Related items: choose a collection and a reference field in the settings panel.');
+    }
+
     // CONTAINER: canonical root (with sizing neutralized) + interactive React children
     if (CONTAINERS.includes(block.type)) {
       const r = blockRoot(innerBlock);

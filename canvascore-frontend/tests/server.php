@@ -141,6 +141,34 @@ check('…and a field that is empty or unknown shows nothing', cc_render_item_fi
 cc_item_context(null);
 check('…and on a page that is not a collection item it shows nothing', cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 't1']]) === '');
 
+echo "\nLISTS, SORT AND FILTER, STRUCTURED DATA\n";
+$ldefs = ['p' => ['id' => 'p', 'key' => 'price', 'label' => 'Price', 'type' => 'number'], 'tier' => ['id' => 'tier', 'key' => 'tier', 'label' => 'Tier', 'type' => 'choice', 'multiple' => false,
+    'options' => [['value' => 'gold', 'label' => 'Gold'], ['value' => 'silver', 'label' => 'Silver']]]];
+$litems = [['title' => 'B', 'date' => '2026-01-02', 'vals' => ['p' => '30', 'tier' => 'gold']], ['title' => 'a', 'date' => '', 'vals' => []], ['title' => 'C', 'date' => '2026-01-01', 'vals' => ['p' => '5', 'tier' => 'silver']]];
+$names = function ($xs) { return implode(',', array_column($xs, 'title')); };
+check('sort by a number: ascending and descending, with the items that have no value last', $names(cc_sort_items($litems, 'p', false, $ldefs)) === 'C,B,a' && $names(cc_sort_items($litems, 'p', true, $ldefs)) === 'B,C,a', $names(cc_sort_items($litems, 'p', false, $ldefs)));
+check('sort by title (any case) and by date; no sort keeps the order given', $names(cc_sort_items($litems, 'title', false, $ldefs)) === 'a,B,C' && $names(cc_sort_items($litems, 'date', false, $ldefs)) === 'C,B,a' && $names(cc_sort_items($litems, '', false, $ldefs)) === 'B,a,C');
+$lopts = cc_list_options(['showCover' => false, 'cardFields' => ['p', 'nope'], 'showDate' => false], $ldefs, ['items' => []], 'grid', 'tier');
+$lcards = cc_list_cards([$litems[0]], 'team', $lopts);
+check('a card shows its chosen fields (label and value), and carries its choices for the filter', strpos($lcards, '>Price</span>') !== false && strpos($lcards, '>30</div>') !== false && strpos($lcards, 'data-cc-filter="gold"') !== false, $lcards);
+check('a card without the filter has no filter attribute, and an unknown card field shows nothing', strpos(cc_list_cards([$litems[0]], 'team', cc_list_options([], $ldefs, ['items' => []], 'grid', '')), 'data-cc-filter') === false && strpos(cc_list_cards([$litems[0]], 'team', cc_list_options(['cardFields' => ['zzz']], $ldefs, ['items' => []], 'grid', '')), 'cc-cl-field') === false);
+$lui = cc_list_filter_ui('lst1', $ldefs['tier']);
+check('the filter gives an All button and one per choice, and a script that hides the cards that do not match', strpos($lui, 'data-cc-filter-value="silver"') !== false && strpos($lui, 'data-cc-filter-value=""') !== false && strpos($lui, '<script>') !== false && strpos($lui, "getElementById('lst1')") !== false);
+check('no filter for a field that is not a choice', cc_list_filter_ui('x', $ldefs['p']) === '');
+$schema_defs = [['id' => 'ph', 'key' => 'photo', 'label' => 'Photo', 'type' => 'image'], ['id' => 'pr', 'key' => 'price', 'label' => 'Price', 'type' => 'number'], ['id' => 'de', 'key' => 'de', 'label' => 'D', 'type' => 'richtext']];
+$sc = cc_schema_clean(['type' => 'Product', 'map' => ['image' => 'ph', 'price' => 'de', 'description' => 'de', 'sku' => 'pr', 'nope' => 'ph'], 'currency' => 'eur'], $schema_defs);
+check('structured data: a property takes only a field of its type, and the currency is an ISO code (lower case is accepted)', $sc === ['type' => 'Product', 'map' => ['image' => 'ph', 'description' => 'de'], 'currency' => 'EUR'] && cc_schema_clean(['type' => 'Product', 'currency' => 'EU'], $schema_defs)['currency'] === '', json_encode($sc));
+check('structured data: an unknown type is no structured data', cc_schema_clean(['type' => 'Recipe'], $schema_defs)['type'] === '');
+$pscope = cc_item_jsonld(['type' => 'Product', 'map' => ['image' => 'ph', 'price' => 'pr', 'description' => 'de'], 'currency' => 'EUR'], [],
+    ['ph' => 'https://x.test/a.jpg', 'pr' => 12.5, 'de' => '<p>Fine &amp; <b>warm</b></p></script><script>alert(1)</script>'], 'Tea </script> cup', 'https://x.test/tea/', function ($u) { return $u; });
+preg_match('#<script type="application/ld\+json">(.*)</script>#s', $pscope, $pm);
+$pld = json_decode($pm[1] ?? '', true);
+check('a Product page gets JSON-LD with its name, image, price and currency, and the script tag is never closed early', $pld && $pld['@type'] === 'Product' && $pld['name'] === 'Tea </script> cup' && $pld['offers']['price'] === 12.5 && $pld['offers']['priceCurrency'] === 'EUR' && $pld['image'] === 'https://x.test/a.jpg' && substr_count($pscope, '</script>') === 1, $pscope);
+check('…the description is text, not markup', $pld && $pld['description'] === 'Fine & warm alert(1)' || ($pld && strpos($pld['description'], '<') === false), json_encode($pld['description'] ?? null));
+$escope = cc_item_jsonld(['type' => 'Event', 'map' => ['startDate' => 'sd', 'location' => 'lo'], 'currency' => ''], [], ['sd' => '2026-11-03', 'lo' => 'Milan Hall'], 'Talk', '', function ($u) { return $u; });
+check('an Event page gets its start date and location; no offers', strpos($escope, '"startDate":"2026-11-03"') !== false && strpos($escope, '"@type":"Place"') !== false && strpos($escope, 'offers') === false, $escope);
+check('an item without a schema gets no JSON-LD', cc_item_jsonld([], [], [], 'x', '', 'strval') === '');
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

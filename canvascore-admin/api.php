@@ -779,8 +779,12 @@ if ($action === 'clear_submissions' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ---- Collections (management: admin) ----
 if ($action === 'get_collections') {
-    $rows = $pdo->query("SELECT id, name, slug, fields, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($rows as &$r) { $r['fields'] = cc_field_defs(json_decode((string)($r['fields'] ?? '[]'), true), $pdo); }
+    $rows = $pdo->query("SELECT id, name, slug, fields, schema_json, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as &$r) {
+        $r['fields'] = cc_field_defs(json_decode((string)($r['fields'] ?? '[]'), true), $pdo);
+        $r['schema'] = cc_schema_clean(json_decode((string)($r['schema_json'] ?? '{}'), true), $r['fields']);
+        unset($r['schema_json']);
+    }
     unset($r);
     echo json_encode($rows); exit;
 }
@@ -794,6 +798,13 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Custom fields: sent with the collection (a save without them keeps the ones it has)
     $fields_json = null;
     if (array_key_exists('fields', $d)) $fields_json = json_encode(cc_field_defs($d['fields'], $pdo));
+    // Structured data: checked against the fields being saved (or the ones the collection has)
+    $schema_json = null;
+    if (array_key_exists('schema', $d)) {
+        $sdefs = $fields_json !== null ? json_decode($fields_json, true) : null;
+        if ($sdefs === null) { $fq = $pdo->prepare("SELECT fields FROM collections WHERE id = ?"); $fq->execute([$id]); $sdefs = cc_field_defs(json_decode((string)($fq->fetchColumn() ?: '[]'), true), $pdo); }
+        $schema_json = json_encode(cc_schema_clean($d['schema'], $sdefs));
+    }
     $chk = $pdo->prepare("SELECT id, slug FROM collections WHERE id = ?"); $chk->execute([$id]);
     $existing = $chk->fetch(PDO::FETCH_ASSOC);
     // Renaming keeps the address unless a new slug is sent explicitly
@@ -806,6 +817,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->prepare("UPDATE collections SET name=?, slug=? WHERE id=?")->execute([$name, $slug, $id]);
             if ($fields_json !== null) $pdo->prepare("UPDATE collections SET fields=? WHERE id=?")->execute([$fields_json, $id]);
+            if ($schema_json !== null) $pdo->prepare("UPDATE collections SET schema_json=? WHERE id=?")->execute([$schema_json, $id]);
             // New address: every published item forwards from its old URL (the files move at the next publish)
             if ($existing['slug'] !== $slug) {
                 $its = $pdo->prepare("SELECT slug FROM collection_items WHERE collection_id = ? AND status = 'published'"); $its->execute([$id]);
@@ -820,7 +832,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'message' => 'Could not rename the collection: ' . $e->getMessage()]); exit;
         }
     } else {
-        $pdo->prepare("INSERT INTO collections (id, name, slug, fields) VALUES (?,?,?,?)")->execute([$id, $name, $slug, $fields_json ?? '[]']);
+        $pdo->prepare("INSERT INTO collections (id, name, slug, fields, schema_json) VALUES (?,?,?,?,?)")->execute([$id, $name, $slug, $fields_json ?? '[]', $schema_json ?? '{}']);
     }
     echo json_encode(['success' => true, 'id' => $id, 'name' => $name, 'slug' => $slug, 'moved' => $existing && $existing['slug'] !== $slug]); exit;
 }
