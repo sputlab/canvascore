@@ -212,6 +212,31 @@ $sld = json_decode($sm[1] ?? '', true);
 check('an item page of a Product collection carries its structured data (name, photo, price in EUR)', ($sld['@type'] ?? '') === 'Product' && ($sld['name'] ?? '') === 'Green Tea' && ($sld['image'] ?? '') === 'https://x.test/tea.jpg' && ($sld['offers']['priceCurrency'] ?? '') === 'EUR' && ($sld['offers']['price'] ?? 0) == 12, json_encode($sld));
 check('…and a page without structured data has no JSON-LD', strpos((string)@file_get_contents($web . '/departments/design/index.html'), 'application/ld+json') === false);
 
+echo "\nITEM DESIGN\n";
+$own->api('save_collection', ['id' => 'col_books', 'name' => 'Books', 'slug' => 'books', 'fields' => [['id' => 'name', 'key' => 'name', 'label' => 'Name', 'type' => 'text']]]);
+$r = $own->api('save_collection_design', ['collection_id' => 'col_books', 'blocks' => [
+    ['id' => 'dz1', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<h1>{{field:name}}</h1><p>{{item:title}}</p>']]]]);
+check('an admin saves the design of a collection', !empty($r['json']['success']) && ($r['json']['blocks'] ?? 0) === 1, json_encode($r['json'] ?? null));
+$got = $own->req('GET', '/canvascore-admin/api.php?action=get_collection_design&collection=col_books');
+check('the design is given back', count($got['json']['blocks'] ?? []) === 1 && $got['json']['blocks'][0]['id'] === 'dz1');
+$own->api('save_item', ['id' => 'bk1', 'collection_id' => 'col_books', 'title' => 'Dune', 'slug' => 'dune', 'status' => 'published', 'blocks' => null, 'field_values' => ['name' => 'Frank Herbert']]);
+$own->api('save_item', ['id' => 'bk2', 'collection_id' => 'col_books', 'title' => 'Emma', 'slug' => 'emma', 'status' => 'published', 'blocks' => [['id' => 'own1', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => 'OWN BLOCK']]], 'field_values' => ['name' => 'Jane Austen']]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$p1 = (string)@file_get_contents($web . '/books/dune/index.html');
+$p2 = (string)@file_get_contents($web . '/books/emma/index.html');
+check('every item page is built from the design, with its own values', strpos($p1, '<h1>Frank Herbert</h1>') !== false && strpos($p1, '<p>Dune</p>') !== false && strpos($p2, '<h1>Jane Austen</h1>') !== false, substr($p1, 0, 0));
+check('an item\'s own blocks are not shown when the collection has a design', strpos($p2, 'OWN BLOCK') === false);
+$own->api('save_item', ['id' => 'bk2', 'collection_id' => 'col_books', 'title' => 'Emma', 'slug' => 'emma', 'status' => 'published', 'blocks' => null, 'field_values' => ['name' => 'Jane A.']]);
+$kept = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=bk2');
+check('saving an item built from the design keeps its own stored blocks (nothing is lost)', strpos((string)($kept['json']['content_json'] ?? ''), 'OWN BLOCK') !== false);
+$own->api('save_collection', ['id' => 'col_plain', 'name' => 'Plain', 'slug' => 'plain', 'fields' => []]);
+$own->api('save_item', ['id' => 'pl1', 'collection_id' => 'col_plain', 'title' => 'Old one', 'slug' => 'old-one', 'status' => 'published', 'blocks' => [['id' => 'pl1b', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => 'LEGACY BLOCK']]]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('a collection with no design keeps its items\' own blocks', strpos((string)@file_get_contents($web . '/plain/old-one/index.html'), 'LEGACY BLOCK') !== false);
+$own->api('save_collection_design', ['collection_id' => 'col_books', 'blocks' => []]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('without blocks in the design, the items go back to their own blocks', strpos((string)@file_get_contents($web . '/books/emma/index.html'), 'OWN BLOCK') !== false);
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

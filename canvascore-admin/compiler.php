@@ -1479,6 +1479,73 @@ function cc_item_context($ctx = false) {
     if ($ctx !== false) $current = $ctx;
     return $current;
 }
+// ---------------------------------------------------------------------------
+// Dynamic values: any text or value of a block may hold {{field:KEY}} (a field of the collection), {{field:KEY.part}}
+// (a link's url or text, a reference's title or url) and {{item:title|excerpt|date|url}} (the item itself). On an item
+// page they are replaced with the item's values, escaped (a rich-text field gives its cleaned HTML). On any other page
+// they are removed, so no placeholder reaches a visitor. Twin: src/render/itemBinding.mjs.
+// ---------------------------------------------------------------------------
+const CC_TOKEN_RE = '/\{\{(field|item):([a-z][a-z0-9_]{0,39})(?:\.([a-z]{1,20}))?\}\}/';
+// A date as the site writes it ("October 19, 2026"); '' when it is not a date
+function cc_long_date($ymd) {
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $ymd) || !checkdate((int)substr($ymd, 5, 2), (int)substr($ymd, 8, 2), (int)substr($ymd, 0, 4))) return '';
+    return date('F j, Y', strtotime($ymd . ' 12:00:00'));
+}
+// A number without trailing zeros (12.5 and 12 as "12.5" and "12")
+function cc_plain_number($v) {
+    $s = rtrim(rtrim(number_format((float)$v, 6, '.', ''), '0'), '.');
+    return htmlspecialchars($s === '-0' ? '0' : $s);
+}
+function cc_bind_token($m, $ctx) {
+    if ($ctx === null) return '';
+    $kind = $m[1]; $name = $m[2]; $part = $m[3] ?? '';
+    if ($kind === 'item') {
+        $it = $ctx['page'] ?? [];   // the item's title, excerpt, date and address
+        if ($name === 'date') return htmlspecialchars(cc_long_date((string)($it['date'] ?? '')));
+        if (in_array($name, ['title', 'excerpt', 'url'], true)) return htmlspecialchars((string)($it[$name] ?? ''));
+        return '';
+    }
+    $def = null;
+    foreach ($ctx['defs'] ?? [] as $d) { if ($d['key'] === $name) { $def = $d; break; } }
+    if ($def === null) return '';
+    $v = $ctx['values'][$def['id']] ?? null;
+    switch ($def['type']) {
+        case 'text': case 'image':
+            return htmlspecialchars((string)$v);
+        case 'richtext':
+            return (string)$v;   // cleaned when it was saved
+        case 'number':
+            return $v === null ? '' : cc_plain_number($v);
+        case 'date':
+            return htmlspecialchars(cc_long_date((string)$v));
+        case 'link':
+            $url = is_array($v) ? (string)($v['url'] ?? '') : '';
+            if ($part === 'text') return htmlspecialchars(is_array($v) && $v['text'] !== '' ? (string)$v['text'] : $url);
+            return $url === '' ? '' : htmlspecialchars(cc_block_url($url));
+        case 'choice':
+            $names = [];
+            foreach ((array)$v as $x) { foreach ($def['options'] ?? [] as $o) { if ($o['value'] === $x) { $names[] = htmlspecialchars($o['label']); break; } } }
+            return implode(', ', $names);
+        case 'reference':
+            $ref = is_string($v) && $v !== '' ? ($ctx['items'][$v] ?? null) : null;
+            if ($ref === null) return '';
+            if ($part === 'url') return $ref['live'] ? htmlspecialchars('{{BASE_URL}}' . $ref['col_slug'] . '/' . $ref['slug'] . '/') : '';
+            return htmlspecialchars($ref['title']);
+    }
+    return '';
+}
+// Replaces the tokens of a string (or of every string in an array, keys kept) for the item being published
+function cc_bind_deep($value, $ctx) {
+    if (is_string($value)) {
+        if (strpos($value, '{{') === false) return $value;
+        return preg_replace_callback(CC_TOKEN_RE, function ($m) use ($ctx) { return cc_bind_token($m, $ctx); }, $value);
+    }
+    if (is_array($value)) {
+        foreach ($value as $k => $v) $value[$k] = cc_bind_deep($v, $ctx);
+    }
+    return $value;
+}
+
 // The HTML of one field's value (no label), for its type. '' when the value is empty.
 function cc_field_html($d, $v, $c, $ctx) {
     switch ($d['type']) {
@@ -1545,6 +1612,8 @@ function render_block($block) {
 }
 
 function cc_render_block_body($block) {
+    // dynamic values: the item's fields and title, on an item page (removed elsewhere)
+    if (isset($block['content']) && is_array($block['content'])) $block['content'] = cc_bind_deep($block['content'], cc_item_context());
 
     static $masters_cache = null;
     if ($masters_cache === null) {

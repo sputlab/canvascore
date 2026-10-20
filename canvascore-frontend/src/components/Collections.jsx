@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
-import { Library, Plus, Trash2, Pencil, FileText, Folder, Archive, ArchiveRestore, Globe, CheckSquare, MoveRight, X } from 'lucide-react';
+import { Library, Plus, Trash2, Pencil, FileText, Folder, Archive, ArchiveRestore, Globe, CheckSquare, MoveRight, X, LayoutTemplate } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, Badge, StatusBadge, Select } from '../ui/kit';
 import { slugify } from '../utils/slug';
 import { notify } from '../ui/notify';
@@ -99,6 +99,20 @@ export default function Collections() {
   };
 
   // A new item (item = null) can start from a starter template: its blocks, with fresh ids
+  // The design of a collection: the blocks every item page is built from (admins). It is edited like a page; the site
+  // shows it once it is published.
+  const openDesign = async (c) => {
+    let blocks = [];
+    try {
+      const data = await (await fetch('api.php?action=get_collection_design&collection=' + encodeURIComponent(c.id))).json();
+      blocks = Array.isArray(data.blocks) ? data.blocks : [];
+    } catch { notify('Could not open the design (connection problem).', 'error'); return; }
+    setActivePage({ id: 'design_' + c.id, __design: true, collection_id: c.id, __collectionSlug: c.slug, __fieldDefs: c.fields || [],
+      title: 'Design of ' + c.name, slug: c.slug, layout: 'full', bg_color: '#ffffff', boxed_width: '1100px', status: 'draft', seo_title: '', seo_description: '' });
+    setBlocks(blocks);
+    setSelectedBlockId(null);
+    setView('editor');
+  };
   const editItem = async (item, starter = null) => {
     let full = { id: item?.id, collection_id: active.id, title: 'New Item', slug: 'new-item', excerpt: '', cover_image: '', date: new Date().toISOString().slice(0, 10), status: 'draft', archived: 0, seo_title: '', seo_description: '', blocks: starter ? starterBlocks(starter) : [] };
     if (item) {
@@ -123,7 +137,18 @@ export default function Collections() {
       __fieldDefs: active.fields || [], field_values: full.field_values || {},
       layout: 'full', bg_color: '#ffffff', boxed_width: '1100px',
     });
-    setBlocks(Array.isArray(full.blocks) ? full.blocks : []);
+    // With a design, the item's page is the design: its blocks come from the design and stay as they are (read-only)
+    let blocks = Array.isArray(full.blocks) ? full.blocks : [];
+    let locked = false;
+    if (active.has_design) {
+      try {
+        const d = await (await fetch('api.php?action=get_collection_design&collection=' + encodeURIComponent(active.id))).json();
+        blocks = Array.isArray(d.blocks) ? d.blocks : [];
+        locked = blocks.length > 0;
+      } catch { notify('Could not open the item (connection problem).', 'error'); return; }
+    }
+    setActivePage({ ...useStore.getState().activePage, __locked: locked, __collectionSlug: active.slug });
+    setBlocks(blocks);
     setSelectedBlockId(null);
     setView('editor');
   };
@@ -292,6 +317,7 @@ export default function Collections() {
                 </div>
                 <span className="ui-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                   {userRole === 'admin' && <Button size="sm" icon={Pencil} onClick={() => startRename(active)}>Rename</Button>}
+                  {userRole === 'admin' && <Button size="sm" icon={LayoutTemplate} onClick={() => openDesign(active)} title={active.has_design ? 'Edit the design every item page is built from' : 'Design the item pages of this collection'}>{active.has_design ? 'Design' : 'Make the design'}</Button>}
                   <Button variant="primary" size="sm" icon={Plus} onClick={() => setPicking(true)}>New Item</Button>
                 </span>
               </div>

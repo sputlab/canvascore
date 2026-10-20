@@ -25,6 +25,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - **Structured data for search engines**: a collection can be Product, Event or Person (Collections › Fields). Its item
   pages get schema.org JSON-LD from the fields chosen for each property (price in the currency chosen, photo, dates...).
 - Database schema 10: `collections.schema_json` (added on update).
+- **One design per collection** (Collections › Design, admins): the blocks every item page of the collection is built
+  from. It is edited like a page, and published with the site. An item keeps its fields and settings, and its layout is
+  read-only in the editor (the canvas says so). A collection without a design keeps the blocks of each item.
+- **Dynamic values** in any block: `{{field:key}}` shows a field of the item (`{{field:key.text}}` the text of a link,
+  `.url` a link or a reference's page, `.title` a reference's title), `{{item:title}}`, `{{item:excerpt}}`,
+  `{{item:date}}` and `{{item:url}}` show the item itself. In the editor, the design shows the field names in brackets.
+- Database schema 11: `collections.design_json` (added on update).
 
 ## [0.18.0] - 2026-10-18 — Button and field presets, copy & paste style, on-canvas handles
 

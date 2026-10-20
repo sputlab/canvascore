@@ -779,11 +779,13 @@ if ($action === 'clear_submissions' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ---- Collections (management: admin) ----
 if ($action === 'get_collections') {
-    $rows = $pdo->query("SELECT id, name, slug, fields, schema_json, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $pdo->query("SELECT id, name, slug, fields, schema_json, design_json, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as &$r) {
         $r['fields'] = cc_field_defs(json_decode((string)($r['fields'] ?? '[]'), true), $pdo);
         $r['schema'] = cc_schema_clean(json_decode((string)($r['schema_json'] ?? '{}'), true), $r['fields']);
-        unset($r['schema_json']);
+        $design = json_decode((string)($r['design_json'] ?? '[]'), true);
+        $r['has_design'] = is_array($design) && count($design) > 0;
+        unset($r['schema_json'], $r['design_json']);
     }
     unset($r);
     echo json_encode($rows); exit;
@@ -835,6 +837,23 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("INSERT INTO collections (id, name, slug, fields, schema_json) VALUES (?,?,?,?,?)")->execute([$id, $name, $slug, $fields_json ?? '[]', $schema_json ?? '{}']);
     }
     echo json_encode(['success' => true, 'id' => $id, 'name' => $name, 'slug' => $slug, 'moved' => $existing && $existing['slug'] !== $slug]); exit;
+}
+// The design of a collection: the blocks every item page of the collection is built from (one design per collection)
+if ($action === 'get_collection_design') {
+    $st = $pdo->prepare("SELECT design_json FROM collections WHERE id = ?");
+    $st->execute([$_GET['collection'] ?? '']);
+    $blocks = json_decode((string)($st->fetchColumn() ?: '[]'), true);
+    echo json_encode(['blocks' => is_array($blocks) ? $blocks : []]); exit;
+}
+if ($action === 'save_collection_design' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can change the design of a collection.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true);
+    $cid = is_string($d['collection_id'] ?? null) ? $d['collection_id'] : '';
+    if (!cc_collection_exists($pdo, $cid)) { echo json_encode(['success' => false, 'message' => 'The collection does not exist.']); exit; }
+    $blocks = isset($d['blocks']) && is_array($d['blocks']) ? array_values($d['blocks']) : [];
+    cc_sanitize_blocks($blocks);   // the same rules as any page
+    $pdo->prepare("UPDATE collections SET design_json = ? WHERE id = ?")->execute([json_encode($blocks), $cid]);
+    echo json_encode(['success' => true, 'blocks' => count($blocks)]); exit;
 }
 if ($action === 'delete_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can manage collections.']); exit; }

@@ -105,6 +105,16 @@ export default function VisualEditor() {
         return await res.json();
       } catch { notify('Error saving the part.', 'error'); return null; }
     }
+    // The design of a collection (its blocks are every item page's layout): saved, and shown by publishing the site
+    if (activePage.__design) {
+      try {
+        const res = await fetch('api.php?action=save_collection_design', { method: 'POST', body: JSON.stringify({ collection_id: activePage.collection_id, blocks }) });
+        const data = await res.json();
+        if (data.success) notify('Design saved. Publish the site to update the item pages.');
+        else notify(data.message || 'Could not save the design.', 'error');
+        return data;
+      } catch { notify('Error saving the design.', 'error'); return null; }
+    }
     // Collection item: saved to collection_items
     if (activePage.__item) {
       try {
@@ -113,7 +123,9 @@ export default function VisualEditor() {
           title: activePage.title, slug: activePage.slug, excerpt: activePage.excerpt,
           cover_image: activePage.cover_image, date: activePage.date, archived: activePage.archived ? 1 : 0,
           status: publish ? 'published' : (activePage.status || 'draft'),
-          seo_title: activePage.seo_title, seo_description: activePage.seo_description, blocks,
+          seo_title: activePage.seo_title, seo_description: activePage.seo_description,
+          // an item built from the design keeps its own blocks as they are (null: not sent)
+          blocks: activePage.__locked ? null : blocks,
           field_values: activePage.field_values || {}
         }) });
         const data = await res.json();
@@ -232,7 +244,7 @@ export default function VisualEditor() {
   const leave = async () => {
     if (useStore.getState().editorDirty && !(await confirmDialog({ title: 'Leave with unsaved changes?', message: 'They stay backed up on this device and will be offered next time you open the page, but they are NOT saved to the site.', confirmLabel: 'Leave anyway', cancelLabel: 'Stay' }))) return;
     setSelectedBlockId(null);
-    setView(activePage?.__item ? 'collections' : activePage?.__part ? 'settings' : 'manager');
+    setView(activePage?.__item || activePage?.__design ? 'collections' : activePage?.__part ? 'settings' : 'manager');
   };
 
   const parentId = getValidParentId();
@@ -252,8 +264,8 @@ export default function VisualEditor() {
   }, [activePage?.__item, activePage?.collection_id]);
   const liveUrl = livePageUrl(activePage, pages, colSlug);
 
-  const kind = activePage?.__part ? (activePage.__part === 'header' ? 'Global header' : 'Global footer') : activePage?.__item ? 'Collection item' : null;
-  const backLabel = activePage?.__item ? 'Collections' : activePage?.__part ? 'Global Options' : 'Pages';
+  const kind = activePage?.__part ? (activePage.__part === 'header' ? 'Global header' : 'Global footer') : activePage?.__design ? 'Collection design' : activePage?.__item ? 'Collection item' : null;
+  const backLabel = activePage?.__item || activePage?.__design ? 'Collections' : activePage?.__part ? 'Global Options' : 'Pages';
 
   return (
     <div className="cc-editor">

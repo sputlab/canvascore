@@ -169,6 +169,21 @@ $escope = cc_item_jsonld(['type' => 'Event', 'map' => ['startDate' => 'sd', 'loc
 check('an Event page gets its start date and location; no offers', strpos($escope, '"startDate":"2026-11-03"') !== false && strpos($escope, '"@type":"Place"') !== false && strpos($escope, 'offers') === false, $escope);
 check('an item without a schema gets no JSON-LD', cc_item_jsonld([], [], [], 'x', '', 'strval') === '');
 
+echo "\nDYNAMIC VALUES\n";
+$bdefs = [['id' => 't1', 'key' => 'name', 'type' => 'text', 'label' => 'Name'], ['id' => 'n1', 'key' => 'price', 'type' => 'number', 'label' => 'Price'],
+    ['id' => 'd1', 'key' => 'when', 'type' => 'date', 'label' => 'When'], ['id' => 'l1', 'key' => 'site', 'type' => 'link', 'label' => 'Site'],
+    ['id' => 'c1', 'key' => 'tier', 'type' => 'choice', 'label' => 'Tier', 'multiple' => true, 'options' => [['value' => 'gold', 'label' => 'Gold'], ['value' => 'silver', 'label' => 'Silver']]],
+    ['id' => 'x1', 'key' => 'lead', 'type' => 'reference', 'label' => 'Lead', 'target' => 'c2']];
+$bctx = ['defs' => $bdefs, 'values' => ['t1' => '<b>Ada</b> & co', 'n1' => 12.5, 'd1' => '2026-10-19', 'l1' => ['url' => 'chi-siamo/index.html', 'text' => 'About'], 'c1' => ['gold', 'silver'], 'x1' => 'i9'],
+    'items' => ['i9' => ['title' => 'Ada L.', 'slug' => 'ada', 'col_slug' => 'team', 'live' => true]], 'item' => 'i1',
+    'page' => ['title' => 'Ada "L"', 'excerpt' => '', 'date' => '2026-10-19', 'url' => '{{BASE_URL}}team/ada/']];
+$btpl = 'Hi {{field:name}}, {{field:price}} on {{field:when}}. {{field:site}} / {{field:site.text}} / {{field:tier}} / {{field:lead}} {{field:lead.url}} | {{item:title}} {{item:date}} {{field:missing}} {{item:url}}';
+// the same literal as the JavaScript test (ui-shell.mjs)
+check('dynamic values: fields, item and reference tokens become the item\'s values, escaped', cc_bind_deep($btpl, $bctx) === 'Hi &lt;b&gt;Ada&lt;/b&gt; &amp; co, 12.5 on October 19, 2026. {{BASE_URL}}chi-siamo/ / About / Gold, Silver / Ada L. {{BASE_URL}}team/ada/ | Ada &quot;L&quot; October 19, 2026  {{BASE_URL}}team/ada/', cc_bind_deep($btpl, $bctx));
+check('dynamic values: outside an item they are removed (a visitor never sees a placeholder)', cc_bind_deep($btpl, null) === 'Hi ,  on .  /  /  /   |    ');
+check('dynamic values: every string of a block\'s content is bound, keys kept', json_encode(cc_bind_deep(['text' => '{{field:price}}', 'nested' => ['a' => '{{item:title}}'], 'n' => 3], $bctx)) === '{"text":"12.5","nested":{"a":"Ada &quot;L&quot;"},"n":3}');
+check('dynamic values: a page without tokens is left as it is', cc_bind_deep('plain text', $bctx) === 'plain text');
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

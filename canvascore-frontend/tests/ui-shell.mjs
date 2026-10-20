@@ -1057,6 +1057,43 @@ try {
     COL_SAVES.length = 0;
   }
 
+  console.log('\nITEM DESIGN AND DYNAMIC VALUES');
+  {
+    const ib = await vite.ssrLoadModule('/src/render/itemBinding.mjs');
+    const bdefs = [{ id: 't1', key: 'name', type: 'text', label: 'Name' }, { id: 'n1', key: 'price', type: 'number', label: 'Price' },
+      { id: 'd1', key: 'when', type: 'date', label: 'When' }, { id: 'l1', key: 'site', type: 'link', label: 'Site' },
+      { id: 'c1', key: 'tier', type: 'choice', label: 'Tier', multiple: true, options: [{ value: 'gold', label: 'Gold' }, { value: 'silver', label: 'Silver' }] },
+      { id: 'x1', key: 'lead', type: 'reference', label: 'Lead', target: 'c2' }];
+    const bctx = { defs: bdefs, values: { t1: '<b>Ada</b> & co', n1: 12.5, d1: '2026-10-19', l1: { url: 'chi-siamo/index.html', text: 'About' }, c1: ['gold', 'silver'], x1: 'i9' },
+      items: { i9: { title: 'Ada L.', slug: 'ada', col_slug: 'team', live: true } }, item: 'i1',
+      page: { title: 'Ada "L"', excerpt: '', date: '2026-10-19', url: '{{BASE_URL}}team/ada/' } };
+    const tpl = 'Hi {{field:name}}, {{field:price}} on {{field:when}}. {{field:site}} / {{field:site.text}} / {{field:tier}} / {{field:lead}} {{field:lead.url}} | {{item:title}} {{item:date}} {{field:missing}} {{item:url}}';
+    // the same literals as the PHP tests (server.php, DYNAMIC VALUES)
+    check('dynamic values: fields, item and reference tokens become the item\'s values, escaped (as on the site)', ib.bindValue(tpl, bctx) === 'Hi &lt;b&gt;Ada&lt;/b&gt; &amp; co, 12.5 on October 19, 2026. {{BASE_URL}}chi-siamo/ / About / Gold, Silver / Ada L. {{BASE_URL}}team/ada/ | Ada &quot;L&quot; October 19, 2026  {{BASE_URL}}team/ada/', ib.bindValue(tpl, bctx));
+    check('dynamic values: outside an item they are removed', ib.bindValue(tpl, null) === 'Hi ,  on .  /  /  /   |    ');
+    check('dynamic values: every string of a content is bound, keys kept', JSON.stringify(ib.bindValue({ text: '{{field:price}}', nested: { a: '{{item:title}}' }, n: 3 }, bctx)) === '{"text":"12.5","nested":{"a":"Ada &quot;L&quot;"},"n":3}');
+    check('the design shows the names of the fields, in brackets', ib.bindValue('{{field:name}} {{item:title}}', { placeholder: true, defs: bdefs }) === '[Name] [Title]');
+    check('the editor binds an item to its values, and a design to placeholders, and a page to nothing', ib.contextFor({ __design: true, __fieldDefs: bdefs }).placeholder === true
+      && ib.contextFor({ __item: true, __fieldDefs: bdefs, field_values: {}, title: 'T', slug: 't', __collectionSlug: 'books' }).page.url === '/books/t/' && ib.contextFor({ id: 'p' }) === null);
+    // the block's own edits keep the raw text: a bound block is only a copy for the display
+    const raw = { id: 'b', type: 'TEXT', content: { text: '{{field:name}}' } };
+    check('binding a block gives a copy: its raw content is unchanged', ib.bindBlock(raw, { placeholder: true, defs: bdefs }).content.text === '[Name]' && raw.content.text === '{{field:name}}');
+
+    // a locked item (built from the design): nothing changes its blocks
+    useStore.setState({ currentView: 'editor', blocks: [{ id: 'lk1', type: 'TEXT', styles: {}, content: { text: 'design text' } }], pastBlocks: [], futureBlocks: [], selectedBlockId: null,
+      activePage: { id: 'it9', __item: true, __locked: true, collection_id: 'col_books', title: 'x', slug: 'x', __fieldDefs: [] } });
+    st().updateBlock('lk1', { content: { text: 'changed' } });
+    st().removeBlock('lk1');
+    st().addBlock('TEXT');
+    st().moveBlockBy('lk1', 1);
+    st().undo();
+    check('a locked item cannot change its layout: edit, remove, add, move and undo all leave the design alone', st().blocks.length === 1 && st().blocks[0].content.text === 'design text' && st().pastBlocks.length === 0, JSON.stringify(st().blocks));
+    useStore.setState({ activePage: { id: 'it9', __item: true, collection_id: 'col_books', title: 'x', slug: 'x', __fieldDefs: [] } });
+    st().updateBlock('lk1', { content: { text: 'changed' } });
+    check('…and an item that is not locked is edited as before', st().blocks[0].content.text === 'changed');
+    useStore.setState({ activePage: null, blocks: [] });
+  }
+
   console.log('\nCANVAS MENU');
   {
     const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;

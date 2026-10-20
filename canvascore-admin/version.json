@@ -1,7 +1,7 @@
 {
   "app": "0.18.0",
-  "db_schema": 10,
+  "db_schema": 11,
   "content_schema": 1,
-  "build": 50,
-  "built": "2026-10-19T19:58:39.144Z"
+  "build": 52,
+  "built": "2026-10-20T17:24:57.899Z"
 }

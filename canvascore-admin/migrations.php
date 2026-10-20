@@ -199,6 +199,11 @@ function cc_db_migrations() {
         10 => function ($pdo) {
             cc_add_col($pdo, 'collections', 'schema_json', "TEXT DEFAULT '{}'");
         },
+
+        // v11 — one design per collection: the blocks every item page of the collection is built from
+        11 => function ($pdo) {
+            cc_add_col($pdo, 'collections', 'design_json', "TEXT DEFAULT '[]'");
+        },
     ];
 }
 
