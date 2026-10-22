@@ -6,7 +6,7 @@ import {
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
   Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
   StarHalf, MessagesSquare, SquareMousePointer, ScrollText, MapPinned, TableOfContents, Share2, Code2,
-  Calculator, ListChecks, Film, Headphones, Megaphone, MailPlus, Braces, Link2,
+  Calculator, ListChecks, Film, Headphones, Megaphone, MailPlus, Braces, Link2, Tags,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -81,6 +81,7 @@ export const BLOCKS = [
   { type: 'SEARCH', label: 'Site Search', icon: Search, category: 'business', color: '#22d3ee', keywords: 'search find query results' },
   { type: 'ITEM_FIELD', label: 'Item Field', icon: Braces, category: 'business', color: '#a78bfa', keywords: 'field custom data value collection item' },
   { type: 'RELATED', label: 'Related Items', icon: Link2, category: 'business', color: '#f472b6', keywords: 'related items references team projects backlinks' },
+  { type: 'ITEM_TERMS', label: 'Categories & Tags', icon: Tags, category: 'business', color: '#34d399', keywords: 'categories tags taxonomy terms labels topics' },
 ];
 
 const BY_TYPE = Object.fromEntries(BLOCKS.map((b) => [b.type, b]));

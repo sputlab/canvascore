@@ -8,6 +8,7 @@ import { confirmDialog } from '../ui/dialog';
 import StarterPickerDialog from './StarterPickerDialog';
 import { starterBlocks } from '../editor/starters';
 import CollectionFields from './CollectionFields';
+import CollectionTaxonomies from './CollectionTaxonomies';
 
 // An item's custom field values as an object (the server keeps them as JSON text)
 const parseFieldValues = (raw) => {
@@ -122,9 +123,13 @@ export default function Collections() {
         if (!data || !data.id) { notify('This item no longer exists (deleted elsewhere?).', 'error'); loadItems(active.id); return; }
         let blocks = [];
         try { blocks = JSON.parse(data.content_json || '[]'); } catch { blocks = []; }
-        full = { ...data, blocks, field_values: parseFieldValues(data.field_values) };
+        full = { ...data, blocks, field_values: parseFieldValues(data.field_values), terms: parseFieldValues(data.terms_json) };
       } catch { notify('Could not open the item (connection problem).', 'error'); return; }
     }
+    // the collection's categories and tags, for the item's settings
+    let taxes = [];
+    try { taxes = await (await fetch('api.php?action=get_taxonomies&collection=' + encodeURIComponent(active.id))).json(); } catch { taxes = []; }
+    if (!Array.isArray(taxes)) taxes = [];
     // open the block editor on the item's content
     setActivePage({
       id: full.id || ('item_' + Date.now()),
@@ -135,6 +140,8 @@ export default function Collections() {
       seo_title: full.seo_title || '', seo_description: full.seo_description || '',
       // the custom fields: their definitions (for the inputs and the Item Field block) and this item's values
       __fieldDefs: active.fields || [], field_values: full.field_values || {},
+      // categories and tags: the collection's taxonomies, and the terms this item has (taxonomy id => term ids)
+      __taxonomies: taxes, terms: full.terms || {},
       layout: 'full', bg_color: '#ffffff', boxed_width: '1100px',
     });
     // With a design, the item's page is the design: its blocks come from the design and stay as they are (read-only)
@@ -324,6 +331,7 @@ export default function Collections() {
 
               <CollectionFields key={active.id} collection={active} collections={collections} canEdit={userRole === 'admin'}
                 onSaved={() => loadCollections().then((d) => { if (Array.isArray(d)) { const c = d.find((x) => x.id === active.id); if (c) setActive(c); } })} />
+              <CollectionTaxonomies key={`tax-${active.id}`} collection={active} canEdit={userRole === 'admin'} onSaved={() => loadCollections()} />
 
               {n > 0 && (
                 <div className="cc-media-selbar" role="toolbar" aria-label="Selected items" style={{ marginBottom: 12 }}>

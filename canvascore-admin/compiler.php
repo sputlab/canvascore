@@ -325,6 +325,50 @@ function cc_item_jsonld($schema, $defsById, $values, $title, $url, $image_fn) {
     $json = json_encode($ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     return $json === false ? '' : '<script type="application/ld+json">' . $json . "</script>\n";
 }
+// The page of one term: its taxonomy, its name and description, and the cards of its items
+function cc_term_page_inner($tax_name, $term_name, $desc, $cards) {
+    $d = $desc !== '' ? '<p style="margin:0; font-size:16px; color:#475569; line-height:1.6; max-width:720px;">' . htmlspecialchars($desc) . '</p>' : '';
+    return '<section class="cc-term-head" style="padding:48px 0 16px;"><div style="font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">' . htmlspecialchars($tax_name) . '</div>'
+        . '<h1 style="margin:6px 0 12px; font-size:40px; line-height:1.15; color:#0f172a;">' . htmlspecialchars($term_name) . '</h1>' . $d . '</section>'
+        . '<style>@media(max-width:768px){ .cc-term-grid { grid-template-columns:1fr !important; } }</style>'
+        . '<div class="cc-term-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:24px; padding:16px 0 48px;">' . $cards . '</div>';
+}
+// The page of a taxonomy: its name and the list of its terms, each with how many items it has
+function cc_taxonomy_index_inner($tax_name, $terms) {
+    $list = '';
+    foreach ($terms as $t) {
+        $list .= '<li style="padding:12px 0; border-bottom:1px solid #e2e8f0;"><a href="' . htmlspecialchars($t['href']) . '" style="color:#0f172a; text-decoration:none; font-size:18px;">' . htmlspecialchars($t['name']) . '</a>'
+            . ' <span style="color:#94a3b8; font-size:14px;">(' . (int)$t['count'] . ')</span>'
+            . ($t['description'] !== '' ? '<p style="margin:4px 0 0; color:#475569; font-size:14px;">' . htmlspecialchars($t['description']) . '</p>' : '') . '</li>';
+    }
+    return '<section style="padding:48px 0 16px;"><div style="font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">' . htmlspecialchars($tax_name) . '</div>'
+        . '<h1 style="margin:6px 0 12px; font-size:40px; line-height:1.15; color:#0f172a;">' . htmlspecialchars($tax_name) . '</h1></section>'
+        . '<ul style="list-style:none; margin:0 0 48px; padding:0; max-width:760px;">' . $list . '</ul>';
+}
+// The terms of an item on its page (the Item Terms block): links to the term pages; names only for an archived item
+function cc_render_item_terms($block) {
+    $ctx = cc_item_context();
+    if ($ctx === null || empty($ctx['item_terms'])) return '';
+    $c = $block['content'] ?? [];
+    $only = is_string($c['taxonomy'] ?? null) ? $c['taxonomy'] : '';
+    $parts = [];
+    foreach ($ctx['item_terms'] as $tid => $mids) {
+        if ($only !== '' && $tid !== $only) continue;
+        foreach ($mids as $mid) {
+            $t = $ctx['terms'][$mid] ?? null;
+            if ($t === null) continue;
+            $label = htmlspecialchars($t['name']);
+            $link = !empty($ctx['item_archived']) ? $label
+                : '<a class="cc-item-term" href="' . htmlspecialchars('{{BASE_URL}}' . $t['col_slug'] . '/' . $t['tax_slug'] . '/' . $t['slug'] . '/') . '" style="color:inherit;">' . $label . '</a>';
+            $parts[] = ($only === '' ? '<span class="cc-item-term-tax" style="color:#64748b;">' . htmlspecialchars($t['tax_name']) . ': </span>' : '') . $link;
+        }
+    }
+    if (!$parts) return '';
+    $sep = is_string($c['separator'] ?? null) ? htmlspecialchars($c['separator']) : ' · ';
+    $style = build_inline_style($block['styles'] ?? []);
+    return '<div class="cc-item-terms"' . ($style !== '' ? ' style="' . $style . '"' : '') . '>' . implode($sep, $parts) . "</div>\n";
+}
+
 function cc_render_related($block) {
     $ctx = cc_item_context();
     $c = $block['content'] ?? [];
@@ -2446,6 +2490,10 @@ function cc_render_block_body($block) {
         case 'RELATED':
             // the items that point to the item being published (rebuild_all.php); nothing on other pages
             return $customCss . cc_render_related($block);
+
+        case 'ITEM_TERMS':
+            // the categories and tags of the item being published; nothing on other pages
+            return $customCss . cc_render_item_terms($block);
 
         case 'HTML':
             $html = "<div id=\"$innerId\" class=\"cc-html-block$animClass$innerClass\"$styleString>\n" . ($block['content']['code'] ?? '') . "\n</div>\n";

@@ -10,6 +10,16 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **Categories and tags per collection** (Collections › Categories & tags, admins define them): a collection has
+  taxonomies (for example Category, which takes one term, and Tags, which takes several). Each taxonomy has terms with
+  a name, an address and a description. An item picks its terms in its settings (Page Settings › Categories & tags).
+- **Listing pages**: each taxonomy gets a page with its terms and their counts, and each term gets a page with its
+  live items (newest first), built from the same layout as the item pages and listed in the sitemap.
+- **Categories & Tags block**: on an item page, shows the item's terms as links to their listing pages (one taxonomy,
+  or all of them, with a separator).
+- Database schema 12: `collection_taxonomies`, `collection_terms`, and `collection_items.terms_json` (added on update).
+
 ## [0.19.0] - 2026-10-22 — Custom fields, one design per collection, structured data
 
 ### Added

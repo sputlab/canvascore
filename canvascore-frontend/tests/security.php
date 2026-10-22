@@ -237,6 +237,32 @@ $own->api('save_collection_design', ['collection_id' => 'col_books', 'blocks' =>
 $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 check('without blocks in the design, the items go back to their own blocks', strpos((string)@file_get_contents($web . '/books/emma/index.html'), 'OWN BLOCK') !== false);
 
+echo "\nCATEGORIES AND TAGS (published)\n";
+$own->api('save_collection', ['id' => 'col_news', 'name' => 'News', 'slug' => 'news-desk', 'fields' => []]);
+$r = $own->api('save_taxonomies', ['collection_id' => 'col_news', 'taxonomies' => [
+    ['id' => 'cat', 'name' => 'Category', 'multiple' => false, 'terms' => [['id' => 'c-news', 'name' => 'World news', 'description' => 'Around the world']]],
+    ['id' => 'tags', 'name' => 'Tags', 'multiple' => true, 'terms' => [['id' => 'tg-red', 'name' => 'Red'], ['id' => 'tg-blue', 'name' => 'Blue']]]]]);
+check('an admin saves the categories and tags of a collection', !empty($r['json']['success']) && count($r['json']['taxonomies'] ?? []) === 2, json_encode($r['json'] ?? null));
+$got = $own->req('GET', '/canvascore-admin/api.php?action=get_taxonomies&collection=col_news');
+check('the categories and tags are given back, in order, with their terms', ($got['json'][0]['name'] ?? '') === 'Category' && ($got['json'][1]['terms'][1]['name'] ?? '') === 'Blue', json_encode($got['json'] ?? null));
+$own->api('save_item', ['id' => 'nw1', 'collection_id' => 'col_news', 'title' => 'Storm hits coast', 'slug' => 'storm', 'status' => 'published', 'date' => '2026-10-20',
+    'blocks' => [['id' => 'nwb', 'type' => 'ITEM_TERMS', 'styles' => [], 'content' => ['taxonomy' => '']]], 'terms' => ['cat' => ['c-news'], 'tags' => ['tg-red', 'tg-blue']]]);
+$own->api('save_item', ['id' => 'nw2', 'collection_id' => 'col_news', 'title' => 'Quiet day', 'slug' => 'quiet', 'status' => 'published', 'date' => '2026-10-19', 'blocks' => [], 'terms' => ['tags' => ['tg-red']]]);
+$own->api('save_item', ['id' => 'nw3', 'collection_id' => 'col_news', 'title' => 'Old story', 'slug' => 'old', 'status' => 'published', 'archived' => 1, 'date' => '2026-01-01', 'blocks' => [], 'terms' => ['tags' => ['tg-red']]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$term_page = (string)@file_get_contents($web . '/news-desk/category/world-news/index.html');
+check('a term has its own page with its items (newest first), and not the archived ones', strpos($term_page, 'Storm hits coast') !== false && strpos($term_page, 'Quiet day') === false && strpos($term_page, 'Old story') === false, substr($term_page, 0, 0));
+check('the term page carries the term\'s name, description and taxonomy', strpos($term_page, 'World news') !== false && strpos($term_page, 'Around the world') !== false && strpos($term_page, 'Category') !== false);
+$tag_page = (string)@file_get_contents($web . '/news-desk/tags/red/index.html');
+check('a multiple-term taxonomy gets pages for its terms too', strpos($tag_page, 'Storm hits coast') !== false && strpos($tag_page, 'Quiet day') !== false);
+$tax_page = (string)@file_get_contents($web . '/news-desk/tags/index.html');
+check('a taxonomy has an index page listing its terms with their counts', strpos($tax_page, 'Red') !== false && strpos($tax_page, '(2)') !== false, substr($tax_page, 0, 0));
+$storm = (string)@file_get_contents($web . '/news-desk/storm/index.html');
+check('an item page shows its categories and tags as links to their pages', strpos($storm, 'news-desk/tags/red/') !== false);
+$own->api('save_taxonomies', ['collection_id' => 'col_news', 'taxonomies' => [['id' => 'cat', 'name' => 'Category', 'multiple' => false, 'terms' => [['id' => 'c-news', 'name' => 'World news']]]]]);
+$after = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=nw1');
+check('removing a taxonomy drops its terms from the items that had them', json_encode(json_decode((string)($after['json']['terms_json'] ?? '{}'), true)) === '{"cat":["c-news"]}', (string)($after['json']['terms_json'] ?? ''));
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

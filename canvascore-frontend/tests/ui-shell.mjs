@@ -1094,6 +1094,50 @@ try {
     useStore.setState({ activePage: null, blocks: [] });
   }
 
+  console.log('\nCATEGORIES AND TAGS');
+  {
+    const CT = (await vite.ssrLoadModule('/src/components/CollectionTaxonomies.jsx')).default;
+    const ITP = (await vite.ssrLoadModule('/src/components/panel/blocks/ItemTermsPanel.jsx')).default;
+    calls.length = 0;
+    mount(React.createElement(CT, { collection: { id: 'col_tx', name: 'Blog', slug: 'blog' }, canEdit: true })); await sleep(40);
+    click(btnHas('Add taxonomy')); await sleep(20);
+    typeIn($('input[aria-label="Taxonomy 1 name"]'), 'Category'); await sleep(10);
+    click(btnHas('Add term')); await sleep(20);
+    typeIn($('input[aria-label="Category term 1 name"]'), 'World news'); await sleep(10);
+    click(btnHas('Save categories and tags')); await sleep(20);
+    const sentT = await waitFor(() => calls.find((c) => c.u.includes('save_taxonomies')));
+    const bodyT = sentT ? JSON.parse(sentT.body) : {};
+    check('saving sends the taxonomies and their terms, with addresses made from the names', bodyT.collection_id === 'col_tx' && bodyT.taxonomies && bodyT.taxonomies[0].name === 'Category' && bodyT.taxonomies[0].slug === 'category'
+      && bodyT.taxonomies[0].terms[0].name === 'World news' && bodyT.taxonomies[0].terms[0].slug === 'world-news', sentT ? sentT.body.slice(0, 200) : 'no call');
+
+    // an item picks its terms: several for a taxonomy that takes several, one for a single-term one
+    useStore.setState({ currentView: 'editor', selectedBlockId: null, blocks: [], pastBlocks: [], futureBlocks: [],
+      activePage: { id: 'it7', __item: true, collection_id: 'col_tx', title: 'Storm', slug: 'storm', excerpt: '', cover_image: '', date: '2026-10-20', status: 'draft', seo_title: '', seo_description: '', __fieldDefs: [], field_values: {},
+        __taxonomies: [{ id: 'tags', name: 'Tags', multiple: true, terms: [{ id: 'red', name: 'Red' }, { id: 'blue', name: 'Blue' }] },
+          { id: 'cat', name: 'Category', multiple: false, terms: [{ id: 'news', name: 'News' }, { id: 'tech', name: 'Tech' }] }], terms: {} } });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    const red = await waitFor(() => $('input[aria-label="Tags: Red"]'));
+    check('an item offers its collection\'s terms: checkboxes for several, a choice for one', !!red && !!$('select[aria-label="Category"]'));
+    if (red) click(red);
+    await sleep(20);
+    if (red) click($('input[aria-label="Tags: Blue"]'));
+    await sleep(20);
+    const cat = $('select[aria-label="Category"]');
+    if (cat) { cat.value = 'news'; cat.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(20);
+    check('…the terms the item picks are kept with it, per taxonomy', JSON.stringify(st().activePage.terms.tags) === '["red","blue"]' && JSON.stringify(st().activePage.terms.cat) === '["news"]', JSON.stringify(st().activePage.terms));
+
+    // the Categories & Tags block: which taxonomy, and the separator
+    let bc = { taxonomy: '', separator: ' · ' };
+    const ibchg = [];
+    mount(React.createElement(ITP, { ctx: { c: bc, set: (k, v) => { ibchg.push([k, v]); bc = { ...bc, [k]: v }; }, itemTaxonomies: st().activePage.__taxonomies } })); await sleep(30);
+    const tsel = $('select');
+    if (tsel) { tsel.value = 'tags'; tsel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(20);
+    check('the block shows the terms of one taxonomy, or all of them', ibchg.some((c) => c[0] === 'taxonomy' && c[1] === 'tags'));
+    useStore.setState({ activePage: null });
+  }
+
   console.log('\nCANVAS MENU');
   {
     const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;

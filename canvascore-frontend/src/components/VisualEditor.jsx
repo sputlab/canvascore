@@ -126,7 +126,8 @@ export default function VisualEditor() {
           seo_title: activePage.seo_title, seo_description: activePage.seo_description,
           // an item built from the design keeps its own blocks as they are (null: not sent)
           blocks: activePage.__locked ? null : blocks,
-          field_values: activePage.field_values || {}
+          field_values: activePage.field_values || {},
+          terms: activePage.terms || {}
         }) });
         const data = await res.json();
         if (data.success && publish) updateActivePage({ status: 'published' });

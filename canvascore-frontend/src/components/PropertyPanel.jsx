@@ -179,6 +179,8 @@ export default function PropertyPanel() {
     fieldDefs: activePage?.__fieldDefs || [],
     // the collection of the item being edited (a Related block needs a reference to it)
     itemCollectionId: activePage?.__item ? activePage.collection_id : null,
+    // the categories and tags of the collection of the item being edited (Categories & tags block)
+    itemTaxonomies: activePage?.__item ? (activePage.__taxonomies || []) : [],
   };
 
   return (

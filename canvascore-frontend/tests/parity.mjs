@@ -200,6 +200,8 @@ const fixtures = [
   { id: 'nl1', type: 'NEWSLETTER', styles: { width: '100%' }, content: { title: 'Join', text: 'a\nb', placeholder: 'Mail', emailLabel: 'E-mail', askName: true, nameLabel: 'Nome', namePlaceholder: 'Il tuo nome', consentText: 'Accetto', buttonText: 'Iscriviti', successMsg: 'Grazie', email: 'a@b.it', layout: 'plain', formLayout: 'stacked', accent: '#10b981' } },
   { id: 'nl2', type: 'NEWSLETTER', styles: {}, content: { title: '<b>x</b>', text: { o: 1 }, placeholder: '"><script>x</script>', emailLabel: '"><b>', askName: 'yes', consentText: '<i>c</i>', buttonText: '<u>b</u>', successMsg: '"><x>', customId: 'My Form!', formLayout: 'evil', accent: 'red;}' } },
   { id: 'nl3', type: 'NEWSLETTER', styles: {}, content: {} },
+  // Categories & Tags: the terms of the item being published; nothing on any other page (both renderers)
+  { id: 'it1', type: 'ITEM_TERMS', styles: { width: '100%' }, content: { taxonomy: 'tx1', separator: ' · ' } },
   // Related Items: the items that point to the collection item being published; nothing on any other page (both renderers)
   { id: 'rl1', type: 'RELATED', styles: { width: '100%' }, content: { collectionId: 'c1', fieldId: 'f1', limit: 3, columns: 3, title: 'Team', cardFields: ['x'] } },
   // Item Field: shows a field of the collection item being published; on any other page it shows nothing (both renderers)

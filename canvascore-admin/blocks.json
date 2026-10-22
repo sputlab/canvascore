@@ -812,6 +812,17 @@
         "padding": "8px 0"
       }
     },
+    "ITEM_TERMS": {
+      "content": {
+        "taxonomy": "",
+        "separator": " \u00b7 "
+      },
+      "styles": {
+        "width": "100%",
+        "margin": "0",
+        "padding": "8px 0"
+      }
+    },
     "BENTO": {
       "content": {
         "columns": 3,

@@ -234,6 +234,19 @@ try {
     }
     // --- Collection items: one static page per published item ---
     try {
+        // Categories and tags: the taxonomies of every collection and their terms (for the item pages and the taxonomy pages)
+        $term_index = []; $taxes_by_col = [];
+        foreach ($pdo->query("SELECT id, slug FROM collections")->fetchAll(PDO::FETCH_ASSOC) as $tc) {
+            $tcs = cc_safe_slug($tc['slug']);
+            $taxes_by_col[$tc['id']] = ['slug' => $tcs, 'taxes' => cc_taxonomies_load($pdo, $tc['id'])];
+            foreach ($taxes_by_col[$tc['id']]['taxes'] as $tx) {
+                foreach ($tx['terms'] as $tm) {
+                    $term_index[$tm['id']] = ['name' => $tm['name'], 'slug' => cc_tax_slug($tm['slug']), 'tax_id' => $tx['id'], 'tax_name' => $tx['name'], 'tax_slug' => cc_tax_slug($tx['slug']), 'col_slug' => $tcs];
+                }
+            }
+        }
+        $term_items = [];   // term id => its published, live items (for the term pages)
+        $item_slugs = [];   // collection id => the addresses its items use (a taxonomy may not take one)
         // Every item, for the references between items (a reference links to a published one)
         $item_index = [];
         foreach ($pdo->query("SELECT i.id, i.title, i.slug, i.status, i.archived, c.slug AS col_slug FROM collection_items i JOIN collections c ON c.id = i.collection_id")->fetchAll(PDO::FETCH_ASSOC) as $ii) {
@@ -264,8 +277,14 @@ try {
                 $i_raw = json_decode((string)($it['field_values'] ?? '{}'), true);
                 $i_values = [];
                 foreach ($defs_by_id as $fid => $fd) $i_values[$fid] = cc_field_clean($fd, is_array($i_raw) ? ($i_raw[$fid] ?? null) : null, $pdo);
+                // Categories and tags of the item, cleaned against its collection (set before the item's blocks render)
+                $i_terms = cc_terms_clean(json_decode((string)($it['terms_json'] ?? '{}'), true), $pdo, $col['id']);
                 cc_item_context(['defs' => $defs_by_id, 'values' => $i_values, 'items' => $item_index, 'item' => (string)$it['id'], 'collection_id' => (string)$col['id'],
+                    'item_terms' => $i_terms, 'terms' => $term_index, 'item_archived' => (int)($it['archived'] ?? 0) === 1,
                     'page' => ['title' => (string)$it['title'], 'excerpt' => (string)($it['excerpt'] ?? ''), 'date' => (string)($it['date'] ?? ''), 'url' => '{{BASE_URL}}' . $col_slug . '/' . $it_slug . '/']]);
+                // Categories and tags of the item, cleaned against its collection; the term pages list the live items
+                $item_slugs[$col['id']][$it_slug] = true;
+                if ((int)($it['archived'] ?? 0) !== 1) foreach ($i_terms as $i_mids) foreach ($i_mids as $i_mid) $term_items[$i_mid][] = $it;
                 $i_content = '';
                 if (is_array($i_blocks)) foreach ($i_blocks as $b) $i_content .= render_block($b);
                 cc_item_context(null);
@@ -309,6 +328,56 @@ try {
             }
         }
     } catch (Throwable $e) { error_log('CanvasCore publish (collections): ' . $e->getMessage()); $warnings[] = 'Collections could not be published (details in the server error log).'; }
+
+    // --- Taxonomy pages: /<collection>/<taxonomy>/ (its terms, with their counts) and /<collection>/<taxonomy>/<term>/
+    // (the live items of a term), built from the same shell as the item pages. An address already used by an item is skipped.
+    try {
+        foreach ($taxes_by_col as $tcol_id => $tinfo) {
+            $tcs = $tinfo['slug'];
+            if (cc_slug_reserved($tcs)) continue;
+            foreach ($tinfo['taxes'] as $tx) {
+                $tts = cc_tax_slug($tx['slug']);
+                if ($tts === '') continue;
+                if (!empty($item_slugs[$tcol_id][$tts])) { $warnings[] = 'Taxonomy pages not published: an item of the collection "' . $tcs . '" uses the address /' . $tcs . '/' . $tts . '/.'; continue; }
+                $tax_terms = [];
+                foreach ($tx['terms'] as $tm) {
+                    $tms = cc_tax_slug($tm['slug']);
+                    $its = $term_items[$tm['id']] ?? [];
+                    if ($tms === '' || !$its) continue;
+                    usort($its, function ($a, $b) {
+                        $c = strcmp((string)($b['date'] ?: ''), (string)($a['date'] ?: ''));
+                        return $c !== 0 ? $c : strcmp((string)$a['title'], (string)$b['title']);
+                    });
+                    $path = $tcs . '/' . $tts . '/' . $tms . '/';
+                    $cards = cc_list_cards($its, $tcs, cc_list_options(['columns' => 3], [], ['items' => []], 'grid', ''));
+                    $inner = cc_term_page_inner($tx['name'], $tm['name'], (string)$tm['description'], $cards);
+                    $tpage_abs = $site_url ? $site_url . '/' . $path : '';
+                    $tt = htmlspecialchars($tm['name'] . ' · ' . $tx['name']);
+                    $tdesc = htmlspecialchars(mb_substr(trim(preg_replace('/\s+/u', ' ', (string)$tm['description'] !== '' ? (string)$tm['description'] : $tm['name'] . ' — ' . $tx['name'])), 0, 300));
+                    $tpage = str_replace(['{{PAGE_TITLE}}', '{{META_DESCRIPTION}}'], [$tt . $site_suffix, $tdesc], $template);
+                    $tpage = str_replace('</head>', '<style>body{background:#ffffff !important;margin:0;padding:0;overflow-x:clip;}</style>' . "\n" . '<meta property="og:title" content="' . $tt . '">' . "\n</head>", $tpage);
+                    $tpage = str_replace(['{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}'],
+                        [$menu_html, $google_fonts_link, $brand_color, $font_family, $header_html . '<div style="max-width:1100px; margin:0 auto; padding:0 20px; overflow-x:clip;">' . $inner . '</div>' . $footer_html], $tpage);
+                    $tpage = str_replace('{{BASE_URL}}', $base_url, $tpage);
+                    $write(__DIR__ . '/../' . $path . 'index.html', $finish($tpage, $tpage_abs, false));
+                    $sitemap_urls[] = $tpage_abs !== '' ? $tpage_abs : ($base_url . $path);
+                    $tax_terms[] = ['name' => $tm['name'], 'description' => (string)$tm['description'], 'count' => count($its), 'href' => $base_url . $path];
+                }
+                if (!$tax_terms) continue;
+                // the taxonomy's own page: its terms
+                $ipath = $tcs . '/' . $tts . '/';
+                $iinner = cc_taxonomy_index_inner($tx['name'], $tax_terms);
+                $iabs = $site_url ? $site_url . '/' . $ipath : '';
+                $ipage = str_replace(['{{PAGE_TITLE}}', '{{META_DESCRIPTION}}'], [htmlspecialchars($tx['name']) . $site_suffix, htmlspecialchars($tx['name'])], $template);
+                $ipage = str_replace('</head>', '<style>body{background:#ffffff !important;margin:0;padding:0;overflow-x:clip;}</style>' . "\n</head>", $ipage);
+                $ipage = str_replace(['{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}'],
+                    [$menu_html, $google_fonts_link, $brand_color, $font_family, $header_html . '<div style="max-width:1100px; margin:0 auto; padding:0 20px; overflow-x:clip;">' . $iinner . '</div>' . $footer_html], $ipage);
+                $ipage = str_replace('{{BASE_URL}}', $base_url, $ipage);
+                $write(__DIR__ . '/../' . $ipath . 'index.html', $finish($ipage, $iabs, false));
+                $sitemap_urls[] = $iabs !== '' ? $iabs : ($base_url . $ipath);
+            }
+        }
+    } catch (Throwable $e) { error_log('CanvasCore publish (taxonomies): ' . $e->getMessage()); $warnings[] = 'Categories and tags could not be published (details in the server error log).'; }
 
     // --- RSS feeds (newest 50 items each) ---
     foreach ($feeds as $fd) {

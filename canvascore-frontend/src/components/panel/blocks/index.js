@@ -51,6 +51,7 @@ import AnnouncementBarPanel from './AnnouncementBarPanel';
 import NewsletterPanel from './NewsletterPanel';
 import ItemFieldPanel from './ItemFieldPanel';
 import RelatedPanel from './RelatedPanel';
+import ItemTermsPanel from './ItemTermsPanel';
 
 export const CONTENT_PANELS = {
   ACCORDION: AccordionTabsPanel,
@@ -63,6 +64,7 @@ export const CONTENT_PANELS = {
   SEARCH: SearchPanel,
   ITEM_FIELD: ItemFieldPanel,
   RELATED: RelatedPanel,
+  ITEM_TERMS: ItemTermsPanel,
   COLLECTION_LIST: CollectionListPanel,
   COUNTDOWN: CountdownPanel,
   COUNTERS: CountersPanel,

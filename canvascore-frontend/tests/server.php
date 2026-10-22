@@ -184,6 +184,35 @@ check('dynamic values: outside an item they are removed (a visitor never sees a 
 check('dynamic values: every string of a block\'s content is bound, keys kept', json_encode(cc_bind_deep(['text' => '{{field:price}}', 'nested' => ['a' => '{{item:title}}'], 'n' => 3], $bctx)) === '{"text":"12.5","nested":{"a":"Ada &quot;L&quot;"},"n":3}');
 check('dynamic values: a page without tokens is left as it is', cc_bind_deep('plain text', $bctx) === 'plain text');
 
+echo "\nCATEGORIES AND TAGS\n";
+$tax = cc_taxonomies_clean([
+    ['id' => 'cat', 'name' => 'Category', 'slug' => 'Category', 'multiple' => false, 'terms' => [['id' => 'news', 'name' => 'News', 'slug' => '', 'description' => '<b>x</b>'], ['id' => 'news2', 'name' => 'News!', 'slug' => 'news'], ['id' => 'feed', 'name' => 'Feed', 'slug' => 'feed']]],
+    ['name' => 'Tags', 'terms' => [['id' => 'red', 'name' => 'Red']]],
+    ['name' => 'Feed', 'slug' => 'feed'],
+    ['name' => 'category', 'slug' => 'category'],
+]);
+check('taxonomies: names and addresses are tidy and unique; a reserved address is refused; several terms are the default', count($tax) === 2 && $tax[0]['slug'] === 'category' && $tax[1]['multiple'] === true && $tax[0]['multiple'] === false, json_encode($tax));
+check('taxonomies: a term keeps its name; its address is made from the name when it is left out; a duplicate address is dropped', $tax[0]['terms'][0]['slug'] === 'news' && count($tax[0]['terms']) === 1 && $tax[0]['terms'][0]['description'] === 'x', json_encode($tax[0]['terms']));
+check('taxonomies: a term with a bad id gets a new one, and the term id is kept when it is good', $tax[0]['terms'][0]['id'] === 'news' && strlen($tax[1]['terms'][0]['id']) >= 1, json_encode($tax[1]['terms']));
+$tpdo = new PDO('sqlite::memory:');
+$tpdo->exec("CREATE TABLE collection_taxonomies (id TEXT PRIMARY KEY, collection_id TEXT, name TEXT, slug TEXT, multiple INTEGER, position INTEGER)");
+$tpdo->exec("CREATE TABLE collection_terms (id TEXT PRIMARY KEY, taxonomy_id TEXT, collection_id TEXT, name TEXT, slug TEXT, description TEXT, position INTEGER)");
+$tpdo->exec("INSERT INTO collection_taxonomies VALUES ('cat','blog','Category','category',0,0),('tags','blog','Tags','tags',1,1)");
+$tpdo->exec("INSERT INTO collection_terms VALUES ('news','cat','blog','News','news','',0),('tech','cat','blog','Tech','tech','',1),('red','tags','blog','Red','red','',0),('other','cat','shop','Other','other','',0)");
+check('item terms: only terms of its own collection, one term for a single-term taxonomy, and several for a multiple one', json_encode(cc_terms_clean(['cat' => ['news', 'tech'], 'tags' => ['red', 'other'], 'nope' => ['x']], $tpdo, 'blog')) === '{"cat":["news"],"tags":["red"]}', json_encode(cc_terms_clean(['cat' => ['news', 'tech'], 'tags' => ['red', 'other']], $tpdo, 'blog')));
+$tterms = ['news' => ['name' => 'News', 'slug' => 'news', 'tax_id' => 'cat', 'tax_name' => 'Category', 'tax_slug' => 'category', 'col_slug' => 'blog']];
+$tctx = ['item_terms' => ['cat' => ['news']], 'terms' => $tterms, 'item_archived' => false];
+cc_item_context($tctx);
+$tblock = cc_render_item_terms(['type' => 'ITEM_TERMS', 'content' => ['taxonomy' => '', 'separator' => ' | ']]);
+check('the Categories & tags block links each term to its listing page, with the taxonomy named', strpos($tblock, 'href="{{BASE_URL}}blog/category/news/"') !== false && strpos($tblock, 'Category: ') !== false, $tblock);
+cc_item_context(array_merge($tctx, ['item_archived' => true]));
+check('…an archived item shows its terms without links', strpos(cc_render_item_terms(['type' => 'ITEM_TERMS', 'content' => []]), '<a') === false);
+cc_item_context(null);
+check('…and nothing outside an item', cc_render_item_terms(['type' => 'ITEM_TERMS', 'content' => []]) === '');
+$tcard = cc_term_page_inner('Category', 'News <b>', 'About news', '<a>card</a>');
+check('a term page names its taxonomy and term (escaped) and holds the cards', strpos($tcard, 'News &lt;b&gt;') !== false && strpos($tcard, '<a>card</a>') !== false && strpos($tcard, '<b>') === false);
+check('a taxonomy page lists its terms with their counts', strpos(cc_taxonomy_index_inner('Category', [['name' => 'News', 'description' => '', 'count' => 3, 'href' => '/blog/category/news/']]), '(3)') !== false);
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

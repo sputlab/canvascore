@@ -204,6 +204,19 @@ function cc_db_migrations() {
         11 => function ($pdo) {
             cc_add_col($pdo, 'collections', 'design_json', "TEXT DEFAULT '[]'");
         },
+
+        // v12 — categories and tags: the taxonomies of a collection, their terms, and each item's terms
+        12 => function ($pdo) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS collection_taxonomies (
+                id TEXT PRIMARY KEY, collection_id TEXT, name TEXT DEFAULT '', slug TEXT DEFAULT '',
+                multiple INTEGER DEFAULT 1, position INTEGER DEFAULT 0
+            )");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS collection_terms (
+                id TEXT PRIMARY KEY, taxonomy_id TEXT, collection_id TEXT, name TEXT DEFAULT '', slug TEXT DEFAULT '',
+                description TEXT DEFAULT '', position INTEGER DEFAULT 0
+            )");
+            cc_add_col($pdo, 'collection_items', 'terms_json', "TEXT DEFAULT '{}'");
+        },
     ];
 }
 
