@@ -4,6 +4,7 @@ import { Layout, Globe, FileEdit, Upload } from 'lucide-react';
 import { PanelAccordion, ImgF, ChkF } from './fields';
 import { labelStyle, inputStyle } from './helpers';
 import { slugify, slugOwner, uniqueSlug } from '../../utils/slug';
+import ItemFieldsSection from './ItemFieldsSection';
 
 // Page settings, shown when no block is selected: page info, URL, structure, SEO (and item fields for collection items).
 export default function PageSettings({ ctx }) {
@@ -51,6 +52,24 @@ export default function PageSettings({ ctx }) {
 
             <label style={{ ...labelStyle, marginTop: '12px' }}>Excerpt</label>
             <textarea style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }} value={activePage.excerpt || ''} onChange={e => updateActivePage({ excerpt: e.target.value })} placeholder="Short summary shown in lists" />
+          </PanelAccordion>
+        )}
+
+        {activePage?.__item && <ItemFieldsSection activePage={activePage} updateActivePage={updateActivePage} />}
+
+        {activePage?.__design && (
+          <PanelAccordion title="Dynamic values" icon={FileEdit} defaultOpen={true}>
+            <p style={{ fontSize: '11px', color: '#94a3b8', margin: '0 0 8px', lineHeight: 1.45 }}>
+              Type one of these in any text, button, image or link of the design. Each item page shows its own value.
+            </p>
+            <ul style={{ margin: 0, paddingLeft: 16, fontSize: '12px', color: '#cbd5e1', display: 'grid', gap: 4 }}>
+              {(activePage.__fieldDefs || []).map((d) => <li key={d.id}><code style={{ color: '#38bdf8' }}>{`{{field:${d.key}}}`}</code> {d.label}{d.type === 'link' ? <> · <code style={{ color: '#38bdf8' }}>{`{{field:${d.key}.text}}`}</code> text</> : null}</li>)}
+              <li><code style={{ color: '#38bdf8' }}>{'{{item:title}}'}</code> the item's title</li>
+              <li><code style={{ color: '#38bdf8' }}>{'{{item:excerpt}}'}</code> the excerpt</li>
+              <li><code style={{ color: '#38bdf8' }}>{'{{item:date}}'}</code> the date, written out</li>
+              <li><code style={{ color: '#38bdf8' }}>{'{{item:url}}'}</code> the item's address, for share links</li>
+            </ul>
+            {(activePage.__fieldDefs || []).length === 0 && <p style={{ fontSize: '11px', color: '#64748b', margin: '8px 0 0' }}>This collection has no fields yet (Collections › Fields).</p>}
           </PanelAccordion>
         )}
 

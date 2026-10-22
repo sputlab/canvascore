@@ -8,6 +8,20 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 > automatically on update). Take a backup before updating, and please
 > [report what you find](https://github.com/sputlab/CanvasCore/issues).
 
+## What it does
+
+- **Block editor**: more than 50 blocks (text, images, galleries, layout, heroes, forms, pricing, FAQs, maps, and more),
+  drag and drop, with a canvas that shows the published page as it will look.
+- **Styles**: per-device styles (desktop, tablet and phone), global colours, text styles, button presets and a form
+  field style, and copy and paste of a block's style.
+- **Collections** (blogs, news, portfolios, catalogues): custom fields of nine types, one design per collection with
+  dynamic values (`{{field:price}}`), related items, lists with fields, sort and filter, and structured data
+  (schema.org) for search engines.
+- **Publishing**: a static site of HTML files, with RSS feeds, a sitemap, a search index, redirects, and images
+  optimised to WebP with responsive sizes.
+- **Running it**: accounts with admin and editor roles, drafts and version history, whole-site backups, forms with
+  submissions, and a cookie banner.
+
 ## Manuals
 
 - [User Guide](docs/manuals/USER-GUIDE.md): building and editing the site

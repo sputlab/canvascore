@@ -635,6 +635,50 @@ Click **Collections** in the sidebar. The left column lists the collections, wit
 - **Editing an item**: click the pencil icon, or double-click the row.
 - **Deleting an item**: click the bin and confirm. If it was published, its page is taken off the site at once. Collection lists, the site search and the sitemap are updated the next time the site is published: a bar offers **Publish now**.
 
+### Custom fields (admins define them)
+
+A collection can have its own **fields**, such as a price, a date, a photo or a category. Click **Fields** above the items of a collection to open them (admins can change them; editors see the list).
+
+- **Add field** creates one. Give it a **Label** (its key is made from it), a **Type** and, if you like, tick **Required to publish**.
+- **Types**: **Text**, **Rich text**, **Number**, **Date**, **Image**, **Gallery (several images)**, **Link**, **Choice** (one, or several with **Several choices can be picked**) and **Reference to an item** (an item of another collection, for example the department of a team member).
+- A **Choice** field lists its choices one per line: a label on its own, or `value | label`.
+- The **Arrows** move a field up or down; the bin deletes it. A deleted field's values stay in the database but are no longer shown.
+- **Save fields** saves the list.
+
+A required field must be filled in before an item can be **published**: a draft can be left incomplete, but publishing names the field that is missing.
+
+Each item fills in its fields in the settings panel, under **Item fields** (with no block selected). Images and galleries are chosen from the media library, and a reference is picked from the items of the other collection.
+
+### The design of a collection (admins)
+
+A collection can have one **design**: the blocks that every item page is built from. Click **Make the design** (or **Design**, once it exists) above the items. The design opens like a page, with a banner that explains it.
+
+- Build the layout as usual. Any text, button, image or link can show the item's own values by typing a **dynamic value** (see below). The **Dynamic values** section of the settings panel lists them, with the fields of the collection.
+- **Publish Site** puts the design on every item page of the collection. Saving the design alone does not change the site until you publish.
+- With a design, an item's page is the design: the item's layout is **read-only** in the editor (the banner says so). You edit its **fields** and **settings** instead. Its own blocks, if it had any, are kept and come back if the design is removed.
+- Without a design, each item is built from its own blocks, as before.
+
+**Dynamic values** are typed in any text, button, image or link of a design (or of an item's blocks):
+
+| Type | Shows |
+| --- | --- |
+| `{{field:price}}` | The value of the field with that key (the key is shown in the Dynamic values list) |
+| `{{field:site.text}}` / `{{field:site.url}}` | The text or the address of a link field |
+| `{{field:lead.title}}` / `{{field:lead.url}}` | The title or the page of the item a reference points to |
+| `{{item:title}}`, `{{item:excerpt}}`, `{{item:date}}`, `{{item:url}}` | The item's title, excerpt, date (written out, such as October 19, 2026) or address |
+
+On the item pages the values are shown escaped, so they can't add code to the page. On any other page the placeholders are removed. In the editor, the design shows each field's name in brackets, and an item shows its real values.
+
+### Structured data for search engines (admins)
+
+In the **Fields** section of a collection, **Structured data for search engines** tells search engines what its items are. Choose:
+
+- **Product** (a shop item): the **Photo**, **Description**, **Price** (a number field) and **SKU**, and the **Currency** (a three-letter code such as `EUR`) that the price is in.
+- **Event**: the **Start date**, **Location** (a text field), **Image** and **Description**.
+- **Person**: the **Job title**, **Photo** and **Bio**.
+
+Each item page then carries this information in a form search engines read (schema.org). The name and the address come from the item itself. Each property only offers the fields of the right type, and a field left empty is simply not published.
+
 ### Renaming a collection (admins)
 
 Click the pencil next to a collection in the left column, or **Rename** above its items. A form opens with the **Name** and the **Address**.
@@ -656,13 +700,14 @@ Some items may be skipped, and a message lists them with the reason. For example
 
 ### Editing an item
 
-An item opens in the same editor as a page, with a **Collection item** badge. Build its content with blocks as usual. With no block selected, the panel shows **Item Settings** first:
+An item opens in the same editor as a page, with a **Collection item** badge. Build its content with blocks as usual, unless the collection has a [design](#the-design-of-a-collection-admins): then the layout is read-only and the item has only its fields and settings. With no block selected, the panel shows **Item Settings** first:
 
 - **Status**: **Draft (not published)** or **Published**.
 - **Archived (moved to the archive list)**.
 - **Date**.
 - **Cover image**: type an address, or click the upload button.
 - **Excerpt**: a short summary shown in lists.
+- **Item fields**: one input for each field of the collection (see [Custom fields](#custom-fields-admins-define-them)), under the settings.
 
 **Page Info** (title and URL) works as for pages. In **SEO & Meta Data**, the **Meta Title** and **Meta Description** are saved for items, and when the item is shared its **cover image** is used as the picture (the **Social share image** and **Hide this page from search engines** options are for pages only). An item's address is the collection's address followed by the item's slug. If you change the address of a published item, the old address forwards to the new one after you publish.
 
@@ -687,8 +732,20 @@ Add **Collection List** (in **Business & dynamic**) to any page. In its **Conten
 - **Show all items (ignore limit)**, or **Items to show**.
 - **Columns** (grid only): 1 to 4.
 - **Show cover image**, **Show date**, **Show excerpt**.
+- **Fields on each card**: tick the fields of the collection to show under each item's excerpt (for example the price or the role). The label and the value are shown.
+- **Sort by**: **Newest first** (the default), **Title**, **Date**, or a field: a number, a date, a text or a choice. **Ascending** or **Descending** follows. Items without a value for the field go last.
+- **Filter buttons (by a choice field)**: a choice field gives **All** and one button per choice above the list. Visitors click a button to show only the matching items, without reloading the page.
 
 On the canvas you see grey placeholder cards. The real items are filled in when the site is published.
+
+### The Related Items block
+
+**Related Items** (in **Business & dynamic**) lists the items of a collection that point to the item being shown. Use it on the design of a collection: a department page can list its people, a client page its projects. In its settings:
+
+- **Heading (optional)**, **Items of collection**, and **That point to this item through the field**: a reference field of that collection that points to this collection (the panel only offers those fields).
+- **How many**, **Columns**, **Fields on each card**, and **Sort by**, as for a Collection List.
+
+It shows nothing on other pages, and the editor says so until the block is used on a collection item.
 
 ---
 

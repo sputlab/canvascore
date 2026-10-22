@@ -10,7 +10,11 @@ let paletteRequest = null;   // one settings request for all the colour fields
 let idSeq = 0;
 export const newBlockId = () => 'block-' + Date.now().toString(36) + '-' + (++idSeq).toString(36) + Math.random().toString(36).slice(2, 7);
 
+// An item built from its collection's design has a layout that is read-only here: no edit changes its blocks
+const layoutLocked = (state) => !!(state.activePage && state.activePage.__locked);
+
 const pushHistory = (state, newBlocks) => {
+  if (layoutLocked(state)) return {};
   const past = [...state.pastBlocks, state.blocks];
   if (past.length > 30) past.shift();
   return { blocks: newBlocks, pastBlocks: past, futureBlocks: [] };
@@ -471,12 +475,12 @@ export const useStore = create((set, get) => ({
 
   // ---- History ----
   undo: () => set((state) => {
-    if (state.pastBlocks.length === 0) return state;
+    if (layoutLocked(state) || state.pastBlocks.length === 0) return state;
     const previous = state.pastBlocks[state.pastBlocks.length - 1];
     return { pastBlocks: state.pastBlocks.slice(0, -1), futureBlocks: [state.blocks, ...state.futureBlocks], blocks: previous };
   }),
   redo: () => set((state) => {
-    if (state.futureBlocks.length === 0) return state;
+    if (layoutLocked(state) || state.futureBlocks.length === 0) return state;
     const next = state.futureBlocks[0];
     return { pastBlocks: [...state.pastBlocks, state.blocks], futureBlocks: state.futureBlocks.slice(1), blocks: next };
   }),
@@ -550,6 +554,7 @@ export const useStore = create((set, get) => ({
   // The next edit starts a new undo step, even right after another one (a drag starts one of its own)
   breakUndoMerge: () => { lastEdit.sig = null; },
   updateBlock: (id, updates) => set((state) => {
+    if (layoutLocked(state)) return {};
     const sig = id + '|' + Object.keys(updates || {}).map((k) => k + ':' + (updates[k] && typeof updates[k] === 'object' ? Object.keys(updates[k]).sort().join(',') : '')).join(';');
     const now = Date.now();
     const merge = lastEdit.sig === sig && now - lastEdit.t < 1200 && state.pastBlocks.length > 0 && state.blocks === lastEdit.blocks;

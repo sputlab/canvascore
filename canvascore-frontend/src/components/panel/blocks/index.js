@@ -49,6 +49,8 @@ import VideoHeroPanel from './VideoHeroPanel';
 import AudioPlayerPanel from './AudioPlayerPanel';
 import AnnouncementBarPanel from './AnnouncementBarPanel';
 import NewsletterPanel from './NewsletterPanel';
+import ItemFieldPanel from './ItemFieldPanel';
+import RelatedPanel from './RelatedPanel';
 
 export const CONTENT_PANELS = {
   ACCORDION: AccordionTabsPanel,
@@ -59,6 +61,8 @@ export const CONTENT_PANELS = {
   CARDS: GridCardsPanel,
   FLEX_ROW: FlexRowPanel,
   SEARCH: SearchPanel,
+  ITEM_FIELD: ItemFieldPanel,
+  RELATED: RelatedPanel,
   COLLECTION_LIST: CollectionListPanel,
   COUNTDOWN: CountdownPanel,
   COUNTERS: CountersPanel,

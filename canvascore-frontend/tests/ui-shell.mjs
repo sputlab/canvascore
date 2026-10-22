@@ -944,6 +944,156 @@ try {
     check('an "auto" side counts as 0 px when dragged', h.sidePx('auto') === 0 && h.sidePx('12px') === 12);
   }
 
+  console.log('\nCUSTOM FIELDS');
+  {
+    const CF = (await vite.ssrLoadModule('/src/components/CollectionFields.jsx')).default;
+    calls.length = 0;
+    mount(React.createElement(CF, { collection: { id: 'col_x', name: 'Team', slug: 'team', fields: [] }, collections: [], canEdit: true }));
+    await sleep(30);
+    click(btnHas('Add field')); await sleep(30);
+    typeIn($('input[aria-label="Field 1 label"]'), 'Colour'); await sleep(20);
+    const type = $('select[aria-label="Field 1 type"]');
+    type.value = 'choice'; type.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(30);
+    const ch = $('textarea[aria-label="Colour choices"]');
+    check('a choice field has a box for its choices', !!ch);
+    if (ch) { Object.getOwnPropertyDescriptor(w.HTMLTextAreaElement.prototype, 'value').set.call(ch, 'red\nBlue | Azure'); ch.dispatchEvent(new w.Event('input', { bubbles: true })); }
+    await sleep(20);
+    click(btnHas('Save fields')); await sleep(20);
+    const sentF = await waitFor(() => calls.find((c) => c.u.includes('save_collection')));
+    const bodyF = sentF ? JSON.parse(sentF.body) : {};
+    check('saving sends the fields: a key from the label, and the choices as values and labels', bodyF.fields && bodyF.fields.length === 1 && bodyF.fields[0].key === 'colour' && bodyF.fields[0].type === 'choice'
+      && JSON.stringify(bodyF.fields[0].options) === '[{"value":"red","label":"red"},{"value":"blue","label":"Azure"}]' && !('_choices' in bodyF.fields[0]), JSON.stringify(bodyF.fields));
+    check('the collection keeps its name and address when its fields are saved', bodyF.name === 'Team' && bodyF.slug === 'team' && bodyF.id === 'col_x');
+    COL_SAVES.length = 0;   // this save is not the rename tested below
+
+    // the item editor: one input per field, typed to the field
+    const defs = [
+      { id: 'nm', key: 'name', label: 'Name', type: 'text', required: true },
+      { id: 'st', key: 'story', label: 'Story', type: 'richtext', required: false },
+      { id: 'tr', key: 'tier', label: 'Tier', type: 'choice', multiple: true, options: [{ value: 'gold', label: 'Gold' }, { value: 'silver', label: 'Silver' }] },
+      { id: 'lk', key: 'site', label: 'Site', type: 'link', required: false },
+    ];
+    useStore.setState({ currentView: 'editor', selectedBlockId: null, blocks: [], pastBlocks: [], futureBlocks: [],
+      activePage: { id: 'it1', __item: true, collection_id: 'col_x', title: 'Ada', slug: 'ada', excerpt: '', cover_image: '', date: '2026-10-19', status: 'draft', seo_title: '', seo_description: '', __fieldDefs: defs, field_values: {} } });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    const nameIn = await waitFor(() => $('input[aria-label="Name"]'));
+    check('the item editor has an input for each field of the collection', !!nameIn && !!$('input[aria-label="Site address"]') && $$('input[type="checkbox"]').length >= 2);
+    if (nameIn) typeIn(nameIn, 'Ada Lovelace');
+    await sleep(20);
+    check('…and a typed value is kept with the item', st().activePage.field_values.nm === 'Ada Lovelace', JSON.stringify(st().activePage.field_values));
+    const gold = $$('label').find((l) => l.textContent.trim() === 'Gold');
+    if (gold) click(gold.querySelector('input')); await sleep(30);
+    check('a multiple choice keeps the boxes ticked', JSON.stringify(st().activePage.field_values.tr) === '["gold"]', JSON.stringify(st().activePage.field_values.tr));
+    const addr = $('input[aria-label="Site address"]');
+    if (addr) typeIn(addr, 'https://example.com'); await sleep(20);
+    check('a link keeps its address', st().activePage.field_values.lk && st().activePage.field_values.lk.url === 'https://example.com', JSON.stringify(st().activePage.field_values.lk));
+
+    // the Item Field block: its field is chosen from the collection's fields
+    useStore.setState({ selectedBlockId: 'if1', blocks: [{ id: 'if1', type: 'ITEM_FIELD', styles: {}, content: { field: '' } }] });
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    if (!$$('label').find((l) => l.textContent.trim() === 'Field')) { click($$('[role="tab"]').find((b) => b.textContent.trim() === 'Content')); await sleep(30); }
+    const fieldLabel = $$('label').find((l) => l.textContent.trim() === 'Field');
+    const fieldSel = fieldLabel && fieldLabel.parentElement.querySelector('select');
+    check('the Item Field block lists the collection\'s fields', !!fieldSel && [...fieldSel.options].some((o) => /Story \(Rich text\)/.test(o.textContent)));
+    if (fieldSel) { fieldSel.value = 'st'; fieldSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(30);
+    check('…choosing one sets the block\'s field', st().blocks.find((b) => b.id === 'if1').content.field === 'st');
+  }
+
+  console.log('\nLISTS, RELATED AND STRUCTURED DATA');
+  {
+    const LP = (await vite.ssrLoadModule('/src/components/panel/blocks/CollectionListPanel.jsx')).default;
+    const RP = (await vite.ssrLoadModule('/src/components/panel/blocks/RelatedPanel.jsx')).default;
+    const CF = (await vite.ssrLoadModule('/src/components/CollectionFields.jsx')).default;
+    const cols = [
+      { id: 'col_s', name: 'Staff', slug: 'staff', fields: [
+        { id: 'dept', key: 'dept', label: 'Department', type: 'reference', target: 'col_d' },
+        { id: 'role', key: 'role', label: 'Role', type: 'choice', multiple: false, options: [{ value: 'a', label: 'A' }] },
+        { id: 'pay', key: 'pay', label: 'Pay', type: 'number' }] },
+      { id: 'col_d', name: 'Departments', slug: 'departments', fields: [] }];
+    const changes = [];
+    let content = { collectionId: 'col_s', collectionName: 'Staff', cardFields: [] };
+    const ctxL = () => ({ selectedBlock: { id: 'lb', type: 'COLLECTION_LIST', content, styles: {} },
+      handleContentChange: (k, v) => { changes.push([k, v]); content = { ...content, [k]: v }; }, patchContent: (p) => { content = { ...content, ...p }; }, collections: cols });
+    mount(React.createElement(LP, { ctx: ctxL() })); await sleep(30);
+    const box = $('[aria-label="Fields on each card"]');
+    check('the list panel offers the fields of the chosen collection for the cards', !!box && box.querySelectorAll('input').length === 3);
+    if (box) click(box.querySelectorAll('input')[1]);
+    check('…ticking one sets the card fields', JSON.stringify(changes.find((c) => c[0] === 'cardFields')) === '["cardFields",["role"]]', JSON.stringify(changes));
+    const selWith = (text) => $$('select').find((x) => [...x.options].some((o) => o.textContent.startsWith(text)));
+    const sortSel = selWith('Newest first');
+    if (sortSel) { sortSel.value = 'pay'; sortSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    check('the list can be sorted by a field (number, date, text or single choice)', changes.some((c) => c[0] === 'sortBy' && c[1] === 'pay') && !!sortSel && [...sortSel.options].some((o) => o.textContent === 'Pay'));
+    const filtSel = selWith('None');
+    if (filtSel) { filtSel.value = 'role'; filtSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    check('a choice field gives the filter buttons', changes.some((c) => c[0] === 'filterField' && c[1] === 'role') && !!filtSel && [...filtSel.options].every((o) => o.value !== 'pay'));
+
+    // Related items: the reference must point to the collection of the item being edited
+    let rcontent = { collectionId: 'col_s', fieldId: '' };
+    const rchanges = [];
+    const rctx = (itemCol) => ({ selectedBlock: { id: 'rb', type: 'RELATED', content: rcontent, styles: {} },
+      handleContentChange: (k, v) => { rchanges.push([k, v]); rcontent = { ...rcontent, [k]: v }; }, patchContent: (p) => { rcontent = { ...rcontent, ...p }; }, collections: cols, itemCollectionId: itemCol });
+    mount(React.createElement(RP, { ctx: rctx('col_d') })); await sleep(30);
+    check('a Related block offers the reference fields that point to the item\'s collection', !!$$('select').find((x) => [...x.options].some((o) => o.textContent === 'Department')));
+    mount(React.createElement(RP, { ctx: rctx(null) })); await sleep(30);
+    check('…and says so when it is not used on a collection item', /collection item page/.test(doc.body.textContent));
+
+    // Structured data: the type, and which field gives each property
+    COL_SAVES.length = 0; calls.length = 0;
+    mount(React.createElement(CF, { collection: { id: 'col_s', name: 'Staff', slug: 'staff', fields: cols[0].fields, schema: {} }, collections: cols, canEdit: true })); await sleep(30);
+    // the Fields section is closed when the collection has fields: open it
+    if (!$('select[aria-label="Structured data type"]')) { click($$('button').find((b) => /^Fields \(/.test(b.textContent.trim()))); await sleep(30); }
+    const typeSel = $('select[aria-label="Structured data type"]');
+    if (typeSel) { typeSel.value = 'Person'; typeSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(30);
+    const jobSel = $('select[aria-label="Structured data Job title"]');
+    check('the structured data offers the properties of its type, with the fields that fit', !!jobSel && [...jobSel.options].some((o) => o.value === 'role') && ![...jobSel.options].some((o) => o.value === 'pay'));
+    if (jobSel) { jobSel.value = 'role'; jobSel.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    await sleep(20);
+    click(btnHas('Save fields')); await sleep(20);
+    const sentS = await waitFor(() => calls.find((c) => c.u.includes('save_collection')));
+    const bodyS = sentS ? JSON.parse(sentS.body) : {};
+    check('saving sends the structured data of the collection', JSON.stringify(bodyS.schema) === '{"type":"Person","map":{"jobTitle":"role"},"currency":""}', JSON.stringify(bodyS.schema));
+    COL_SAVES.length = 0;
+  }
+
+  console.log('\nITEM DESIGN AND DYNAMIC VALUES');
+  {
+    const ib = await vite.ssrLoadModule('/src/render/itemBinding.mjs');
+    const bdefs = [{ id: 't1', key: 'name', type: 'text', label: 'Name' }, { id: 'n1', key: 'price', type: 'number', label: 'Price' },
+      { id: 'd1', key: 'when', type: 'date', label: 'When' }, { id: 'l1', key: 'site', type: 'link', label: 'Site' },
+      { id: 'c1', key: 'tier', type: 'choice', label: 'Tier', multiple: true, options: [{ value: 'gold', label: 'Gold' }, { value: 'silver', label: 'Silver' }] },
+      { id: 'x1', key: 'lead', type: 'reference', label: 'Lead', target: 'c2' }];
+    const bctx = { defs: bdefs, values: { t1: '<b>Ada</b> & co', n1: 12.5, d1: '2026-10-19', l1: { url: 'chi-siamo/index.html', text: 'About' }, c1: ['gold', 'silver'], x1: 'i9' },
+      items: { i9: { title: 'Ada L.', slug: 'ada', col_slug: 'team', live: true } }, item: 'i1',
+      page: { title: 'Ada "L"', excerpt: '', date: '2026-10-19', url: '{{BASE_URL}}team/ada/' } };
+    const tpl = 'Hi {{field:name}}, {{field:price}} on {{field:when}}. {{field:site}} / {{field:site.text}} / {{field:tier}} / {{field:lead}} {{field:lead.url}} | {{item:title}} {{item:date}} {{field:missing}} {{item:url}}';
+    // the same literals as the PHP tests (server.php, DYNAMIC VALUES)
+    check('dynamic values: fields, item and reference tokens become the item\'s values, escaped (as on the site)', ib.bindValue(tpl, bctx) === 'Hi &lt;b&gt;Ada&lt;/b&gt; &amp; co, 12.5 on October 19, 2026. {{BASE_URL}}chi-siamo/ / About / Gold, Silver / Ada L. {{BASE_URL}}team/ada/ | Ada &quot;L&quot; October 19, 2026  {{BASE_URL}}team/ada/', ib.bindValue(tpl, bctx));
+    check('dynamic values: outside an item they are removed', ib.bindValue(tpl, null) === 'Hi ,  on .  /  /  /   |    ');
+    check('dynamic values: every string of a content is bound, keys kept', JSON.stringify(ib.bindValue({ text: '{{field:price}}', nested: { a: '{{item:title}}' }, n: 3 }, bctx)) === '{"text":"12.5","nested":{"a":"Ada &quot;L&quot;"},"n":3}');
+    check('the design shows the names of the fields, in brackets', ib.bindValue('{{field:name}} {{item:title}}', { placeholder: true, defs: bdefs }) === '[Name] [Title]');
+    check('the editor binds an item to its values, and a design to placeholders, and a page to nothing', ib.contextFor({ __design: true, __fieldDefs: bdefs }).placeholder === true
+      && ib.contextFor({ __item: true, __fieldDefs: bdefs, field_values: {}, title: 'T', slug: 't', __collectionSlug: 'books' }).page.url === '/books/t/' && ib.contextFor({ id: 'p' }) === null);
+    // the block's own edits keep the raw text: a bound block is only a copy for the display
+    const raw = { id: 'b', type: 'TEXT', content: { text: '{{field:name}}' } };
+    check('binding a block gives a copy: its raw content is unchanged', ib.bindBlock(raw, { placeholder: true, defs: bdefs }).content.text === '[Name]' && raw.content.text === '{{field:name}}');
+
+    // a locked item (built from the design): nothing changes its blocks
+    useStore.setState({ currentView: 'editor', blocks: [{ id: 'lk1', type: 'TEXT', styles: {}, content: { text: 'design text' } }], pastBlocks: [], futureBlocks: [], selectedBlockId: null,
+      activePage: { id: 'it9', __item: true, __locked: true, collection_id: 'col_books', title: 'x', slug: 'x', __fieldDefs: [] } });
+    st().updateBlock('lk1', { content: { text: 'changed' } });
+    st().removeBlock('lk1');
+    st().addBlock('TEXT');
+    st().moveBlockBy('lk1', 1);
+    st().undo();
+    check('a locked item cannot change its layout: edit, remove, add, move and undo all leave the design alone', st().blocks.length === 1 && st().blocks[0].content.text === 'design text' && st().pastBlocks.length === 0, JSON.stringify(st().blocks));
+    useStore.setState({ activePage: { id: 'it9', __item: true, collection_id: 'col_books', title: 'x', slug: 'x', __fieldDefs: [] } });
+    st().updateBlock('lk1', { content: { text: 'changed' } });
+    check('…and an item that is not locked is edited as before', st().blocks[0].content.text === 'changed');
+    useStore.setState({ activePage: null, blocks: [] });
+  }
+
   console.log('\nCANVAS MENU');
   {
     const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;

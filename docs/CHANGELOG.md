@@ -10,6 +10,37 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-22 — Custom fields, one design per collection, structured data
+
+### Added
+- **Custom fields per collection** (Collections › Fields, admins define them): text, rich text, number, date, image,
+  gallery, link, choice (one or several) and reference to an item of another collection. Each field can be required
+  to publish: a collection item with a required field left empty stays a draft, and the message names the field. Every
+  item fills them in its settings (Page Settings › Item fields), with the media library for images and galleries.
+- **Item Field block**: shows one field of the collection item being published on its page, with its label if asked
+  (numbers: decimals; dates: long or ISO format). Pages that are not collection items show nothing.
+- Database schema 9: `collections.fields` and `collection_items.field_values` (added on update).
+- **Collection List: fields on the cards**, a **sort** (title, date, or a field) and a **filter** by a choice field
+  (buttons above the list, shown without a reload).
+- **Related Items block**: on an item page, lists the items of a collection that point to it through a reference field
+  (a department page listing its people, a client page listing its projects).
+- **Structured data for search engines**: a collection can be Product, Event or Person (Collections › Fields). Its item
+  pages get schema.org JSON-LD from the fields chosen for each property (price in the currency chosen, photo, dates...).
+- Database schema 10: `collections.schema_json` (added on update).
+- **One design per collection** (Collections › Design, admins): the blocks every item page of the collection is built
+  from. It is edited like a page, and published with the site. An item keeps its fields and settings, and its layout is
+  read-only in the editor (the canvas says so). A collection without a design keeps the blocks of each item.
+- **Dynamic values** in any block: `{{field:key}}` shows a field of the item (`{{field:key.text}}` the text of a link,
+  `.url` a link or a reference's page, `.title` a reference's title), `{{item:title}}`, `{{item:excerpt}}`,
+  `{{item:date}}` and `{{item:url}}` show the item itself. In the editor, the design shows the field names in brackets.
+- Database schema 11: `collections.design_json` (added on update).
+
+### Documentation
+- The user guide (custom fields, the design of a collection, dynamic values, structured data, the list options and the
+  Related Items block), the block reference (Related Items, Item Field, Collection List options), the administrator guide
+  (migrations 9 to 11, structured data on publish, roles) and the developer guide (the data model, dynamic values, the
+  collection helpers, the new API actions and the layout lock) are updated. The manuals index is at 0.19.0.
+
 ## [0.18.0] - 2026-10-18 — Button and field presets, copy & paste style, on-canvas handles
 
 ### Added

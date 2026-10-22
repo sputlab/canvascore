@@ -95,6 +95,95 @@ check('button presets and field style: only valid values are kept, in a fixed or
 check('a button that picks a preset gets its variables, with the built-in look as fallback', cc_button_preset_css('primary') === "background: var(--cc-btn-primary-bg, var(--brand-color, #3b82f6)); color: var(--cc-btn-primary-text, #ffffff); border: 2px solid var(--cc-btn-primary-border, transparent); border-radius: var(--cc-btn-primary-radius, 6px); " && cc_button_preset_css('nope') === '');
 check('the site\'s button presets and field style as CSS variables (only the values that are set)', cc_kit_css($kit, ':root') === ':root{--cc-btn-primary-bg: #112233; --cc-btn-primary-radius: 999px; --cc-btn-outline-bg: transparent; --cc-btn-outline-border: var(--cc-color-accent, #f59e0b); --cc-field-bg: #fafafa;}' && cc_kit_css(cc_kit([]), ':root') === '');
 
+echo "\nCUSTOM FIELDS\n";
+$fpdo = new PDO('sqlite::memory:');
+$fpdo->exec("CREATE TABLE collections (id TEXT, name TEXT, slug TEXT, fields TEXT)");
+$fpdo->exec("CREATE TABLE collection_items (id TEXT, collection_id TEXT, title TEXT, slug TEXT, status TEXT, archived INTEGER, field_values TEXT)");
+$fpdo->exec("INSERT INTO collections VALUES ('team','Team','team','[]')");
+$fpdo->exec("INSERT INTO collection_items VALUES ('ada','team','Ada','ada','published',0,'{}')");
+$fdefs = cc_field_defs([
+    ['id' => 't1', 'key' => 'name', 'label' => 'Name', 'type' => 'text', 'required' => true],
+    ['id' => 'r1', 'key' => 'body', 'label' => 'Body', 'type' => 'richtext'],
+    ['id' => 'n1', 'key' => 'price', 'label' => 'Price', 'type' => 'number'],
+    ['id' => 'd1', 'key' => 'when', 'label' => 'When', 'type' => 'date'],
+    ['id' => 'g1', 'key' => 'pic', 'label' => 'Pic', 'type' => 'image'],
+    ['id' => 'g2', 'key' => 'gal', 'label' => 'Gallery', 'type' => 'gallery'],
+    ['id' => 'l1', 'key' => 'site', 'label' => 'Site', 'type' => 'link'],
+    ['id' => 'c1', 'key' => 'tier', 'label' => 'Tier', 'type' => 'choice', 'multiple' => true, 'options' => [['value' => 'gold', 'label' => 'Gold'], ['value' => 'silver', 'label' => 'Silver']]],
+    ['id' => 'x1', 'key' => 'lead', 'label' => 'Lead', 'type' => 'reference', 'target' => 'team'],
+], $fpdo);
+check('custom fields: all nine types are kept, in order', implode(',', array_column($fdefs, 'type')) === 'text,richtext,number,date,image,gallery,link,choice,reference', implode(',', array_column($fdefs, 'type')));
+check('custom fields: a bad id, key or type, a duplicate key and a choice without a valid value are dropped', count(cc_field_defs([
+    ['id' => 'BAD ID', 'key' => 'ok', 'type' => 'text'], ['id' => 'a', 'key' => 'Bad Key', 'type' => 'text'], ['id' => 'b', 'key' => 'ok', 'type' => 'script'],
+    ['id' => 'c', 'key' => 'dup', 'type' => 'text'], ['id' => 'd', 'key' => 'dup', 'type' => 'text'],
+    ['id' => 'e', 'key' => 'opts', 'type' => 'choice', 'options' => [['value' => 'Not Valid', 'label' => 'x'], ['value' => 'ok-one', 'label' => 'One']]],
+], $fpdo)) === 2);
+check('custom fields: a reference to a collection that does not exist loses its target', cc_field_defs([['id' => 'r', 'key' => 'r', 'type' => 'reference', 'target' => 'nope']], $fpdo)[0]['target'] === '');
+$fraw = ['t1' => '  <b>Ada</b>  ', 'r1' => '<p>ok</p><script>x()</script>', 'n1' => '12.5', 'd1' => '2026-02-30', 'g1' => 'javascript:alert(1)',
+    'g2' => ['a.jpg', 'javascript:x', 'b.png'], 'l1' => ['url' => 'javascript:alert(1)', 'text' => 'Bad'], 'c1' => ['gold', 'bronze'], 'x1' => 'ada'];
+[$fvals, $fmiss] = cc_field_values($fdefs, $fraw, $fpdo, false);
+check('custom field values: rich text loses its script, a bad date and a javascript image are emptied', strpos($fvals['r1'], 'script') === false && $fvals['d1'] === '' && $fvals['g1'] === '' && $fvals['n1'] === 12.5, json_encode([$fvals['r1'], $fvals['d1'], $fvals['g1']]));
+check('custom field values: a gallery keeps its valid images; a link keeps no javascript address; a choice keeps only its options', $fvals['g2'] === ['a.jpg', 'b.png'] && $fvals['l1']['url'] === '' && $fvals['l1']['text'] === 'Bad' && $fvals['c1'] === ['gold'], json_encode([$fvals['g2'], $fvals['l1'], $fvals['c1']]));
+check('custom field values: a reference keeps an item of its collection', $fvals['x1'] === 'ada');
+[, $fmiss2] = cc_field_values($fdefs, ['t1' => ''], $fpdo, true);
+check('a required field left empty blocks a publish (named), but not a draft', $fmiss2 === ['Name'] && $fmiss === []);
+check('a link is only kept as a web address, mail, phone or a path of this site', cc_field_link('https://example.com/a') === 'https://example.com/a' && cc_field_link('mailto:a@b.c') === 'mailto:a@b.c' && cc_field_link('chi-siamo/index.html') === 'chi-siamo/index.html' && cc_field_link('data:text/html,x') === '' && cc_field_link('java script:x') === '');
+// The Item Field block: the value of the item being published, escaped; nothing without an item
+$fitems = ['ada' => ['title' => 'Ada <Lovelace>', 'slug' => 'ada', 'col_slug' => 'team', 'live' => true]];
+cc_item_context(['defs' => array_combine(array_column($fdefs, 'id'), $fdefs), 'values' => array_merge($fvals, ['t1' => '"><img onerror=x>']), 'items' => $fitems]);
+$fpage = cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 'n1', 'showLabel' => true, 'decimals' => 2]]);
+check('the Item Field block shows its field with the label, rounded as asked', strpos($fpage, 'cc-field-label">Price<') !== false && strpos($fpage, '12.50') !== false, $fpage);
+$fesc = cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 't1']]);
+check('…and escapes a value (no markup from a visitor-facing text)', strpos($fesc, '<img onerror') === false && strpos($fesc, '&quot;&gt;&lt;img') !== false, $fesc);
+$fref = cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 'x1']]);
+check('…a reference links to the item it points to, on the published site', strpos($fref, 'href="{{BASE_URL}}team/ada/"') !== false && strpos($fref, 'Ada &lt;Lovelace&gt;') !== false, $fref);
+check('…and a field that is empty or unknown shows nothing', cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 'g1']]) === '' && cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 'zzz']]) === '');
+cc_item_context(null);
+check('…and on a page that is not a collection item it shows nothing', cc_render_item_field(['type' => 'ITEM_FIELD', 'content' => ['field' => 't1']]) === '');
+
+echo "\nLISTS, SORT AND FILTER, STRUCTURED DATA\n";
+$ldefs = ['p' => ['id' => 'p', 'key' => 'price', 'label' => 'Price', 'type' => 'number'], 'tier' => ['id' => 'tier', 'key' => 'tier', 'label' => 'Tier', 'type' => 'choice', 'multiple' => false,
+    'options' => [['value' => 'gold', 'label' => 'Gold'], ['value' => 'silver', 'label' => 'Silver']]]];
+$litems = [['title' => 'B', 'date' => '2026-01-02', 'vals' => ['p' => '30', 'tier' => 'gold']], ['title' => 'a', 'date' => '', 'vals' => []], ['title' => 'C', 'date' => '2026-01-01', 'vals' => ['p' => '5', 'tier' => 'silver']]];
+$names = function ($xs) { return implode(',', array_column($xs, 'title')); };
+check('sort by a number: ascending and descending, with the items that have no value last', $names(cc_sort_items($litems, 'p', false, $ldefs)) === 'C,B,a' && $names(cc_sort_items($litems, 'p', true, $ldefs)) === 'B,C,a', $names(cc_sort_items($litems, 'p', false, $ldefs)));
+check('sort by title (any case) and by date; no sort keeps the order given', $names(cc_sort_items($litems, 'title', false, $ldefs)) === 'a,B,C' && $names(cc_sort_items($litems, 'date', false, $ldefs)) === 'C,B,a' && $names(cc_sort_items($litems, '', false, $ldefs)) === 'B,a,C');
+$lopts = cc_list_options(['showCover' => false, 'cardFields' => ['p', 'nope'], 'showDate' => false], $ldefs, ['items' => []], 'grid', 'tier');
+$lcards = cc_list_cards([$litems[0]], 'team', $lopts);
+check('a card shows its chosen fields (label and value), and carries its choices for the filter', strpos($lcards, '>Price</span>') !== false && strpos($lcards, '>30</div>') !== false && strpos($lcards, 'data-cc-filter="gold"') !== false, $lcards);
+check('a card without the filter has no filter attribute, and an unknown card field shows nothing', strpos(cc_list_cards([$litems[0]], 'team', cc_list_options([], $ldefs, ['items' => []], 'grid', '')), 'data-cc-filter') === false && strpos(cc_list_cards([$litems[0]], 'team', cc_list_options(['cardFields' => ['zzz']], $ldefs, ['items' => []], 'grid', '')), 'cc-cl-field') === false);
+$lui = cc_list_filter_ui('lst1', $ldefs['tier']);
+check('the filter gives an All button and one per choice, and a script that hides the cards that do not match', strpos($lui, 'data-cc-filter-value="silver"') !== false && strpos($lui, 'data-cc-filter-value=""') !== false && strpos($lui, '<script>') !== false && strpos($lui, "getElementById('lst1')") !== false);
+check('no filter for a field that is not a choice', cc_list_filter_ui('x', $ldefs['p']) === '');
+$schema_defs = [['id' => 'ph', 'key' => 'photo', 'label' => 'Photo', 'type' => 'image'], ['id' => 'pr', 'key' => 'price', 'label' => 'Price', 'type' => 'number'], ['id' => 'de', 'key' => 'de', 'label' => 'D', 'type' => 'richtext']];
+$sc = cc_schema_clean(['type' => 'Product', 'map' => ['image' => 'ph', 'price' => 'de', 'description' => 'de', 'sku' => 'pr', 'nope' => 'ph'], 'currency' => 'eur'], $schema_defs);
+check('structured data: a property takes only a field of its type, and the currency is an ISO code (lower case is accepted)', $sc === ['type' => 'Product', 'map' => ['image' => 'ph', 'description' => 'de'], 'currency' => 'EUR'] && cc_schema_clean(['type' => 'Product', 'currency' => 'EU'], $schema_defs)['currency'] === '', json_encode($sc));
+check('structured data: an unknown type is no structured data', cc_schema_clean(['type' => 'Recipe'], $schema_defs)['type'] === '');
+$pscope = cc_item_jsonld(['type' => 'Product', 'map' => ['image' => 'ph', 'price' => 'pr', 'description' => 'de'], 'currency' => 'EUR'], [],
+    ['ph' => 'https://x.test/a.jpg', 'pr' => 12.5, 'de' => '<p>Fine &amp; <b>warm</b></p></script><script>alert(1)</script>'], 'Tea </script> cup', 'https://x.test/tea/', function ($u) { return $u; });
+preg_match('#<script type="application/ld\+json">(.*)</script>#s', $pscope, $pm);
+$pld = json_decode($pm[1] ?? '', true);
+check('a Product page gets JSON-LD with its name, image, price and currency, and the script tag is never closed early', $pld && $pld['@type'] === 'Product' && $pld['name'] === 'Tea </script> cup' && $pld['offers']['price'] === 12.5 && $pld['offers']['priceCurrency'] === 'EUR' && $pld['image'] === 'https://x.test/a.jpg' && substr_count($pscope, '</script>') === 1, $pscope);
+check('…the description is text, not markup', $pld && $pld['description'] === 'Fine & warm alert(1)' || ($pld && strpos($pld['description'], '<') === false), json_encode($pld['description'] ?? null));
+$escope = cc_item_jsonld(['type' => 'Event', 'map' => ['startDate' => 'sd', 'location' => 'lo'], 'currency' => ''], [], ['sd' => '2026-11-03', 'lo' => 'Milan Hall'], 'Talk', '', function ($u) { return $u; });
+check('an Event page gets its start date and location; no offers', strpos($escope, '"startDate":"2026-11-03"') !== false && strpos($escope, '"@type":"Place"') !== false && strpos($escope, 'offers') === false, $escope);
+check('an item without a schema gets no JSON-LD', cc_item_jsonld([], [], [], 'x', '', 'strval') === '');
+
+echo "\nDYNAMIC VALUES\n";
+$bdefs = [['id' => 't1', 'key' => 'name', 'type' => 'text', 'label' => 'Name'], ['id' => 'n1', 'key' => 'price', 'type' => 'number', 'label' => 'Price'],
+    ['id' => 'd1', 'key' => 'when', 'type' => 'date', 'label' => 'When'], ['id' => 'l1', 'key' => 'site', 'type' => 'link', 'label' => 'Site'],
+    ['id' => 'c1', 'key' => 'tier', 'type' => 'choice', 'label' => 'Tier', 'multiple' => true, 'options' => [['value' => 'gold', 'label' => 'Gold'], ['value' => 'silver', 'label' => 'Silver']]],
+    ['id' => 'x1', 'key' => 'lead', 'type' => 'reference', 'label' => 'Lead', 'target' => 'c2']];
+$bctx = ['defs' => $bdefs, 'values' => ['t1' => '<b>Ada</b> & co', 'n1' => 12.5, 'd1' => '2026-10-19', 'l1' => ['url' => 'chi-siamo/index.html', 'text' => 'About'], 'c1' => ['gold', 'silver'], 'x1' => 'i9'],
+    'items' => ['i9' => ['title' => 'Ada L.', 'slug' => 'ada', 'col_slug' => 'team', 'live' => true]], 'item' => 'i1',
+    'page' => ['title' => 'Ada "L"', 'excerpt' => '', 'date' => '2026-10-19', 'url' => '{{BASE_URL}}team/ada/']];
+$btpl = 'Hi {{field:name}}, {{field:price}} on {{field:when}}. {{field:site}} / {{field:site.text}} / {{field:tier}} / {{field:lead}} {{field:lead.url}} | {{item:title}} {{item:date}} {{field:missing}} {{item:url}}';
+// the same literal as the JavaScript test (ui-shell.mjs)
+check('dynamic values: fields, item and reference tokens become the item\'s values, escaped', cc_bind_deep($btpl, $bctx) === 'Hi &lt;b&gt;Ada&lt;/b&gt; &amp; co, 12.5 on October 19, 2026. {{BASE_URL}}chi-siamo/ / About / Gold, Silver / Ada L. {{BASE_URL}}team/ada/ | Ada &quot;L&quot; October 19, 2026  {{BASE_URL}}team/ada/', cc_bind_deep($btpl, $bctx));
+check('dynamic values: outside an item they are removed (a visitor never sees a placeholder)', cc_bind_deep($btpl, null) === 'Hi ,  on .  /  /  /   |    ');
+check('dynamic values: every string of a block\'s content is bound, keys kept', json_encode(cc_bind_deep(['text' => '{{field:price}}', 'nested' => ['a' => '{{item:title}}'], 'n' => 3], $bctx)) === '{"text":"12.5","nested":{"a":"Ada &quot;L&quot;"},"n":3}');
+check('dynamic values: a page without tokens is left as it is', cc_bind_deep('plain text', $bctx) === 'plain text');
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

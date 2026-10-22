@@ -157,6 +157,86 @@ $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 $home = (string)@file_get_contents($web . '/404.html');
 check('published pages: the button preset and the field style as variables', strpos($home, '--cc-btn-primary-bg: #112233;') !== false && strpos($home, '--cc-field-bg: #fafafa;') !== false);
 
+echo "\nCUSTOM FIELDS\n";
+$r = $own->api('save_collection', ['id' => 'col_team', 'name' => 'Team', 'slug' => 'team-members', 'fields' => [
+    ['id' => 'name', 'key' => 'name', 'label' => 'Name', 'type' => 'text', 'required' => true],
+    ['id' => 'price', 'key' => 'price', 'label' => 'Price', 'type' => 'number'],
+    ['id' => 'site', 'key' => 'site', 'label' => 'Site', 'type' => 'link'],
+    ['id' => 'pic', 'key' => 'pic', 'label' => 'Photo', 'type' => 'image']]]);
+$cols = $own->api('get_collections');
+$team = array_values(array_filter($cols['json'] ?? [], function ($c) { return $c['id'] === 'col_team'; }))[0] ?? [];
+check('an admin defines the custom fields of a collection, and the list gives them back', !empty($r['json']['success']) && count($team['fields'] ?? []) === 4 && $team['fields'][0]['type'] === 'text', json_encode($r['json'] ?? null));
+$blocks = [['id' => 'tf1', 'type' => 'ITEM_FIELD', 'styles' => [], 'content' => ['field' => 'price', 'showLabel' => false, 'decimals' => 0]],
+    ['id' => 'tf2', 'type' => 'ITEM_FIELD', 'styles' => [], 'content' => ['field' => 'name', 'showLabel' => false]]];
+$r = $own->api('save_item', ['id' => 'ti1', 'collection_id' => 'col_team', 'title' => 'Ada', 'slug' => 'ada', 'status' => 'draft', 'blocks' => $blocks,
+    'field_values' => ['name' => '', 'price' => '12', 'site' => ['url' => 'javascript:x', 'text' => ''], 'pic' => 'https://x.test/a.jpg']]);
+check('a draft item can leave a required field empty', !empty($r['json']['success']), $r['code']);
+$r = $own->api('save_item', ['id' => 'ti1', 'collection_id' => 'col_team', 'title' => 'Ada', 'slug' => 'ada', 'status' => 'published', 'blocks' => $blocks,
+    'field_values' => ['name' => '  ', 'price' => '12']]);
+check('publishing with a required field empty is refused, and the message names the field', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'required' && strpos($r['json']['message'] ?? '', 'Name') !== false, json_encode($r['json'] ?? null));
+$r = $own->api('save_item', ['id' => 'ti1', 'collection_id' => 'col_team', 'title' => 'Ada', 'slug' => 'ada', 'status' => 'published', 'blocks' => $blocks,
+    'field_values' => ['name' => 'Ada Lovelace', 'price' => '12', 'site' => ['url' => 'javascript:x', 'text' => ''], 'pic' => 'https://x.test/a.jpg']]);
+check('with the required field filled in, the item is published', !empty($r['json']['success']), json_encode($r['json'] ?? null));
+$got = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=ti1');
+$stored = json_decode((string)($got['json']['field_values'] ?? '{}'), true) ?: [];
+check('the item keeps its values, cleaned (the javascript link is emptied)', ($stored['name'] ?? '') === 'Ada Lovelace' && ($stored['site']['url'] ?? 'x') === '', json_encode($stored));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$item_page = (string)@file_get_contents($web . '/team-members/ada/index.html');
+check('the published item page shows its field values', strpos($item_page, 'Ada Lovelace') !== false && strpos($item_page, 'cc-field-value">12</div>') !== false);
+
+echo "\nRELATED ITEMS AND STRUCTURED DATA (published)\n";
+$own->api('save_collection', ['id' => 'col_dept', 'name' => 'Departments', 'slug' => 'departments', 'fields' => []]);
+$r = $own->api('save_collection', ['id' => 'col_staff', 'name' => 'Staff', 'slug' => 'staff', 'fields' => [
+    ['id' => 'dept', 'key' => 'dept', 'label' => 'Department', 'type' => 'reference', 'target' => 'col_dept']]]);
+check('a reference field can point to another collection', !empty($r['json']['success']));
+$r = $own->api('save_collection', ['id' => 'col_shop', 'name' => 'Shop', 'slug' => 'shop', 'fields' => [
+    ['id' => 'photo', 'key' => 'photo', 'label' => 'Photo', 'type' => 'image'],
+    ['id' => 'price', 'key' => 'price', 'label' => 'Price', 'type' => 'number']],
+    'schema' => ['type' => 'Product', 'map' => ['image' => 'photo', 'price' => 'price'], 'currency' => 'EUR']]);
+$cols = $own->api('get_collections');
+$shop = array_values(array_filter($cols['json'] ?? [], function ($c) { return $c['id'] === 'col_shop'; }))[0] ?? [];
+check('the structured data of a collection is saved and given back', !empty($r['json']['success']) && ($shop['schema']['type'] ?? '') === 'Product' && ($shop['schema']['map']['price'] ?? '') === 'price' && ($shop['schema']['currency'] ?? '') === 'EUR', json_encode($shop['schema'] ?? null));
+$own->api('save_item', ['id' => 'dep1', 'collection_id' => 'col_dept', 'title' => 'Design', 'slug' => 'design', 'status' => 'published',
+    'blocks' => [['id' => 'rl1', 'type' => 'RELATED', 'styles' => [], 'content' => ['collectionId' => 'col_staff', 'fieldId' => 'dept', 'limit' => 5, 'title' => 'Our people', 'columns' => 2]]]]);
+$own->api('save_item', ['id' => 'st1', 'collection_id' => 'col_staff', 'title' => 'Ana Rossi', 'slug' => 'ana-rossi', 'status' => 'published', 'blocks' => [], 'field_values' => ['dept' => 'dep1']]);
+$own->api('save_item', ['id' => 'st2', 'collection_id' => 'col_staff', 'title' => 'Luca Bianchi', 'slug' => 'luca-bianchi', 'status' => 'published', 'blocks' => [], 'field_values' => ['dept' => '']]);
+$own->api('save_item', ['id' => 'sh1', 'collection_id' => 'col_shop', 'title' => 'Green Tea', 'slug' => 'green-tea', 'status' => 'published',
+    'blocks' => [['id' => 'sf1', 'type' => 'ITEM_FIELD', 'styles' => [], 'content' => ['field' => 'price']]],
+    'field_values' => ['photo' => 'https://x.test/tea.jpg', 'price' => 12]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$dept_page = (string)@file_get_contents($web . '/departments/design/index.html');
+check('a department page lists the people who point to it (and not the others)', strpos($dept_page, 'Ana Rossi') !== false && strpos($dept_page, 'Our people') !== false && strpos($dept_page, 'Luca Bianchi') === false, substr($dept_page, 0, 0));
+$shop_page = (string)@file_get_contents($web . '/shop/green-tea/index.html');
+preg_match('#<script type="application/ld\+json">(.*?)</script>#s', $shop_page, $sm);
+$sld = json_decode($sm[1] ?? '', true);
+check('an item page of a Product collection carries its structured data (name, photo, price in EUR)', ($sld['@type'] ?? '') === 'Product' && ($sld['name'] ?? '') === 'Green Tea' && ($sld['image'] ?? '') === 'https://x.test/tea.jpg' && ($sld['offers']['priceCurrency'] ?? '') === 'EUR' && ($sld['offers']['price'] ?? 0) == 12, json_encode($sld));
+check('…and a page without structured data has no JSON-LD', strpos((string)@file_get_contents($web . '/departments/design/index.html'), 'application/ld+json') === false);
+
+echo "\nITEM DESIGN\n";
+$own->api('save_collection', ['id' => 'col_books', 'name' => 'Books', 'slug' => 'books', 'fields' => [['id' => 'name', 'key' => 'name', 'label' => 'Name', 'type' => 'text']]]);
+$r = $own->api('save_collection_design', ['collection_id' => 'col_books', 'blocks' => [
+    ['id' => 'dz1', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<h1>{{field:name}}</h1><p>{{item:title}}</p>']]]]);
+check('an admin saves the design of a collection', !empty($r['json']['success']) && ($r['json']['blocks'] ?? 0) === 1, json_encode($r['json'] ?? null));
+$got = $own->req('GET', '/canvascore-admin/api.php?action=get_collection_design&collection=col_books');
+check('the design is given back', count($got['json']['blocks'] ?? []) === 1 && $got['json']['blocks'][0]['id'] === 'dz1');
+$own->api('save_item', ['id' => 'bk1', 'collection_id' => 'col_books', 'title' => 'Dune', 'slug' => 'dune', 'status' => 'published', 'blocks' => null, 'field_values' => ['name' => 'Frank Herbert']]);
+$own->api('save_item', ['id' => 'bk2', 'collection_id' => 'col_books', 'title' => 'Emma', 'slug' => 'emma', 'status' => 'published', 'blocks' => [['id' => 'own1', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => 'OWN BLOCK']]], 'field_values' => ['name' => 'Jane Austen']]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$p1 = (string)@file_get_contents($web . '/books/dune/index.html');
+$p2 = (string)@file_get_contents($web . '/books/emma/index.html');
+check('every item page is built from the design, with its own values', strpos($p1, '<h1>Frank Herbert</h1>') !== false && strpos($p1, '<p>Dune</p>') !== false && strpos($p2, '<h1>Jane Austen</h1>') !== false, substr($p1, 0, 0));
+check('an item\'s own blocks are not shown when the collection has a design', strpos($p2, 'OWN BLOCK') === false);
+$own->api('save_item', ['id' => 'bk2', 'collection_id' => 'col_books', 'title' => 'Emma', 'slug' => 'emma', 'status' => 'published', 'blocks' => null, 'field_values' => ['name' => 'Jane A.']]);
+$kept = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=bk2');
+check('saving an item built from the design keeps its own stored blocks (nothing is lost)', strpos((string)($kept['json']['content_json'] ?? ''), 'OWN BLOCK') !== false);
+$own->api('save_collection', ['id' => 'col_plain', 'name' => 'Plain', 'slug' => 'plain', 'fields' => []]);
+$own->api('save_item', ['id' => 'pl1', 'collection_id' => 'col_plain', 'title' => 'Old one', 'slug' => 'old-one', 'status' => 'published', 'blocks' => [['id' => 'pl1b', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => 'LEGACY BLOCK']]]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('a collection with no design keeps its items\' own blocks', strpos((string)@file_get_contents($web . '/plain/old-one/index.html'), 'LEGACY BLOCK') !== false);
+$own->api('save_collection_design', ['collection_id' => 'col_books', 'blocks' => []]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('without blocks in the design, the items go back to their own blocks', strpos((string)@file_get_contents($web . '/books/emma/index.html'), 'OWN BLOCK') !== false);
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

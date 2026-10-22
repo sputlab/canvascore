@@ -1690,6 +1690,11 @@ function renderBlockBody(block, opts = {}) {
         + `\n</form>\n</div>\n</div>\n`;
     }
 
+    // a field of the collection item being published: the editor shows a placeholder, the page is built on the server
+    case 'ITEM_FIELD':
+    case 'RELATED':
+      return '';
+
     default:
       return `<!-- Unknown element: ${String(t).replace(/[^A-Za-z0-9_]/g, '')} -->\n`;
   }

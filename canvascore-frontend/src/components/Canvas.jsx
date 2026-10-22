@@ -49,6 +49,7 @@ export default function Canvas() {
   const palette = useStore((s) => s.palette);
   const typography = useStore((s) => s.typography);
   const kit = useStore((s) => s.kit);
+  const pageMode = useStore((s) => s.activePage);
   const site = useSiteLook();
 
   const handleDragEnd = (event) => {
@@ -89,8 +90,15 @@ export default function Canvas() {
     '--font-family': `'${site.fontFamily}', sans-serif`
   };
 
+  // What the canvas shows here: the design of a collection, or an item built from it (read-only layout)
+  const banner = pageMode && pageMode.__design
+    ? 'The design of this collection: every item page is built from these blocks. Type {{field:key}} to show a field of each item, or {{item:title}} for its title. Publish the site to update the items.'
+    : pageMode && pageMode.__locked
+      ? 'This item is built from its collection\'s design, so its layout is read-only here. Change the layout in Collections › Design; the fields and settings of the item are edited in the panel.'
+      : null;
   return (
-    <div style={{ padding: viewport !== 'desktop' ? '40px 0' : '0', minHeight: '100%', display: 'flex', justifyContent: 'center' }} onClick={() => setSelectedBlockId(null)}>
+    <div style={{ padding: viewport !== 'desktop' ? '40px 0' : '0', minHeight: '100%', display: 'flex', justifyContent: 'center', flexDirection: 'column' }} onClick={() => setSelectedBlockId(null)}>
+      {banner && <div role="status" style={{ maxWidth: 1100, width: '100%', alignSelf: 'center', boxSizing: 'border-box', padding: '10px 14px', margin: '12px 0 0', background: '#0c4a6e', color: '#e0f2fe', borderRadius: 10, fontSize: 13, lineHeight: 1.45 }}>{banner}</div>}
       <style>{EFFECTS_CSS}</style>
       {/* the text styles of the device being edited (Global Options › Text styles) */}
       <style>{typeCanvasCss(typography, viewport) + kitCss(kit || {}, '.cc-canvas')}</style>

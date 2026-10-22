@@ -10,6 +10,7 @@ import { initCodeBlock, initShareBlock, initTocBlock, initCalcBlock, initWizardB
 import { safeHtml } from '../utils/safeHtml';
 import { forViewport } from '../editor/devicePreview';
 import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
+import { bindBlock, contextFor } from '../render/itemBinding.mjs';
 import BlockHandles from './BlockHandles';
 
 const CONTAINERS = CONTAINER_TYPES;
@@ -52,15 +53,23 @@ function canonicalHtml(block, viewport) {
   return forViewport(renderBlock(block).replace(/\{\{BASE_URL\}\}/g, '#'), viewport);
 }
 
-export default function SortableBlock({ block, isMasterPreview = false }) {
+export default function SortableBlock({ block: rawBlock, isMasterPreview = false }) {
   const { selectedBlockId, setSelectedBlockId, updateBlock, viewport, masters } = useStore();
+  // The block as it is shown: its dynamic values bound to the page (the design's placeholders, an item's values).
+  // Edits always work on rawBlock, so a placeholder is never saved back into the content.
+  const page = useStore((s) => s.activePage);
+  const bindCtx = contextFor(page);
+  const block = bindBlock(rawBlock, bindCtx);
+  // An item built from its collection's design: its layout is read-only here (the fields and the settings are edited)
+  const locked = !!(page && page.__locked);
   const revealBlockId = useStore((s) => s.revealBlockId);
+  const fieldDefs = useStore((s) => s.activePage && s.activePage.__fieldDefs);
   const frameRef = useRef(null);
   const isSelected = selectedBlockId === block.id && !isMasterPreview;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: block.id,
-    disabled: isMasterPreview,
+    disabled: isMasterPreview || locked,
   });
 
   // A block that was just added from the Add panel scrolls into view (once)
@@ -133,16 +142,17 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
   const handleClick = (e) => {
     if (isMasterPreview) return;
     e.stopPropagation();
+    if (locked) return;
     if (!isSelected && TEXT_FIELDS[block.type]) setClickPoint({ x: e.clientX, y: e.clientY });
     setSelectedBlockId(block.id);
   };
   const commitField = useCallback((key, value) => {
-    updateBlock(block.id, { content: { ...block.content, [key]: value } });
-  }, [block.id, block.content, updateBlock]);
+    updateBlock(rawBlock.id, { content: { ...rawBlock.content, [key]: value } });
+  }, [rawBlock.id, rawBlock.content, updateBlock]);
 
   // Right-click: the block is selected and its menu opens (the innermost block of a container gets it)
   const handleContextMenu = (e) => {
-    if (isMasterPreview) return;
+    if (isMasterPreview || locked) return;
     e.preventDefault();
     e.stopPropagation();
     setSelectedBlockId(block.id);
@@ -150,7 +160,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
   };
 
   const handleContentChange = (key, value) => {
-    updateBlock(block.id, { content: { ...block.content, [key]: value } });
+    updateBlock(rawBlock.id, { content: { ...rawBlock.content, [key]: value } });
   };
 
   // The previewed device's styles (desktop + tablet overrides + phone overrides): the canvas shows them directly,
@@ -241,6 +251,18 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
       );
     }
 
+    // ITEM_FIELD: the page shows the value only on a collection item; the canvas shows which field it is
+    if (block.type === 'ITEM_FIELD') {
+      const d = (fieldDefs || []).find((x) => x.id === block.content?.field);
+      return emptyPlaceholder(d ? `Item field: ${d.label}. Shown on each collection item page.` : 'Item field: choose a field in the settings panel.');
+    }
+
+    // RELATED: the items that point to the collection item being published (listed on the published item page)
+    if (block.type === 'RELATED') {
+      const cname = block.content?.collectionName;
+      return emptyPlaceholder(cname ? `Related items from ${cname}. Shown on each collection item page.` : 'Related items: choose a collection and a reference field in the settings panel.');
+    }
+
     // CONTAINER: canonical root (with sizing neutralized) + interactive React children
     if (CONTAINERS.includes(block.type)) {
       const r = blockRoot(innerBlock);
@@ -256,7 +278,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
 
     // Selected text blocks: the block's own HTML with its text fields editable in place, so the text keeps
     // the size, spacing and margins it has on the published page (the toolbar floats above it)
-    if (TEXT_FIELDS[block.type] && isSelected && !isMasterPreview) {
+    if (TEXT_FIELDS[block.type] && isSelected && !isMasterPreview && !bindCtx) {
       return (
         <InlineRegions html={forViewport(renderBlock(innerBlock, { fields: true }), viewport)} variants={TEXT_FIELDS[block.type]}
           onCommit={commitField} initialPoint={clickPoint} style={{ width: '100%' }} />
@@ -264,7 +286,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
     }
     if (block.type === 'HTML' && isSelected && !isMasterPreview && useStore.getState().userRole === 'admin') {
       return (
-        <textarea rows="6" value={block.content.code || ''} onChange={(e) => handleContentChange('code', e.target.value)} onClick={(e) => e.stopPropagation()}
+        <textarea rows="6" value={rawBlock.content.code || ''} onChange={(e) => handleContentChange('code', e.target.value)} onClick={(e) => e.stopPropagation()}
           style={{ width: '100%', padding: '12px', fontFamily: 'monospace', fontSize: '13px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '6px', boxSizing: 'border-box' }} />
       );
     }
@@ -285,7 +307,7 @@ export default function SortableBlock({ block, isMasterPreview = false }) {
   return (
     <div ref={(el) => { setNodeRef(el); frameRef.current = el; }} style={wrapperStyle} onClick={handleClick} onContextMenu={handleContextMenu}>
       {dragHandle}
-      {isSelected && !isDragging && block.type !== 'MASTER' && <BlockHandles block={block} frameRef={frameRef} />}
+      {isSelected && !isDragging && !locked && block.type !== 'MASTER' && <BlockHandles block={rawBlock} frameRef={frameRef} />}
       {hiddenHere && <div className="cc-hidden-badge" style={{ position: 'absolute', top: 4, right: 4, zIndex: 40, background: '#334155', color: '#f8fafc', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', pointerEvents: 'none' }}>Hidden on {DEVICE_NAMES[viewport]}</div>}
       {block.content?.customCss && <style>{String(block.content.customCss).replace(/__THIS__/g, `#${innerId}`)}</style>}
       {renderBody()}

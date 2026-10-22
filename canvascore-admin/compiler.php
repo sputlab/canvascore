@@ -150,21 +150,36 @@ JS;
     return str_replace('__ID__', $id, $js);
 }
 
-// Cache of collections + published items (for the COLLECTION_LIST block)
+// Cache of collections and published items (for the COLLECTION_LIST and RELATED blocks), made once per publish.
+// Each collection: its custom fields by id (defsById) and its published items, with their values (vals). 'items' is an
+// index of every item (title, address and whether it is live), for the references between items.
 function cc_collections_data() {
     static $d = null;
     if ($d !== null) return $d;
-    $d = ['by_id' => [], 'by_slug' => []];
+    $d = ['by_id' => [], 'by_slug' => [], 'items' => []];
     try {
         $db = cc_data_dir() . '/canvascore.sqlite';
         if (!file_exists($db)) return $d;
         $pdo = new PDO("sqlite:$db");
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $cols = $pdo->query("SELECT id, name, slug FROM collections")->fetchAll(PDO::FETCH_ASSOC);
-        $ist = $pdo->prepare("SELECT title, slug, excerpt, cover_image, date, archived FROM collection_items WHERE collection_id = ? AND status = 'published' ORDER BY (date = '') ASC, date DESC, updated_at DESC");
+        foreach ($pdo->query("SELECT i.id, i.title, i.slug, i.status, i.archived, c.slug AS col_slug FROM collection_items i JOIN collections c ON c.id = i.collection_id") as $ii) {
+            $d['items'][$ii['id']] = ['title' => (string)$ii['title'], 'slug' => cc_safe_slug($ii['slug']), 'col_slug' => cc_safe_slug($ii['col_slug']),
+                'live' => $ii['status'] === 'published' && (int)($ii['archived'] ?? 0) !== 1];
+        }
+        $cols = $pdo->query("SELECT id, name, slug, fields FROM collections")->fetchAll(PDO::FETCH_ASSOC);
+        $ist = $pdo->prepare("SELECT id, title, slug, excerpt, cover_image, date, archived, field_values FROM collection_items WHERE collection_id = ? AND status = 'published' ORDER BY (date = '') ASC, date DESC, updated_at DESC");
         foreach ($cols as $c) {
+            $defs = cc_field_defs(json_decode((string)($c['fields'] ?? '[]'), true), $pdo);
+            $c['defsById'] = [];
+            foreach ($defs as $df) $c['defsById'][$df['id']] = $df;
             $ist->execute([$c['id']]);
-            $c['items'] = $ist->fetchAll(PDO::FETCH_ASSOC);
+            $c['items'] = [];
+            foreach ($ist->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $v = json_decode((string)($row['field_values'] ?? '{}'), true);
+                $row['vals'] = is_array($v) ? $v : [];
+                unset($row['field_values']);
+                $c['items'][] = $row;
+            }
             $d['by_id'][$c['id']] = $c;
             $d['by_slug'][$c['slug']] = $c;
         }
@@ -172,6 +187,177 @@ function cc_collections_data() {
     return $d;
 }
 
+// The fields a card shows, in the order the block lists them: "Label  value" lines under the excerpt
+function cc_list_card_fields($it, $o) {
+    $out = '';
+    foreach ($o['cardFields'] as $fid) {
+        $d = $o['defs'][$fid] ?? null;
+        if ($d === null) continue;
+        $raw = $it['vals'][$fid] ?? null;
+        $v = $d['type'] === 'reference' ? $raw : cc_field_clean($d, $raw, null);   // a reference is checked against the item index
+        $inner = cc_field_html($d, $v, $o['content'], $o['ctx']);
+        if ($inner === '') continue;
+        $out .= '<div class="cc-cl-field" style="margin-top:8px; font-size:13px; color:#475569;"><span class="cc-cl-field-label" style="color:#64748b; margin-right:6px;">' . htmlspecialchars($d['label']) . '</span>' . $inner . '</div>';
+    }
+    return $out;
+}
+// The values a card carries for the filter (its data-cc-filter attribute): the choices it has
+function cc_list_filter_attr($it, $o) {
+    if ($o['filterId'] === '') return '';
+    $raw = $it['vals'][$o['filterId']] ?? null;
+    $vals = array_values(array_filter(array_map(function ($x) { return is_scalar($x) ? (string)$x : ''; }, (array)$raw), function ($x) { return $x !== ''; }));
+    return ' data-cc-filter="' . htmlspecialchars(implode(' ', $vals)) . '"';
+}
+// The items sorted by a key: '' (as they are), 'title', 'date', or a field id (number, date, text or a single choice).
+// Items with no value go last, whatever the direction.
+function cc_sort_items($items, $sortBy, $desc, $defs) {
+    if ($sortBy === '') return $items;
+    $key = function ($it) use ($sortBy, $defs) {
+        if ($sortBy === 'title') return mb_strtolower((string)$it['title']);
+        if ($sortBy === 'date') return (string)($it['date'] ?? '') === '' ? null : (string)$it['date'];
+        $d = $defs[$sortBy] ?? null;
+        if ($d === null) return null;
+        $v = cc_field_clean($d, $it['vals'][$sortBy] ?? null, null);
+        if ($d['type'] === 'number') return $v === null ? null : (float)$v;
+        if ($d['type'] === 'date' || $d['type'] === 'text') return (string)$v === '' ? null : mb_strtolower((string)$v);
+        if ($d['type'] === 'choice' && empty($d['multiple'])) return (string)$v === '' ? null : (string)$v;
+        return null;
+    };
+    $keyed = [];
+    foreach ($items as $i => $it) $keyed[] = [$key($it), $i, $it];
+    usort($keyed, function ($a, $b) use ($desc) {
+        if ($a[0] === null || $b[0] === null) {
+            if ($a[0] === null && $b[0] === null) return $a[1] <=> $b[1];
+            return $a[0] === null ? 1 : -1;
+        }
+        $c = $a[0] <=> $b[0];
+        if ($desc) $c = -$c;
+        return $c !== 0 ? $c : $a[1] <=> $b[1];
+    });
+    return array_map(function ($k) { return $k[2]; }, $keyed);
+}
+// The cards of a list: the grid or the rows of the Collection List block, and of the Related block
+function cc_list_cards($items, $cslug, $o) {
+    $isList = $o['layout'] === 'list';
+    $showCover = $o['showCover']; $showDate = $o['showDate']; $showExcerpt = $o['showExcerpt'];
+    $cards = '';
+    foreach ($items as $it) {
+        $islug = cc_safe_slug($it['slug']);
+        $href = '{{BASE_URL}}' . $cslug . '/' . $islug . '/';
+        $title = htmlspecialchars($it['title']);
+        $dateTxt = (!empty($it['date'])) ? htmlspecialchars($it['date']) : '';
+        $excTxt = (!empty($it['excerpt'])) ? htmlspecialchars($it['excerpt']) : '';
+        $fattr = cc_list_filter_attr($it, $o);
+        $fx = cc_list_card_fields($it, $o);
+        if ($isList) {
+            $thumb = ($showCover && !empty($it['cover_image']))
+                ? '<div style="flex:0 0 96px; width:96px; height:64px; border-radius:8px; overflow:hidden; background:#e2e8f0;"><img src="' . htmlspecialchars($it['cover_image']) . '" alt="' . $title . '" loading="lazy" style="width:100%; height:100%; object-fit:cover; display:block;"></div>'
+                : '';
+            $date = ($showDate && $dateTxt !== '') ? '<span style="font-size:12px; color:#64748b; white-space:nowrap;">' . $dateTxt . '</span>' : '';
+            $excerpt = ($showExcerpt && $excTxt !== '') ? '<p style="margin:3px 0 0 0; font-size:13px; color:#475569; line-height:1.4;">' . $excTxt . '</p>' : '';
+            $excerpt .= $fx;
+            $cards .= '<a href="' . htmlspecialchars($href) . '"' . $fattr . ' class="cc-cl-row" style="display:flex; align-items:center; gap:16px; text-decoration:none; color:inherit; padding:14px 4px; border-bottom:1px solid #e2e8f0;">'
+                . $thumb
+                . '<div style="flex:1; min-width:0;"><div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline;"><h3 style="margin:0; font-size:16px; color:#0f172a;">' . $title . '</h3>' . $date . '</div>' . $excerpt . '</div>'
+                . '</a>';
+        } else {
+            $cover = ($showCover && !empty($it['cover_image']))
+                ? '<div style="aspect-ratio:16/9; overflow:hidden; background:#e2e8f0;"><img src="' . htmlspecialchars($it['cover_image']) . '" alt="' . $title . '" loading="lazy" style="width:100%; height:100%; object-fit:cover; display:block;"></div>'
+                : '';
+            $date = ($showDate && $dateTxt !== '') ? '<div style="font-size:12px; color:#64748b; margin-bottom:6px;">' . $dateTxt . '</div>' : '';
+            $excerpt = ($showExcerpt && $excTxt !== '') ? '<p style="margin:8px 0 0 0; font-size:14px; color:#475569; line-height:1.5;">' . $excTxt . '</p>' : '';
+            $excerpt .= $fx;
+            $cards .= '<a href="' . htmlspecialchars($href) . '"' . $fattr . ' class="cc-cl-card" style="display:block; text-decoration:none; color:inherit; background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.05);">'
+                . $cover
+                . '<div style="padding:18px;">' . $date . '<h3 style="margin:0; font-size:18px; color:#0f172a;">' . $title . '</h3>' . $excerpt . '</div>'
+                . '</a>';
+        }
+    }
+    return $cards;
+}
+// The filter buttons of a list (one per choice of the field) and their script; '' when there is no filter
+function cc_list_filter_ui($innerId, $fdef) {
+    if (!$fdef || $fdef['type'] !== 'choice' || empty($fdef['options'])) return '';
+    $btn = 'border:1px solid #cbd5e1; background:#fff; color:#0f172a; border-radius:999px; padding:6px 14px; font:inherit; font-size:14px; cursor:pointer;';
+    $btns = '<button type="button" class="cc-cl-filter" data-cc-filter-value="" aria-pressed="true" style="' . $btn . '">All</button>';
+    foreach ($fdef['options'] as $o) {
+        $btns .= '<button type="button" class="cc-cl-filter" data-cc-filter-value="' . htmlspecialchars($o['value']) . '" aria-pressed="false" style="' . $btn . '">' . htmlspecialchars($o['label']) . '</button>';
+    }
+    $js = "(function(){var root=document.getElementById('$innerId');if(!root)return;var btns=root.querySelectorAll('.cc-cl-filter');var cards=root.querySelectorAll('[data-cc-filter]');"
+        . "btns.forEach(function(b){b.addEventListener('click',function(){var v=b.getAttribute('data-cc-filter-value');"
+        . "btns.forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});"
+        . "cards.forEach(function(c){var list=(c.getAttribute('data-cc-filter')||'').split(' ');c.hidden=!(v===''||list.indexOf(v)!==-1);});});});})();";
+    return '<div class="cc-cl-filters" role="group" aria-label="Filter" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;">' . $btns . '</div>'
+        . '<style>#' . $innerId . ' [hidden]{display:none !important;}</style>'
+        . "<script>$js</script>\n";
+}
+// The Related block: the items of a collection that point (through a reference field) to the item being published
+// The JSON-LD of a collection item from its collection's schema (Product, Event or Person), as a script tag; '' when the
+// collection has no structured data. Values come from the item's fields; the JSON never closes its script early.
+function cc_item_jsonld($schema, $defsById, $values, $title, $url, $image_fn) {
+    if (empty($schema['type'])) return '';
+    $val = function ($prop) use ($schema, $values) {
+        $fid = $schema['map'][$prop] ?? '';
+        return $fid !== '' ? ($values[$fid] ?? null) : null;
+    };
+    $ld = ['@context' => 'https://schema.org', '@type' => $schema['type'], 'name' => $title];
+    if ($url !== '') $ld['url'] = $url;
+    $imgs = $val('image');
+    $imgs = is_array($imgs) ? $imgs : ($imgs ? [$imgs] : []);
+    $imgs = array_values(array_filter(array_map($image_fn, array_map('strval', $imgs)), function ($x) { return $x !== ''; }));
+    if ($imgs) $ld['image'] = count($imgs) === 1 ? $imgs[0] : $imgs;
+    $desc = $val('description');
+    if (is_string($desc) && trim(strip_tags($desc)) !== '') $ld['description'] = mb_substr(trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($desc), ENT_QUOTES | ENT_HTML5, 'UTF-8'))), 0, 300);
+    if ($schema['type'] === 'Product') {
+        $sku = $val('sku');
+        if (is_string($sku) && $sku !== '') $ld['sku'] = $sku;
+        $price = $val('price');
+        if ($price !== null && $price !== '' && $schema['currency'] !== '') $ld['offers'] = ['@type' => 'Offer', 'price' => (float)$price, 'priceCurrency' => $schema['currency']];
+    } elseif ($schema['type'] === 'Event') {
+        $start = $val('startDate');
+        if (is_string($start) && $start !== '') $ld['startDate'] = $start;
+        $loc = $val('location');
+        if (is_string($loc) && trim($loc) !== '') $ld['location'] = ['@type' => 'Place', 'name' => trim($loc)];
+    } elseif ($schema['type'] === 'Person') {
+        $job = $val('jobTitle');
+        if (is_string($job) && $job !== '') $ld['jobTitle'] = $job;
+    }
+    $json = json_encode($ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    return $json === false ? '' : '<script type="application/ld+json">' . $json . "</script>\n";
+}
+function cc_render_related($block) {
+    $ctx = cc_item_context();
+    $c = $block['content'] ?? [];
+    if ($ctx === null || empty($ctx['item']) || empty($ctx['collection_id'])) return '';
+    $data = cc_collections_data();
+    $cid = is_string($c['collectionId'] ?? null) ? $c['collectionId'] : '';
+    $fid = is_string($c['fieldId'] ?? null) ? $c['fieldId'] : '';
+    $coll = $data['by_id'][$cid] ?? null;
+    $def = $coll['defsById'][$fid] ?? null;
+    if ($coll === null || $def === null || $def['type'] !== 'reference' || $def['target'] !== $ctx['collection_id']) return '';
+    $mine = array_values(array_filter($coll['items'], function ($it) use ($fid, $ctx) {
+        return empty($it['archived']) && (($it['vals'][$fid] ?? null) === $ctx['item']);
+    }));
+    $mine = cc_sort_items($mine, is_string($c['sortBy'] ?? null) ? $c['sortBy'] : '', ($c['sortDir'] ?? 'asc') === 'desc', $coll['defsById']);
+    $mine = array_slice($mine, 0, max(1, intval($c['limit'] ?? 3)));
+    if (!$mine) return '';
+    $cards = cc_list_cards($mine, cc_safe_slug($coll['slug']), cc_list_options($c, $coll['defsById'], ['items' => $data['items']], 'grid', ''));
+    $rid = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($block['id'] ?? 'related'));
+    $cols = max(1, intval($c['columns'] ?? 3));
+    $title = is_string($c['title'] ?? null) && trim($c['title']) !== '' ? '<h2 style="margin:0 0 18px 0; font-size:24px; color:#0f172a;">' . htmlspecialchars($c['title']) . '</h2>' : '';
+    return "<div id=\"$rid\" class=\"cc-related\" style=\"margin:40px 0;\">\n<style>@media(max-width:768px){ #$rid .cc-cl-grid { grid-template-columns:1fr !important; } }</style>\n"
+        . $title . "<div class=\"cc-cl-grid\" style=\"display:grid; grid-template-columns:repeat($cols, 1fr); gap:24px;\">$cards</div>\n</div>\n";
+}
+// The options of the cards, from a block's content (the fields it shows, its filter, the definitions and the item index)
+function cc_list_options($c, $defsById, $ctx, $layout, $filterId) {
+    $fields = [];
+    foreach ((is_array($c['cardFields'] ?? null) ? $c['cardFields'] : []) as $f) {
+        if (is_string($f) && isset($defsById[$f]) && !in_array($f, $fields, true)) $fields[] = $f;
+    }
+    return ['layout' => $layout, 'showCover' => ($c['showCover'] ?? true) !== false, 'showDate' => ($c['showDate'] ?? true) !== false,
+        'showExcerpt' => ($c['showExcerpt'] ?? true) !== false, 'cardFields' => $fields, 'defs' => $defsById, 'content' => $c,
+        'ctx' => $ctx, 'filterId' => $filterId];
+}
 
 // Block effects (Advanced tab) and button hovers: mirror of effectClasses()/buttonHover()
 // in canvascore-frontend/src/render/effects.mjs. The CSS is effects.css (inlined by rebuild_all.php).
@@ -1285,6 +1471,137 @@ function cc_device_css($block, $id) {
     return $css !== '' ? '<style data-cc-device>' . $css . "</style>\n" : '';
 }
 
+// The item being published: its cleaned field values (by field id), the definitions of its collection and the items a
+// reference can point to. rebuild_all.php sets it around each item's blocks and clears it afterwards; on other pages it
+// is null and the Item Field block shows nothing.
+function cc_item_context($ctx = false) {
+    static $current = null;
+    if ($ctx !== false) $current = $ctx;
+    return $current;
+}
+// ---------------------------------------------------------------------------
+// Dynamic values: any text or value of a block may hold {{field:KEY}} (a field of the collection), {{field:KEY.part}}
+// (a link's url or text, a reference's title or url) and {{item:title|excerpt|date|url}} (the item itself). On an item
+// page they are replaced with the item's values, escaped (a rich-text field gives its cleaned HTML). On any other page
+// they are removed, so no placeholder reaches a visitor. Twin: src/render/itemBinding.mjs.
+// ---------------------------------------------------------------------------
+const CC_TOKEN_RE = '/\{\{(field|item):([a-z][a-z0-9_]{0,39})(?:\.([a-z]{1,20}))?\}\}/';
+// A date as the site writes it ("October 19, 2026"); '' when it is not a date
+function cc_long_date($ymd) {
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $ymd) || !checkdate((int)substr($ymd, 5, 2), (int)substr($ymd, 8, 2), (int)substr($ymd, 0, 4))) return '';
+    return date('F j, Y', strtotime($ymd . ' 12:00:00'));
+}
+// A number without trailing zeros (12.5 and 12 as "12.5" and "12")
+function cc_plain_number($v) {
+    $s = rtrim(rtrim(number_format((float)$v, 6, '.', ''), '0'), '.');
+    return htmlspecialchars($s === '-0' ? '0' : $s);
+}
+function cc_bind_token($m, $ctx) {
+    if ($ctx === null) return '';
+    $kind = $m[1]; $name = $m[2]; $part = $m[3] ?? '';
+    if ($kind === 'item') {
+        $it = $ctx['page'] ?? [];   // the item's title, excerpt, date and address
+        if ($name === 'date') return htmlspecialchars(cc_long_date((string)($it['date'] ?? '')));
+        if (in_array($name, ['title', 'excerpt', 'url'], true)) return htmlspecialchars((string)($it[$name] ?? ''));
+        return '';
+    }
+    $def = null;
+    foreach ($ctx['defs'] ?? [] as $d) { if ($d['key'] === $name) { $def = $d; break; } }
+    if ($def === null) return '';
+    $v = $ctx['values'][$def['id']] ?? null;
+    switch ($def['type']) {
+        case 'text': case 'image':
+            return htmlspecialchars((string)$v);
+        case 'richtext':
+            return (string)$v;   // cleaned when it was saved
+        case 'number':
+            return $v === null ? '' : cc_plain_number($v);
+        case 'date':
+            return htmlspecialchars(cc_long_date((string)$v));
+        case 'link':
+            $url = is_array($v) ? (string)($v['url'] ?? '') : '';
+            if ($part === 'text') return htmlspecialchars(is_array($v) && $v['text'] !== '' ? (string)$v['text'] : $url);
+            return $url === '' ? '' : htmlspecialchars(cc_block_url($url));
+        case 'choice':
+            $names = [];
+            foreach ((array)$v as $x) { foreach ($def['options'] ?? [] as $o) { if ($o['value'] === $x) { $names[] = htmlspecialchars($o['label']); break; } } }
+            return implode(', ', $names);
+        case 'reference':
+            $ref = is_string($v) && $v !== '' ? ($ctx['items'][$v] ?? null) : null;
+            if ($ref === null) return '';
+            if ($part === 'url') return $ref['live'] ? htmlspecialchars('{{BASE_URL}}' . $ref['col_slug'] . '/' . $ref['slug'] . '/') : '';
+            return htmlspecialchars($ref['title']);
+    }
+    return '';
+}
+// Replaces the tokens of a string (or of every string in an array, keys kept) for the item being published
+function cc_bind_deep($value, $ctx) {
+    if (is_string($value)) {
+        if (strpos($value, '{{') === false) return $value;
+        return preg_replace_callback(CC_TOKEN_RE, function ($m) use ($ctx) { return cc_bind_token($m, $ctx); }, $value);
+    }
+    if (is_array($value)) {
+        foreach ($value as $k => $v) $value[$k] = cc_bind_deep($v, $ctx);
+    }
+    return $value;
+}
+
+// The HTML of one field's value (no label), for its type. '' when the value is empty.
+function cc_field_html($d, $v, $c, $ctx) {
+    switch ($d['type']) {
+        case 'text':
+            return $v === '' || $v === null ? '' : '<div class="cc-field-value">' . nl2br(htmlspecialchars((string)$v)) . '</div>';
+        case 'richtext':
+            return (string)$v === '' ? '' : '<div class="cc-field-value">' . $v . '</div>';   // rich text is cleaned when it is saved
+        case 'number':
+            if ($v === null) return '';
+            return '<div class="cc-field-value">' . htmlspecialchars(cc_fmt_num($v, cc_int($c['decimals'] ?? null, 0, 0, 4))) . '</div>';
+        case 'date':
+            if ($v === '' || $v === null) return '';
+            $shown = ($c['dateFormat'] ?? 'long') === 'iso' ? (string)$v : date('F j, Y', strtotime($v . ' 12:00:00'));
+            return '<div class="cc-field-value"><time datetime="' . htmlspecialchars((string)$v) . '">' . htmlspecialchars($shown) . '</time></div>';
+        case 'image':
+            if ($v === '' || $v === null) return '';
+            return '<img class="cc-field-image" src="' . htmlspecialchars((string)$v) . '" alt="" loading="lazy" style="max-width:100%; height:auto; display:block;">';
+        case 'gallery':
+            if (!is_array($v) || !$v) return '';
+            $imgs = '';
+            foreach ($v as $u) $imgs .= '<img src="' . htmlspecialchars((string)$u) . '" alt="" loading="lazy" style="width:100%; height:auto; display:block; border-radius:8px;">';
+            return '<div class="cc-field-gallery-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px;">' . $imgs . '</div>';
+        case 'link':
+            if (!is_array($v) || $v['url'] === '') return '';
+            $text = $v['text'] !== '' ? $v['text'] : $v['url'];
+            return '<a class="cc-field-link" href="' . htmlspecialchars(cc_block_url($v['url'])) . '">' . htmlspecialchars($text) . '</a>';
+        case 'choice':
+            $names = [];
+            foreach ((array)$v as $x) {
+                foreach ($d['options'] ?? [] as $o) { if ($o['value'] === $x) { $names[] = htmlspecialchars($o['label']); break; } }
+            }
+            return $names ? '<div class="cc-field-value">' . implode(', ', $names) . '</div>' : '';
+        case 'reference':
+            $it = is_string($v) && $v !== '' ? ($ctx['items'][$v] ?? null) : null;
+            if (!$it) return '';
+            $title = htmlspecialchars($it['title']);
+            return $it['live']
+                ? '<a class="cc-field-ref" href="{{BASE_URL}}' . htmlspecialchars($it['col_slug'] . '/' . $it['slug'] . '/') . '">' . $title . '</a>'
+                : '<span class="cc-field-ref">' . $title . '</span>';
+    }
+    return '';
+}
+// The Item Field block: one field of the item being published, with its label when asked
+function cc_render_item_field($block) {
+    $ctx = cc_item_context();
+    $c = $block['content'] ?? [];
+    $fid = is_string($c['field'] ?? null) ? $c['field'] : '';
+    if ($ctx === null || !isset($ctx['defs'][$fid])) return '';
+    $d = $ctx['defs'][$fid];
+    $inner = cc_field_html($d, $ctx['values'][$fid] ?? null, $c, $ctx);
+    if ($inner === '') return '';
+    $label = !empty($c['showLabel']) ? '<div class="cc-field-label">' . htmlspecialchars($d['label']) . '</div>' : '';
+    $style = build_inline_style($block['styles'] ?? []);
+    return '<div class="cc-field cc-field-' . $d['type'] . '" data-field="' . htmlspecialchars($d['key']) . '"' . ($style !== '' ? ' style="' . $style . '"' : '') . '>' . $label . $inner . "</div>\n";
+}
+
 function render_block($block) {
     if (!$block || !is_array($block)) return '';
     $html = cc_render_block_body($block);
@@ -1295,6 +1612,8 @@ function render_block($block) {
 }
 
 function cc_render_block_body($block) {
+    // dynamic values: the item's fields and title, on an item page (removed elsewhere)
+    if (isset($block['content']) && is_array($block['content'])) $block['content'] = cc_bind_deep($block['content'], cc_item_context());
 
     static $masters_cache = null;
     if ($masters_cache === null) {
@@ -1348,6 +1667,9 @@ function cc_render_block_body($block) {
     }
 
     switch ($block['type']) {
+        case 'ITEM_FIELD':
+            // A field of the item being published (rebuild_all.php sets the item); nothing on any other page
+            return $customCss . cc_render_item_field($block);
         case 'SECTION':
             $html = "<section id=\"$innerId\" class=\"cc-section$animClass$innerClass\"$styleString>\n$childrenHtml\n</section>\n";
             return $customCss . $html;
@@ -2095,41 +2417,22 @@ function cc_render_block_body($block) {
                 if ($source === 'all') return true;
                 return !$arch; // active
             }));
+            // Sorted (before the limit), then the cards; a field chosen for the filter gives the buttons above the list
+            $sortBy = is_string($block['content']['sortBy'] ?? null) ? $block['content']['sortBy'] : '';
+            $defsById = $coll ? $coll['defsById'] : [];
+            $items = cc_sort_items($items, $sortBy, ($block['content']['sortDir'] ?? 'asc') === 'desc', $defsById);
             if (!$showAll) $items = array_slice($items, 0, $limit);
 
             $isList = ($block['content']['layout'] ?? 'grid') === 'list';
-            $cards = '';
-            foreach ($items as $it) {
-                $islug = cc_safe_slug($it['slug']);
-                $href = '{{BASE_URL}}' . $cslug . '/' . $islug . '/';
-                $title = htmlspecialchars($it['title']);
-                $dateTxt = (!empty($it['date'])) ? htmlspecialchars($it['date']) : '';
-                $excTxt = (!empty($it['excerpt'])) ? htmlspecialchars($it['excerpt']) : '';
-                if ($isList) {
-                    $thumb = ($showCover && !empty($it['cover_image']))
-                        ? '<div style="flex:0 0 96px; width:96px; height:64px; border-radius:8px; overflow:hidden; background:#e2e8f0;"><img src="' . htmlspecialchars($it['cover_image']) . '" alt="' . $title . '" loading="lazy" style="width:100%; height:100%; object-fit:cover; display:block;"></div>'
-                        : '';
-                    $date = ($showDate && $dateTxt !== '') ? '<span style="font-size:12px; color:#64748b; white-space:nowrap;">' . $dateTxt . '</span>' : '';
-                    $excerpt = ($showExcerpt && $excTxt !== '') ? '<p style="margin:3px 0 0 0; font-size:13px; color:#475569; line-height:1.4;">' . $excTxt . '</p>' : '';
-                    $cards .= '<a href="' . htmlspecialchars($href) . '" class="cc-cl-row" style="display:flex; align-items:center; gap:16px; text-decoration:none; color:inherit; padding:14px 4px; border-bottom:1px solid #e2e8f0;">'
-                        . $thumb
-                        . '<div style="flex:1; min-width:0;"><div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline;"><h3 style="margin:0; font-size:16px; color:#0f172a;">' . $title . '</h3>' . $date . '</div>' . $excerpt . '</div>'
-                        . '</a>';
-                } else {
-                    $cover = ($showCover && !empty($it['cover_image']))
-                        ? '<div style="aspect-ratio:16/9; overflow:hidden; background:#e2e8f0;"><img src="' . htmlspecialchars($it['cover_image']) . '" alt="' . $title . '" loading="lazy" style="width:100%; height:100%; object-fit:cover; display:block;"></div>'
-                        : '';
-                    $date = ($showDate && $dateTxt !== '') ? '<div style="font-size:12px; color:#64748b; margin-bottom:6px;">' . $dateTxt . '</div>' : '';
-                    $excerpt = ($showExcerpt && $excTxt !== '') ? '<p style="margin:8px 0 0 0; font-size:14px; color:#475569; line-height:1.5;">' . $excTxt . '</p>' : '';
-                    $cards .= '<a href="' . htmlspecialchars($href) . '" class="cc-cl-card" style="display:block; text-decoration:none; color:inherit; background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.04);">'
-                        . $cover
-                        . '<div style="padding:18px;">' . $date . '<h3 style="margin:0; font-size:18px; color:#0f172a;">' . $title . '</h3>' . $excerpt . '</div>'
-                        . '</a>';
-                }
-            }
+            $filterId = is_string($block['content']['filterField'] ?? null) ? $block['content']['filterField'] : '';
+            $filterDef = ($filterId !== '' && isset($defsById[$filterId])) ? $defsById[$filterId] : null;
+            $cardOpts = cc_list_options($block['content'], $defsById, ['items' => $data['items']], $isList ? 'list' : 'grid', $filterDef ? $filterId : '');
+            $cards = cc_list_cards($items, $cslug, $cardOpts);
+            $filterUi = cc_list_filter_ui($innerId, $filterDef);
             if ($cards === '') $cards = '<div style="grid-column:1/-1; padding:30px; text-align:center; color:#94a3b8; border:1px dashed #cbd5e1; border-radius:12px;">No published items yet.</div>';
 
             $html = "<div id=\"$innerId\" class=\"cc-collection-list$animClass$innerClass\" style=\"$styleAttr\">\n";
+            $html .= $filterUi;
             if ($layout === 'list') {
                 $html .= "<div class=\"cc-cl-list\" style=\"display:flex; flex-direction:column; gap:0;\">$cards</div>\n";
             } else {
@@ -2139,6 +2442,10 @@ function cc_render_block_body($block) {
             $html .= "</div>\n";
             return $customCss . $html;
         }
+
+        case 'RELATED':
+            // the items that point to the item being published (rebuild_all.php); nothing on other pages
+            return $customCss . cc_render_related($block);
 
         case 'HTML':
             $html = "<div id=\"$innerId\" class=\"cc-html-block$animClass$innerClass\"$styleString>\n" . ($block['content']['code'] ?? '') . "\n</div>\n";

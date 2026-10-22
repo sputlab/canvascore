@@ -71,7 +71,9 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | | [Review Summary](#review-summary) | An average rating with stars and the number of reviews |
 | **Business & dynamic** | [Business Info](#business-info) | Address, contacts and opening hours |
 | | [Map](#map) | A Google map of a place |
-| | [Collection List](#collection-list) | The latest posts, news or items of a collection |
+| | [Collection List](#collection-list) | The latest posts, news or items of a collection, with their fields, a sort and a filter |
+| | [Related Items](#related-items) | The items of a collection that point to this item (the team of a department) |
+| | [Item Field](#item-field) | One field of the collection item, shown on its page |
 | | [Site Search](#site-search) | A search box that finds your pages and items |
 | | [Table of Contents](#table-of-contents) | A list of the page's headings, which follows you down the page |
 | | [Share Bar](#share-bar) | Buttons to share the page on social networks, by email or by copying the link |
@@ -912,12 +914,43 @@ Shows items from one of your collections (blog posts, news, products…) as card
 - **Items to show**: when not showing all. Default 6.
 - **Columns**: Grid only, 1 to 4. Default 3.
 - **Show cover image**, **Show date**, **Show excerpt**: all on by default.
+- **Fields on each card**: the fields of the collection to show under each item (label and value).
+- **Sort by**: Newest first (default), Title, Date, or a field (number, date, text or single choice), **Ascending** or **Descending**.
+- **Filter buttons (by a choice field)**: buttons above the list, one per choice, that show only the matching items without a reload.
 
 **Tips**
 - A Collection List needs a collection. If you have none, the panel says so: create one first in the **Collections** section.
 - On the canvas you see grey placeholder cards. The real items are added when the page is published, so publish (or republish) after adding items to the collection.
 - If there is nothing to show, the site displays "No published items yet."
 - On phones the grid becomes one column.
+
+### Related Items
+
+Lists the items of one of your collections that point to the item being shown. It is for the **design** of a collection (see the [User Guide](USER-GUIDE.md#the-design-of-a-collection-admins)): a department page lists its people, a client page its projects.
+
+**Settings** (panel: **Related items**)
+- **Heading (optional)**.
+- **Items of collection**: the collection to list.
+- **That point to this item through the field**: a reference field of that collection that points to this item's collection. The panel only offers those fields, and says so when there are none.
+- **How many** (default 3), **Columns** (default 3), **Fields on each card**, **Sort by** and **Ascending** or **Descending**.
+
+**Tips**
+- On the canvas the block shows a placeholder. It shows the list on each item page only, and nothing on other pages.
+- Archived items are left out.
+
+### Item Field
+
+Shows one field of the collection item being published, on that item's page: the value only, or with its name above it.
+
+**Settings** (panel: **Item field**)
+- **Field**: one of the fields of the item's collection (the panel lists them when the block is used on an item).
+- **Show the field name above the value**.
+- **Decimals** (numbers, 0 to 4) and **Date format** (dates: **October 19, 2026** or **2026-10-19**).
+
+**Tips**
+- Fill in the values in the item's settings (Item fields). Values are shown escaped; links and images are checked when they are saved.
+- On pages that are not collection items the block shows nothing. In the editor it shows which field it is for.
+- For any text, use a [dynamic value](USER-GUIDE.md#the-design-of-a-collection-admins) such as `{{field:price}}` instead, when the value belongs inside a sentence.
 
 ### Site Search
 
