@@ -297,9 +297,13 @@ public by design), and uploads get their optimized copies in `uploads/_cc/`.
   (`boxed`/full), `bg_color, boxed_width, content_json, status, is_draft_copy, is_home, noindex, content_schema, author, updated_at`.
   `noindex = 1` (migration 7) adds `<meta name="robots" content="noindex">` and leaves the page out of the
   sitemap and the search index; `save_page` only touches it when the client sends the key.
-- **`collections`** (`id, name, slug`) and **`collection_items`** (`id, collection_id, title, slug, excerpt,
-  cover_image, date, content_json, status` draft/published, `archived, seo_*, content_schema, updated_at`).
-  Items publish to `/<collection-slug>/<item-slug>/`; the `COLLECTION_LIST` block lists them at build time.
+- **`collections`** (`id, name, slug`, plus `fields` = the custom field definitions as JSON, `schema_json` = the
+  structured-data type and field map, and `design_json` = the blocks every item page is built from) and
+  **`collection_items`** (`id, collection_id, title, slug, excerpt, cover_image, date, content_json, status` draft/published,
+  `archived, seo_*, content_schema, updated_at`, and `field_values` = the item's values keyed by field id).
+  Items publish to `/<collection-slug>/<item-slug>/`. The `COLLECTION_LIST` and `RELATED` blocks list them at build time
+  (from a per-build cache, `cc_collections_data()`). With a design, `content_json` is not used for the page layout: it is
+  kept as it is.
 - **`master_components`** (`id, name, content_json`): one block (a subtree) reused by reference.
 - **`templates`** (`id, name, content_json`): one block saved as a reusable **copy**.
 - **`site_parts`** (`name` = `header`/`footer`, `content_json` = block array): global header/footer.
@@ -385,9 +389,10 @@ undoable change.
 
 `api.php` runs `cc_migrate($pdo)` and `cc_migrate_content($pdo)` on every request (`migrations.php`).
 
-**DB schema** (currently 8; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
-unique user names, old default account removed, pre-wizard sites marked installed, stored content sanitized): add a
-numbered closure
+**DB schema** (currently 11; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
+unique user names, old default account removed, pre-wizard sites marked installed, stored content sanitized, 9 = custom
+fields (`collections.fields`, `collection_items.field_values`), 10 = structured data (`collections.schema_json`), 11 = the
+collection design (`collections.design_json`)): add a numbered closure
 to `cc_db_migrations()`, then bump `db_schema` in `version.json` and note it in the CHANGELOG. Each migration
 runs once, in order, in a transaction, and the number is recorded in `cc_meta`.
 
@@ -512,6 +517,21 @@ Escaping rules:
   `save_template`; new blocks from an editor get empty code. (`cc_strip_code_surfaces()` still exists in
   `config.php` but no save uses it any more.)
 
+### Dynamic values
+
+A text or a value of any block may hold a **dynamic value** (the syntax is in the User Guide): `{{field:KEY}}`,
+`{{field:KEY.part}}` and `{{item:title|excerpt|date|url}}`. The values are bound once per block, before it is rendered:
+
+- **On the site**: `cc_render_block_body()` calls `cc_bind_deep($content, cc_item_context())` at its start. The item
+  context (set by `rebuild_all.php` around each item's blocks: `defs`, `values`, `items`, `page`, `item`, `collection_id`)
+  supplies the values. Without a context (any other page) the tokens are removed, so a placeholder never reaches a visitor.
+- **In the editor**: `SortableBlock` shows `bindBlock(rawBlock, contextFor(activePage))` (`src/render/itemBinding.mjs`):
+  an item shows its values, a design shows the field names in brackets, and a page shows nothing. `renderBlock.mjs`
+  receives content that is already bound and never binds itself, so its output is the same as the site's.
+- **Edits always use the raw block** (`rawBlock`): a bound value is never saved back into the content.
+- `cc_bind_token()` and `tokenValue()` are the twins (same escaping as `htmlspecialchars()`, same date and number
+  format). The tests check both with the same literal (`tests/server.php` and `tests/ui-shell.mjs`, "DYNAMIC VALUES").
+
 ### Effects
 
 `effectClasses(styles, content)` (`src/render/effects.mjs`) ≡ `cc_effect_classes()` builds
@@ -619,6 +639,27 @@ reserved addresses). An exception is logged (`CanvasCore publish: …`) and answ
   A region must not contain `</script`, `<!--` or `-->`.
 - `SLIDER`: with 2+ images it adds `cc-slider-prev` / `cc-slider-next` buttons; the script pauses autoplay on
   hover and doesn't autoplay under `prefers-reduced-motion`.
+
+### Custom fields, lists, related items and structured data
+
+Helpers for the collection features (all in `config.php` unless noted; `compiler.php` for the rendering):
+
+| Function | What it does |
+| --- | --- |
+| `cc_field_defs($raw, $pdo)` | The tidy field definitions: valid ids and unique keys, the nine types (`CC_FIELD_TYPES`), choices with unique values, a reference to a collection that exists |
+| `cc_field_clean($def, $value, $pdo)` / `cc_field_values($defs, $raw, $pdo, $publishing)` | One value, cleaned for its type; all the values of an item, plus the labels of the required fields left empty (only when publishing) |
+| `cc_field_link($url)` / `cc_field_image($url)` | A link: web, mail, phone or a site path (never another scheme). An image: the rule of `cc_img_url()`, kept here because the API does not load `compiler.php` |
+| `cc_schema_clean($raw, $defs)` | The structured data: a known type (`CC_SCHEMA_TYPES`), a field per property of the right type, an ISO currency |
+| `cc_collections_data()` (compiler) | The per-build cache: collections with their `defsById` and published items with their `vals`, and an index of every item for references |
+| `cc_list_cards($items, $cslug, $opts)` / `cc_list_options()` (compiler) | The cards of a Collection List or a Related block (grid or rows; card fields; the filter attribute) |
+| `cc_sort_items($items, $sortBy, $desc, $defs)` (compiler) | Sort by title, date or a field; items without a value go last |
+| `cc_list_filter_ui($innerId, $fieldDef)` (compiler) | The filter buttons and their script; nothing without a choice field |
+| `cc_render_related($block)` (compiler) | The Related block: the items whose reference points to the item being published |
+| `cc_item_jsonld($schema, $defsById, $values, $title, $url, $imageFn)` (compiler) | The item's JSON-LD script; `JSON_HEX_*` flags keep the script from closing early |
+| `cc_field_html($def, $value, $content, $ctx)` / `cc_render_item_field($block)` (compiler) | One field's HTML for its type, and the Item Field block |
+
+`api.php` gives the definitions and the structured data back in `get_collections` (decoded and cleaned), and returns
+`has_design` instead of the design itself. `save_collection` only changes what it is sent (`fields`, `schema`).
 
 ### `media.php`
 
@@ -789,6 +830,12 @@ menu both use it.
 (`components/BlockHandles.jsx`, maths in `editor/handles.js`) call it when a drag or a key press starts, so one drag
 is one step even though it writes on every move.
 
+**Custom fields and designs in the editor**: an item's page carries `__item`, its field definitions (`__fieldDefs`),
+its `field_values` and, when its collection has a design, `__locked: true`. A design is a page with `__design` (its
+`collection_id` and `__fieldDefs`), saved with `save_collection_design`. `pushHistory()` and `updateBlock()` return no
+change while the page is locked (`layoutLocked()`), and so do undo and redo, so no edit path can change an item's
+layout. Saving a locked item sends `blocks: null`.
+
 **Master edit mode**: `enterMasterEditMode(masterId)` saves the page (`editingMaster.pageBackup`,
 `activePageBackup`) and loads the master as `blocks = [master]`. `exitMasterEditMode(true)` posts
 `save_master` and only restores the page if it succeeded (on failure it stays, nothing lost);
@@ -927,6 +974,11 @@ Recently added actions:
 `delete_media` accepts `{ name }` or `{ names: [...] }` and calls `cc_media_forget()` for each.
 `save_collection` (admins) renames: without an explicit `slug` the address is kept; it returns `{ id, name, slug,
 moved }`. `delete_collection` and `delete_item` take the published files offline at once and return `removed_files`.
+
+`get_collection_design` (`?collection=`) returns `{ blocks }`. `save_collection_design` (admins; POST `{ collection_id,
+blocks }`) sanitizes the blocks like a page and stores them as the collection's design. `save_item` accepts `field_values`
+(cleaned against the collection's fields; a required field left empty refuses a **publish** with `code: "required"`
+and the labels in the message) and `blocks: null` (keeps the stored blocks: an item built from a design sends no blocks).
 `export_site` / `import_site` (the pre-0.14 `.json` format) remain; the editor only uses `import_site`, for old
 backups.
 

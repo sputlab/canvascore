@@ -386,7 +386,7 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    should not stay on the server).
 6. Open the editor. **Database migrations run automatically** on the first request: each
    pending schema step is applied in order, in a transaction, and recorded in the `cc_meta`
-   table (key `db_schema`). There is nothing to run by hand. The current schema is **8**
+   table (key `db_schema`). There is nothing to run by hand. The current schema is **11**
    (`db_schema` in `version.json`); the most recent steps are:
 
    | Migration | Adds |
@@ -394,6 +394,9 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    | 6 | `page_revisions` table: version history of pages and collection items (section 7.8) |
    | 7 | `redirects` table (old addresses → new ones, section 7.4) and the `pages.noindex` column ("Hide this page from search engines") |
    | 8 | Security (0.14.1): the `admin.session_gen` column (section 6), user names unique regardless of case (when no two existing names differ only in case), the old default `admin`/`admin` account deleted once another account exists (a site set up before the wizard then counts as installed), and the rich text already stored cleaned like new saves |
+   | 9 | Custom fields per collection: `collections.fields` and `collection_items.field_values` |
+   | 10 | Structured data per collection: `collections.schema_json` |
+   | 11 | One design per collection: `collections.design_json` |
 
    Back up the data directory before updating: a migration cannot be undone by installing the
    older release again.
@@ -454,6 +457,7 @@ header/footer and most Global Options, and can run Publish Site. Editors **canno
 - see, export or delete form **Submissions**;
 - create, rename or delete **collections** (they can add, edit, move, archive and delete the
   items of existing ones);
+- define a collection's **fields**, its **design** and its **structured data** (Collections › Fields and Design);
 - add or change **code**. Custom HTML blocks and a block's custom CSS/JS stay **exactly as an
   admin saved them** when an editor saves the page, item, header/footer, master or template
   (matched by block id on the server); an editor can only move or delete those blocks. Custom
@@ -581,6 +585,10 @@ name (`.html`, `.xml`, `.json` or `.txt`); anything else counts as a file that c
 written.
 
 The Google Fonts link on every page loads the site font and each font chosen for a text style (Global Options › Text styles). Visitors' browsers therefore need access to `fonts.googleapis.com`, as before.
+
+Items of a collection with a **design** (Collections › Design) are built from that design, so publishing the site also
+publishes the design. An item page of a collection with **structured data** carries a `<script type="application/ld+json">`
+block (schema.org Product, Event or Person) built from the item's values.
 
 ### 7.2 Removal of stale pages
 

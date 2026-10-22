@@ -10,6 +10,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-22 — Custom fields, one design per collection, structured data
+
 ### Added
 - **Custom fields per collection** (Collections › Fields, admins define them): text, rich text, number, date, image,
   gallery, link, choice (one or several) and reference to an item of another collection. Each field can be required
@@ -32,6 +34,12 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   `.url` a link or a reference's page, `.title` a reference's title), `{{item:title}}`, `{{item:excerpt}}`,
   `{{item:date}}` and `{{item:url}}` show the item itself. In the editor, the design shows the field names in brackets.
 - Database schema 11: `collections.design_json` (added on update).
+
+### Documentation
+- The user guide (custom fields, the design of a collection, dynamic values, structured data, the list options and the
+  Related Items block), the block reference (Related Items, Item Field, Collection List options), the administrator guide
+  (migrations 9 to 11, structured data on publish, roles) and the developer guide (the data model, dynamic values, the
+  collection helpers, the new API actions and the layout lock) are updated. The manuals index is at 0.19.0.
 
 ## [0.18.0] - 2026-10-18 — Button and field presets, copy & paste style, on-canvas handles
 
