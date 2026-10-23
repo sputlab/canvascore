@@ -226,6 +226,11 @@ echo "\nSCHEDULED PUBLISHING: TIMES\n";
 check('a schedule time takes the editor\'s value, or a stored one, and nothing else', cc_schedule_clean('2026-11-03T09:30') === '2026-11-03 09:30' && cc_schedule_clean('2026-11-03 09:30') === '2026-11-03 09:30' && cc_schedule_clean('') === '');
 check('…an impossible date or time is refused', cc_schedule_clean('2026-02-30T10:00') === false && cc_schedule_clean('2026-11-03T25:00') === false && cc_schedule_clean('tomorrow') === false && cc_schedule_clean('2026-11-03T09:60') === false);
 
+echo "\nFACETED SEARCH AND RELATED BY TAG (renderer)\n";
+$sh = render_block(['type' => 'SEARCH', 'id' => 'sr1', 'content' => ['facets' => ['collection', 'tax:cat-1', 'tax:<script>', 'nope']]]);
+check('the search block offers the facets it is given, and drops anything that is not a facet', strpos($sh, ' data-facets="[&quot;collection&quot;,&quot;tax:cat-1&quot;]"') !== false, substr($sh, 0, 300));
+check('…and without facets the search block is as it was (no facets attribute)', strpos(render_block(['type' => 'SEARCH', 'id' => 'sr2', 'content' => []]), ' data-facets="') === false);
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

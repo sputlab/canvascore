@@ -11,6 +11,11 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Related items by tag**: the Related block has a second mode, **That share tags with this item**: the other items of
+  the collection that share terms with this one, the most shared first, optionally through one taxonomy.
+- **Faceted Site Search**: the Site Search block offers filters (the collection, and each taxonomy). Visitors tick
+  choices: the choices of one filter combine with "or", and the filters with "and". With filters on, a search with no
+  words browses the matching items. The search index carries each entry's collection and terms.
 - **Scheduled publishing**: a page or a collection item can go live at a date and time (**Publish at**) and come down
   at one (**Unpublish at**), set in its settings (Page Settings › Scheduled publishing). The change is made by the server
   at that time: on the next admin request, or by `cron.php` from the command line on a server with no admin in use

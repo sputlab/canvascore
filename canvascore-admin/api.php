@@ -886,6 +886,10 @@ if ($action === 'set_schedule' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($st->rowCount() === 0) { echo json_encode(['success' => false, 'message' => 'That page or item does not exist.']); exit; }
     echo json_encode(['success' => true, 'publish_at' => $pa, 'unpublish_at' => $ua]); exit;
 }
+// Every taxonomy of the site, with its collection: the facets the Site Search block can offer
+if ($action === 'get_taxonomy_list') {
+    echo json_encode($pdo->query("SELECT t.id, t.name, c.name AS collection FROM collection_taxonomies t JOIN collections c ON c.id = t.collection_id ORDER BY c.name, t.position")->fetchAll(PDO::FETCH_ASSOC)); exit;
+}
 // Categories and tags of a collection: its taxonomies and their terms
 if ($action === 'get_taxonomies') {
     echo json_encode(cc_taxonomies_load($pdo, $_GET['collection'] ?? '')); exit;

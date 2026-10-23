@@ -332,6 +332,27 @@ check('cron.php makes the due changes from the command line, and refuses to run 
 $webrun = $anon->req('GET', '/canvascore-admin/cron.php');
 check('cron.php is not served to the web', $webrun['code'] === 404 || $webrun['code'] === 403 || strpos((string)$webrun['body'], 'changes') === false);
 
+echo "\nRELATED BY TAG AND THE SEARCH FACETS (published)\n";
+$own->api('save_collection', ['id' => 'col_rec', 'name' => 'Recipes', 'slug' => 'recipes', 'fields' => []]);
+$own->api('save_taxonomies', ['collection_id' => 'col_rec', 'taxonomies' => [
+    ['id' => 'cuisine', 'name' => 'Cuisine', 'multiple' => false, 'terms' => [['id' => 'it', 'name' => 'Italian'], ['id' => 'gr', 'name' => 'Greek']]],
+    ['id' => 'mood', 'name' => 'Mood', 'multiple' => true, 'terms' => [['id' => 'quick', 'name' => 'Quick'], ['id' => 'cosy', 'name' => 'Cosy']]]]]);
+$tagged = ['pasta' => ['cuisine' => ['it'], 'mood' => ['quick', 'cosy']], 'pizza' => ['cuisine' => ['it'], 'mood' => ['quick']], 'salad' => ['cuisine' => ['gr']], 'risotto' => ['cuisine' => ['it'], 'mood' => ['cosy']]];
+foreach ($tagged as $slug => $tm) {
+    $own->api('save_item', ['id' => 'rc-' . $slug, 'collection_id' => 'col_rec', 'title' => ucfirst($slug), 'slug' => $slug, 'status' => 'published', 'date' => '2026-10-20',
+        'blocks' => $slug === 'pasta' ? [['id' => 'rel1', 'type' => 'RELATED', 'styles' => [], 'content' => ['mode' => 'tags', 'taxonomy' => '', 'limit' => 5, 'title' => 'More like this']]] : [],
+        'terms' => $tm]);
+}
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pasta = (string)@file_get_contents($web . '/recipes/pasta/index.html');
+check('an item lists the other items that share tags with it, the most shared first, and not the others', strpos($pasta, 'More like this') !== false && strpos($pasta, 'Pizza') !== false && strpos($pasta, 'Risotto') !== false && strpos($pasta, 'Salad') === false
+    && strpos($pasta, 'Pizza') < strpos($pasta, 'Risotto'), substr($pasta, strpos($pasta, 'cc-related') ?: 0, 200));
+$idx = json_decode((string)@file_get_contents($web . '/search-index.json'), true) ?: [];
+$pz = array_values(array_filter($idx, function ($e) { return ($e['t'] ?? '') === 'Pizza'; }))[0] ?? [];
+check('the search index carries each item\'s facets: its collection and the terms of each taxonomy', ($pz['f']['collection'] ?? '') === 'Recipes' && ($pz['f']['tax:cuisine'] ?? []) === ['Italian'] && ($pz['f']['tax:mood'] ?? []) === ['Quick'] && ($pz['fl']['tax:cuisine'] ?? '') === 'Cuisine', json_encode($pz));
+$pg = array_values(array_filter($idx, function ($e) { return ($e['f']['collection'] ?? '') === 'Pages'; }));
+check('pages are in the index under the "Pages" facet', is_array($pg));
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

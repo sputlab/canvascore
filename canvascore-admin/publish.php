@@ -204,8 +204,10 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             foreach ($targets as $fp) $write($fp, $html);
             if (!$noindex_pg) {
                 $txt = $plain($content_html);
+                // f: the facets of the entry (the collection, and the terms of each taxonomy); fl: their labels
                 $search_index[] = ['t' => html_entity_decode($title, ENT_QUOTES, 'UTF-8'), 'u' => $base_url . ltrim($page_path, '/'),
-                                   'd' => (string)($page['seo_description'] ?? '') !== '' ? (string)$page['seo_description'] : mb_substr($txt, 0, 160), 'x' => mb_substr($txt, 0, 3000)];
+                                   'd' => (string)($page['seo_description'] ?? '') !== '' ? (string)$page['seo_description'] : mb_substr($txt, 0, 160), 'x' => mb_substr($txt, 0, 3000),
+                                   'f' => ['collection' => 'Pages'], 'fl' => ['collection' => 'Collection']];
             }
             $count++;
         }
@@ -230,7 +232,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 $item_index[$ii['id']] = ['title' => (string)$ii['title'], 'slug' => cc_safe_slug($ii['slug']), 'col_slug' => cc_safe_slug($ii['col_slug']),
                     'live' => $ii['status'] === 'published' && (int)($ii['archived'] ?? 0) !== 1];
             }
-            $cols = $pdo->query("SELECT id, slug, fields, schema_json, design_json, archive_json FROM collections")->fetchAll(PDO::FETCH_ASSOC);
+            $cols = $pdo->query("SELECT id, name, slug, fields, schema_json, design_json, archive_json FROM collections")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($cols as $col) {
                 $col_slug = cc_safe_slug($col['slug']);
                 if (cc_slug_reserved($col_slug)) { $warnings[] = 'Not published: a collection uses the reserved address /' . $col_slug . '/'; continue; }
@@ -298,8 +300,16 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     $write(__DIR__ . '/../' . $col_slug . '/' . $it_slug . '/index.html', $ihtml);
                     if ((int)($it['archived'] ?? 0) !== 1) {
                         $itxt = $plain($i_content);
+                        // facets: the collection, and the terms of the item in each taxonomy
+                        $sf = ['collection' => (string)($col['name'] ?? '')]; $sfl = ['collection' => 'Collection'];
+                        foreach ($i_terms as $i_tid => $i_mids) {
+                            $tnames = [];
+                            foreach ($i_mids as $i_mid) if (isset($term_index[$i_mid])) { $tnames[] = $term_index[$i_mid]['name']; $sfl['tax:' . $i_tid] = $term_index[$i_mid]['tax_name']; }
+                            if ($tnames) $sf['tax:' . $i_tid] = $tnames;
+                        }
                         $search_index[] = ['t' => (string)($it['title'] ?? ''), 'u' => $base_url . $col_slug . '/' . $it_slug . '/',
-                                           'd' => (string)($it['excerpt'] ?? '') !== '' ? (string)$it['excerpt'] : mb_substr($itxt, 0, 160), 'x' => mb_substr($itxt, 0, 3000)];
+                                           'd' => (string)($it['excerpt'] ?? '') !== '' ? (string)$it['excerpt'] : mb_substr($itxt, 0, 160), 'x' => mb_substr($itxt, 0, 3000),
+                                           'f' => $sf, 'fl' => $sfl];
                         if (isset($feeds[$col['id']])) $feeds[$col['id']]['items'][] = $it;
                     }
                     $count++;

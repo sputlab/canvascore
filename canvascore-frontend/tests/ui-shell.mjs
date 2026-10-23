@@ -1173,6 +1173,27 @@ try {
     useStore.setState({ activePage: null });
   }
 
+  console.log('\nFACETED SEARCH AND RELATED BY TAG (editor)');
+  {
+    const SP = (await vite.ssrLoadModule('/src/components/panel/blocks/SearchPanel.jsx')).default;
+    const RP = (await vite.ssrLoadModule('/src/components/panel/blocks/RelatedPanel.jsx')).default;
+    const sets = [];
+    let sc = { facets: [] };
+    mount(React.createElement(SP, { ctx: { c: sc, set: (k, v) => { sets.push([k, v]); sc = { ...sc, [k]: v }; } } })); await sleep(40);
+    const fc = $('[aria-label="Filters"] input[type="checkbox"]');
+    check('the search panel offers the collection filter', !!fc);
+    if (fc) click(fc);
+    check('…ticking it sets the facets of the search block', JSON.stringify(sets.find((x) => x[0] === 'facets')) === '["facets",["collection"]]', JSON.stringify(sets));
+
+    let rc = { mode: 'tags', taxonomy: '' };
+    const rsets = [];
+    mount(React.createElement(RP, { ctx: { selectedBlock: { id: 'rb2', type: 'RELATED', content: rc, styles: {} }, handleContentChange: (k, v) => { rsets.push([k, v]); rc = { ...rc, [k]: v }; }, patchContent: () => {}, collections: [], itemCollectionId: 'col_x', itemTaxonomies: [{ id: 'cuisine', name: 'Cuisine' }] } })); await sleep(40);
+    const tax = $$('select').find((x) => [...x.options].some((o) => o.textContent === 'Cuisine'));
+    check('a Related block by tags offers the taxonomies of the item, and no collection choice', !!tax && !$$('select').some((x) => [...x.options].some((o) => /choose a collection/.test(o.textContent))));
+    if (tax) { tax.value = 'cuisine'; tax.dispatchEvent(new w.Event('change', { bubbles: true })); }
+    check('…choosing one sets the taxonomy of the block', rsets.some((x) => x[0] === 'taxonomy' && x[1] === 'cuisine'), JSON.stringify(rsets));
+  }
+
   console.log('\nCANVAS MENU');
   {
     const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;
