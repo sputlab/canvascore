@@ -217,6 +217,11 @@ function cc_db_migrations() {
             )");
             cc_add_col($pdo, 'collection_items', 'terms_json', "TEXT DEFAULT '{}'");
         },
+
+        // v13 — listing and archive pages: the page size and which archives a collection publishes
+        13 => function ($pdo) {
+            cc_add_col($pdo, 'collections', 'archive_json', "TEXT DEFAULT '{}'");
+        },
     ];
 }
 

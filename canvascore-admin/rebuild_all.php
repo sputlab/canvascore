@@ -235,7 +235,7 @@ try {
     // --- Collection items: one static page per published item ---
     try {
         // Categories and tags: the taxonomies of every collection and their terms (for the item pages and the taxonomy pages)
-        $term_index = []; $taxes_by_col = [];
+        $term_index = []; $taxes_by_col = []; $archive_by_col = [];
         foreach ($pdo->query("SELECT id, slug FROM collections")->fetchAll(PDO::FETCH_ASSOC) as $tc) {
             $tcs = cc_safe_slug($tc['slug']);
             $taxes_by_col[$tc['id']] = ['slug' => $tcs, 'taxes' => cc_taxonomies_load($pdo, $tc['id'])];
@@ -253,7 +253,7 @@ try {
             $item_index[$ii['id']] = ['title' => (string)$ii['title'], 'slug' => cc_safe_slug($ii['slug']), 'col_slug' => cc_safe_slug($ii['col_slug']),
                 'live' => $ii['status'] === 'published' && (int)($ii['archived'] ?? 0) !== 1];
         }
-        $cols = $pdo->query("SELECT id, slug, fields, schema_json, design_json FROM collections")->fetchAll(PDO::FETCH_ASSOC);
+        $cols = $pdo->query("SELECT id, slug, fields, schema_json, design_json, archive_json FROM collections")->fetchAll(PDO::FETCH_ASSOC);
         foreach ($cols as $col) {
             $col_slug = cc_safe_slug($col['slug']);
             if (cc_slug_reserved($col_slug)) { $warnings[] = 'Not published: a collection uses the reserved address /' . $col_slug . '/'; continue; }
@@ -262,6 +262,8 @@ try {
             foreach (cc_field_defs(json_decode((string)($col['fields'] ?? '[]'), true), $pdo) as $fd) $defs_by_id[$fd['id']] = $fd;
             // Structured data of the items (schema.org), from the collection's schema
             $col_schema = cc_schema_clean(json_decode((string)($col['schema_json'] ?? '{}'), true), array_values($defs_by_id));
+            // Listing and archive pages: how many items a page holds, and which archives are published
+            $archive_by_col[$col['id']] = cc_archive_clean(json_decode((string)($col['archive_json'] ?? '{}'), true));
             $its = $pdo->prepare("SELECT * FROM collection_items WHERE collection_id = ? AND status = 'published'");
             $its->execute([$col['id']]);
             foreach ($its->fetchAll(PDO::FETCH_ASSOC) as $it) {
@@ -329,16 +331,50 @@ try {
         }
     } catch (Throwable $e) { error_log('CanvasCore publish (collections): ' . $e->getMessage()); $warnings[] = 'Collections could not be published (details in the server error log).'; }
 
-    // --- Taxonomy pages: /<collection>/<taxonomy>/ (its terms, with their counts) and /<collection>/<taxonomy>/<term>/
-    // (the live items of a term), built from the same shell as the item pages. An address already used by an item is skipped.
+    // --- Listing, archive and taxonomy pages. One layout for all of them, paginated (cc_archive_nav), built from the
+    // live items of each collection: the listing (/<col>/, /<col>/page/N/), its sorts (/<col>/sort/title/, /<col>/sort/oldest/),
+    // its years and months (/<col>/<yyyy>/, /<col>/<yyyy>/<mm>/), the filters of its choice fields
+    // (/<col>/filter/<field>/<value>/), and the taxonomies: their pages (/<col>/<tax>/) and their terms (/<col>/<tax>/<term>/).
+    // An address that an item already uses is never written over.
     try {
-        foreach ($taxes_by_col as $tcol_id => $tinfo) {
-            $tcs = $tinfo['slug'];
-            if (cc_slug_reserved($tcs)) continue;
-            foreach ($tinfo['taxes'] as $tx) {
+        $render_page = function ($path, $title, $desc, $inner) use (&$sitemap_urls, $template, $menu_html, $google_fonts_link, $brand_color, $font_family, $header_html, $footer_html, $site_suffix, $base_url, $site_url, $finish, $write) {
+            $tt = htmlspecialchars($title);
+            $tdesc = htmlspecialchars(mb_substr(trim(preg_replace('/\s+/u', ' ', $desc !== '' ? $desc : $title)), 0, 300));
+            $abs = $site_url ? $site_url . '/' . $path : '';
+            $page = str_replace(['{{PAGE_TITLE}}', '{{META_DESCRIPTION}}'], [$tt . $site_suffix, $tdesc], $template);
+            $page = str_replace('</head>', '<style>body{background:#ffffff !important;margin:0;padding:0;overflow-x:clip;}</style>' . "\n" . '<meta property="og:title" content="' . $tt . '">' . "\n</head>", $page);
+            $page = str_replace(['{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}'],
+                [$menu_html, $google_fonts_link, $brand_color, $font_family, $header_html . '<div style="max-width:1100px; margin:0 auto; padding:0 20px; overflow-x:clip;">' . $inner . '</div>' . $footer_html], $page);
+            $page = str_replace('{{BASE_URL}}', $base_url, $page);
+            $write(__DIR__ . '/../' . $path . 'index.html', $finish($page, $abs, false));
+            $sitemap_urls[] = $abs !== '' ? $abs : ($base_url . $path);
+        };
+        // One archive: its items in pages of $per (the browse links go on its first page)
+        $archive = function ($dir, $kind, $title, $desc, $items, $cs, $per, $browse) use ($render_page) {
+            $total = max(1, (int)ceil(count($items) / $per));
+            for ($p = 1; $p <= $total; $p++) {
+                $path = $dir . ($p > 1 ? 'page/' . $p . '/' : '');
+                $cards = cc_list_cards(array_slice($items, ($p - 1) * $per, $per), $cs, cc_list_options(['columns' => 3], [], ['items' => []], 'grid', ''));
+                $inner = cc_archive_page_inner($kind, $title, $desc, $cards, cc_archive_nav($dir, $p, $total), $p === 1 ? $browse : '');
+                $render_page($path, $title . ($p > 1 ? ' · page ' . $p : ''), $desc, $inner);
+            }
+        };
+        $cdata = cc_collections_data();
+        foreach ($cdata['by_id'] as $cid => $cc) {
+            $cs = cc_safe_slug($cc['slug']);
+            if (cc_slug_reserved($cs) || !isset($archive_by_col[$cid])) continue;
+            $cfg = $archive_by_col[$cid];
+            $per = $cfg['perPage'];
+            $taken = $item_slugs[$cid] ?? [];
+            $live = array_values(array_filter($cc['items'], function ($it) { return empty($it['archived']); }));
+            $newest = cc_sort_items($live, 'date', true, []);
+
+            // 1. the taxonomies: the page of each one (its terms with their counts), and the page of each term (its items)
+            $tax_pages = [];
+            foreach (($taxes_by_col[$cid]['taxes'] ?? []) as $tx) {
                 $tts = cc_tax_slug($tx['slug']);
                 if ($tts === '') continue;
-                if (!empty($item_slugs[$tcol_id][$tts])) { $warnings[] = 'Taxonomy pages not published: an item of the collection "' . $tcs . '" uses the address /' . $tcs . '/' . $tts . '/.'; continue; }
+                if (!empty($taken[$tts])) { $warnings[] = 'Taxonomy pages not published: an item of the collection "' . $cs . '" uses the address /' . $cs . '/' . $tts . '/.'; continue; }
                 $tax_terms = [];
                 foreach ($tx['terms'] as $tm) {
                     $tms = cc_tax_slug($tm['slug']);
@@ -348,36 +384,73 @@ try {
                         $c = strcmp((string)($b['date'] ?: ''), (string)($a['date'] ?: ''));
                         return $c !== 0 ? $c : strcmp((string)$a['title'], (string)$b['title']);
                     });
-                    $path = $tcs . '/' . $tts . '/' . $tms . '/';
-                    $cards = cc_list_cards($its, $tcs, cc_list_options(['columns' => 3], [], ['items' => []], 'grid', ''));
-                    $inner = cc_term_page_inner($tx['name'], $tm['name'], (string)$tm['description'], $cards);
-                    $tpage_abs = $site_url ? $site_url . '/' . $path : '';
-                    $tt = htmlspecialchars($tm['name'] . ' · ' . $tx['name']);
-                    $tdesc = htmlspecialchars(mb_substr(trim(preg_replace('/\s+/u', ' ', (string)$tm['description'] !== '' ? (string)$tm['description'] : $tm['name'] . ' — ' . $tx['name'])), 0, 300));
-                    $tpage = str_replace(['{{PAGE_TITLE}}', '{{META_DESCRIPTION}}'], [$tt . $site_suffix, $tdesc], $template);
-                    $tpage = str_replace('</head>', '<style>body{background:#ffffff !important;margin:0;padding:0;overflow-x:clip;}</style>' . "\n" . '<meta property="og:title" content="' . $tt . '">' . "\n</head>", $tpage);
-                    $tpage = str_replace(['{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}'],
-                        [$menu_html, $google_fonts_link, $brand_color, $font_family, $header_html . '<div style="max-width:1100px; margin:0 auto; padding:0 20px; overflow-x:clip;">' . $inner . '</div>' . $footer_html], $tpage);
-                    $tpage = str_replace('{{BASE_URL}}', $base_url, $tpage);
-                    $write(__DIR__ . '/../' . $path . 'index.html', $finish($tpage, $tpage_abs, false));
-                    $sitemap_urls[] = $tpage_abs !== '' ? $tpage_abs : ($base_url . $path);
-                    $tax_terms[] = ['name' => $tm['name'], 'description' => (string)$tm['description'], 'count' => count($its), 'href' => $base_url . $path];
+                    $archive($cs . '/' . $tts . '/' . $tms . '/', $tx['name'], $tm['name'], (string)$tm['description'], $its, $cs, $per, '');
+                    $tax_terms[] = ['name' => $tm['name'], 'description' => (string)$tm['description'], 'count' => count($its), 'href' => $base_url . $cs . '/' . $tts . '/' . $tms . '/'];
                 }
                 if (!$tax_terms) continue;
-                // the taxonomy's own page: its terms
-                $ipath = $tcs . '/' . $tts . '/';
-                $iinner = cc_taxonomy_index_inner($tx['name'], $tax_terms);
-                $iabs = $site_url ? $site_url . '/' . $ipath : '';
-                $ipage = str_replace(['{{PAGE_TITLE}}', '{{META_DESCRIPTION}}'], [htmlspecialchars($tx['name']) . $site_suffix, htmlspecialchars($tx['name'])], $template);
-                $ipage = str_replace('</head>', '<style>body{background:#ffffff !important;margin:0;padding:0;overflow-x:clip;}</style>' . "\n</head>", $ipage);
-                $ipage = str_replace(['{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}'],
-                    [$menu_html, $google_fonts_link, $brand_color, $font_family, $header_html . '<div style="max-width:1100px; margin:0 auto; padding:0 20px; overflow-x:clip;">' . $iinner . '</div>' . $footer_html], $ipage);
-                $ipage = str_replace('{{BASE_URL}}', $base_url, $ipage);
-                $write(__DIR__ . '/../' . $ipath . 'index.html', $finish($ipage, $iabs, false));
-                $sitemap_urls[] = $iabs !== '' ? $iabs : ($base_url . $ipath);
+                $ipath = $cs . '/' . $tts . '/';
+                $render_page($ipath, $tx['name'], $tx['name'], cc_taxonomy_index_inner($tx['name'], $tax_terms));
+                $tax_pages[] = [$tx['name'], $ipath];
+            }
+
+            // 2. the browse links of the first listing page
+            $groups = [];
+            if ($cfg['sorts'] && empty($taken['sort'])) $groups[] = ['Sort', [['Newest first', $cs . '/'], ['Oldest first', $cs . '/sort/oldest/'], ['Title A–Z', $cs . '/sort/title/']]];
+            $years = []; $months = [];
+            foreach ($live as $it) {
+                if (preg_match('/^(\d{4})-(\d{2})/', (string)($it['date'] ?? ''), $ym)) { $years[$ym[1]][] = $it; $months[$ym[1] . '-' . $ym[2]][] = $it; }
+            }
+            krsort($years); krsort($months);
+            $year_links = [];
+            foreach (array_keys($years) as $y) if (empty($taken[$y])) $year_links[] = [$y, $cs . '/' . $y . '/'];
+            if ($cfg['years'] && $year_links) $groups[] = ['Years', $year_links];
+            if ($cfg['filters'] && empty($taken['filter'])) {
+                foreach ($cc['defsById'] as $fd) {
+                    if ($fd['type'] !== 'choice') continue;
+                    $links = [];
+                    foreach ($fd['options'] ?? [] as $o) $links[] = [$o['label'], $cs . '/filter/' . $fd['key'] . '/' . $o['value'] . '/'];
+                    if ($links) $groups[] = [$fd['label'], $links];
+                }
+            }
+            if ($tax_pages) $groups[] = ['Categories & tags', array_map(function ($t) { return [$t[0], $t[1]]; }, $tax_pages)];
+            $browse = cc_archive_browse_html($groups);
+
+            // 3. the listing and its sorts
+            $archive($cs . '/', 'Collection', $cc['name'], '', $newest, $cs, $per, $browse);
+            if ($cfg['sorts'] && empty($taken['sort'])) {
+                $archive($cs . '/sort/oldest/', 'Sorted', $cc['name'] . ' · oldest first', '', cc_sort_items($live, 'date', false, []), $cs, $per, '');
+                $archive($cs . '/sort/title/', 'Sorted', $cc['name'] . ' · A–Z', '', cc_sort_items($live, 'title', false, []), $cs, $per, '');
+            }
+
+            // 4. the years and their months
+            if ($cfg['years']) {
+                foreach ($years as $y => $ys) {
+                    if (!empty($taken[$y])) continue;
+                    $archive($cs . '/' . $y . '/', 'Year', $y, '', $ys, $cs, $per, '');
+                }
+                foreach ($months as $ym => $ms) {
+                    [$my, $mm] = explode('-', $ym);
+                    if (!empty($taken[$my])) continue;
+                    $archive($cs . '/' . $my . '/' . $mm . '/', 'Month', date('F Y', mktime(0, 0, 0, (int)$mm, 1, (int)$my)), '', $ms, $cs, $per, '');
+                }
+            }
+
+            // 5. the filters of the choice fields: one archive per choice, with the items that have it
+            if ($cfg['filters'] && empty($taken['filter'])) {
+                foreach ($cc['defsById'] as $fd) {
+                    if ($fd['type'] !== 'choice') continue;
+                    foreach ($fd['options'] ?? [] as $o) {
+                        $matches = array_values(array_filter($live, function ($it) use ($fd, $o) {
+                            $v = cc_field_clean($fd, $it['vals'][$fd['id']] ?? null, null);
+                            return in_array($o['value'], (array)$v, true);
+                        }));
+                        if (!$matches) continue;
+                        $archive($cs . '/filter/' . $fd['key'] . '/' . $o['value'] . '/', $fd['label'], $o['label'], '', $matches, $cs, $per, '');
+                    }
+                }
             }
         }
-    } catch (Throwable $e) { error_log('CanvasCore publish (taxonomies): ' . $e->getMessage()); $warnings[] = 'Categories and tags could not be published (details in the server error log).'; }
+    } catch (Throwable $e) { error_log('CanvasCore publish (archives): ' . $e->getMessage()); $warnings[] = 'Listing and archive pages could not be published (details in the server error log).'; }
 
     // --- RSS feeds (newest 50 items each) ---
     foreach ($feeds as $fd) {

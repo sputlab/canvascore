@@ -9,6 +9,7 @@ import StarterPickerDialog from './StarterPickerDialog';
 import { starterBlocks } from '../editor/starters';
 import CollectionFields from './CollectionFields';
 import CollectionTaxonomies from './CollectionTaxonomies';
+import CollectionArchives from './CollectionArchives';
 
 // An item's custom field values as an object (the server keeps them as JSON text)
 const parseFieldValues = (raw) => {
@@ -332,6 +333,7 @@ export default function Collections() {
               <CollectionFields key={active.id} collection={active} collections={collections} canEdit={userRole === 'admin'}
                 onSaved={() => loadCollections().then((d) => { if (Array.isArray(d)) { const c = d.find((x) => x.id === active.id); if (c) setActive(c); } })} />
               <CollectionTaxonomies key={`tax-${active.id}`} collection={active} canEdit={userRole === 'admin'} onSaved={() => loadCollections()} />
+              <CollectionArchives key={`arc-${active.id}`} collection={active} canEdit={userRole === 'admin'} onSaved={() => loadCollections()} />
 
               {n > 0 && (
                 <div className="cc-media-selbar" role="toolbar" aria-label="Selected items" style={{ marginBottom: 12 }}>

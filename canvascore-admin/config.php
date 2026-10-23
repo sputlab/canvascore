@@ -673,6 +673,22 @@ function cc_terms_clean($raw, $pdo, $cid) {
     return $out;
 }
 
+// ---------------------------------------------------------------------------
+// Listing and archive pages of a collection: how many items a page holds, and which archives are published (the years,
+// the filters of its choice fields, the sorts). The layout is the same for every archive.
+// ---------------------------------------------------------------------------
+const CC_ARCHIVE_DEFAULT_PER_PAGE = 12;
+function cc_archive_clean($raw) {
+    $raw = is_array($raw) ? $raw : [];
+    $per = is_numeric($raw['perPage'] ?? null) ? (int)$raw['perPage'] : CC_ARCHIVE_DEFAULT_PER_PAGE;
+    return [
+        'perPage' => max(3, min(50, $per)),
+        'years' => !array_key_exists('years', $raw) || !empty($raw['years']),
+        'filters' => !array_key_exists('filters', $raw) || !empty($raw['filters']),
+        'sorts' => !array_key_exists('sorts', $raw) || !empty($raw['sorts']),
+    ];
+}
+
 // Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
 // (a page published there would replace or redirect the admin, the images or the data).
 function cc_reserved_slugs() {

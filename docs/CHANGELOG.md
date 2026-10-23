@@ -11,7 +11,15 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
-- **Categories and tags per collection** (Collections › Categories & tags, admins define them): a collection has
+- **Listing and archive pages** of each collection, built from one paginated layout: the listing (`/<collection>/`,
+  `/<collection>/page/2/`…), its sorts (oldest first, A–Z), its years and months (`/<collection>/2026/`,
+  `/<collection>/2026/10/`), a filter archive for each choice of its choice fields (`/<collection>/filter/tier/gold/`),
+  and the pages of its categories and tags, now paginated. The first listing page links to all of them.
+- **Collections › Listing & archives** (admins): the items per page (3 to 50) and which archives are published.
+  An address that an item already uses is never written over; the archive is skipped with a publish warning.
+- Database schema 13: `collections.archive_json` (added on update).
+
+### Categories and tags per collection (Collections › Categories & tags, admins define them): a collection has
   taxonomies (for example Category, which takes one term, and Tags, which takes several). Each taxonomy has terms with
   a name, an address and a description. An item picks its terms in its settings (Page Settings › Categories & tags).
 - **Listing pages**: each taxonomy gets a page with its terms and their counts, and each term gets a page with its

@@ -325,6 +325,42 @@ function cc_item_jsonld($schema, $defsById, $values, $title, $url, $image_fn) {
     $json = json_encode($ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     return $json === false ? '' : '<script type="application/ld+json">' . $json . "</script>\n";
 }
+// Listing and archive pages (one layout). An archive's first page is its address; the next ones are in page/N/.
+// The page links point to the archive's own pages: "← Newer" to the page before, "Older →" to the page after.
+function cc_archive_nav($dir, $p, $total) {
+    if ($total <= 1) return '';
+    $href = function ($n) use ($dir) { return '{{BASE_URL}}' . $dir . ($n > 1 ? 'page/' . $n . '/' : ''); };
+    $link = 'color:#0f172a; text-decoration:none; font-weight:600;';
+    $prev = $p > 1 ? '<a href="' . htmlspecialchars($href($p - 1)) . '" rel="prev" style="' . $link . '">← Newer</a>' : '<span></span>';
+    $next = $p < $total ? '<a href="' . htmlspecialchars($href($p + 1)) . '" rel="next" style="' . $link . '">Older →</a>' : '<span></span>';
+    return '<nav class="cc-pagination" aria-label="Pages" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0 48px; color:#475569; font-size:15px;">'
+        . $prev . '<span>Page ' . (int)$p . ' of ' . (int)$total . '</span>' . $next . '</nav>';
+}
+// The "browse" part of the first listing page: the sorts, the years, the filters of the choice fields and the taxonomies
+// $groups: [[label, [[text, dir], ...]], ...]
+function cc_archive_browse_html($groups) {
+    $html = '';
+    foreach ($groups as [$label, $links]) {
+        if (!$links) continue;
+        $chips = '';
+        foreach ($links as [$text, $dir]) {
+            $chips .= '<a href="' . htmlspecialchars('{{BASE_URL}}' . $dir) . '" style="display:inline-block; border:1px solid #cbd5e1; border-radius:999px; padding:5px 12px; margin:0 6px 6px 0; color:#0f172a; text-decoration:none; font-size:14px;">' . htmlspecialchars($text) . '</a>';
+        }
+        $html .= '<div style="margin:0 0 12px;"><div style="font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">' . htmlspecialchars($label) . '</div>' . $chips . '</div>';
+    }
+    return $html === '' ? '' : '<div class="cc-archive-browse" style="padding:8px 0 20px; border-bottom:1px solid #e2e8f0; margin-bottom:24px;">' . $html . '</div>';
+}
+// The body of an archive page: its kind, title and description, the browse links, the cards and the page links
+function cc_archive_page_inner($kind, $title, $desc, $cards, $nav, $browse) {
+    $d = $desc !== '' ? '<p style="margin:0; font-size:16px; color:#475569; line-height:1.6; max-width:720px;">' . htmlspecialchars($desc) . '</p>' : '';
+    return '<section class="cc-archive-head" style="padding:48px 0 16px;"><div style="font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">' . htmlspecialchars($kind) . '</div>'
+        . '<h1 style="margin:6px 0 12px; font-size:40px; line-height:1.15; color:#0f172a;">' . htmlspecialchars($title) . '</h1>' . $d . '</section>'
+        . $browse
+        . '<style>@media(max-width:768px){ .cc-archive-grid { grid-template-columns:1fr !important; } }</style>'
+        . '<div class="cc-archive-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:24px; padding:8px 0 16px;">' . $cards . '</div>'
+        . $nav;
+}
+
 // The page of one term: its taxonomy, its name and description, and the cards of its items
 function cc_term_page_inner($tax_name, $term_name, $desc, $cards) {
     $d = $desc !== '' ? '<p style="margin:0; font-size:16px; color:#475569; line-height:1.6; max-width:720px;">' . htmlspecialchars($desc) . '</p>' : '';

@@ -213,6 +213,14 @@ $tcard = cc_term_page_inner('Category', 'News <b>', 'About news', '<a>card</a>')
 check('a term page names its taxonomy and term (escaped) and holds the cards', strpos($tcard, 'News &lt;b&gt;') !== false && strpos($tcard, '<a>card</a>') !== false && strpos($tcard, '<b>') === false);
 check('a taxonomy page lists its terms with their counts', strpos(cc_taxonomy_index_inner('Category', [['name' => 'News', 'description' => '', 'count' => 3, 'href' => '/blog/category/news/']]), '(3)') !== false);
 
+echo "\nLISTING AND ARCHIVE SETTINGS\n";
+check('archive settings: the page size is kept within 3 to 50, and every archive is on by default', cc_archive_clean([]) === ['perPage' => 12, 'years' => true, 'filters' => true, 'sorts' => true]
+    && cc_archive_clean(['perPage' => 1])['perPage'] === 3 && cc_archive_clean(['perPage' => 999])['perPage'] === 50 && cc_archive_clean(['perPage' => 'x'])['perPage'] === 12);
+check('archive settings: an archive that is switched off stays off', cc_archive_clean(['years' => false, 'sorts' => 0])['years'] === false && cc_archive_clean(['years' => false, 'sorts' => 0])['sorts'] === false && cc_archive_clean(['filters' => false])['filters'] === false);
+check('pagination: the first page is the address, the next ones are in page/N/; the links go to the page before and after', cc_archive_nav('blog/', 1, 1) === '' && strpos(cc_archive_nav('blog/', 2, 3), 'href="{{BASE_URL}}blog/"') !== false && strpos(cc_archive_nav('blog/', 2, 3), 'href="{{BASE_URL}}blog/page/3/"') !== false && strpos(cc_archive_nav('blog/', 2, 3), 'Page 2 of 3') !== false);
+check('the browse links group the sorts, years and filters, and nothing is empty', strpos(cc_archive_browse_html([['Years', [['2026', 'blog/2026/']]], ['Sort', []]]), 'blog/2026/') !== false && strpos(cc_archive_browse_html([['Sort', []]]), 'cc-archive-browse') === false);
+check('an archive page carries its kind, title and description (escaped), and its cards', strpos(cc_archive_page_inner('Year', 'A <b>', 'Desc', '<a>card</a>', '', ''), 'A &lt;b&gt;') !== false && strpos(cc_archive_page_inner('Year', 'T', '', '<a>card</a>', '', ''), '<a>card</a>') !== false);
+
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
 $mf = sys_get_temp_dir() . '/cc_mig_' . getmypid() . '.sqlite'; @unlink($mf);

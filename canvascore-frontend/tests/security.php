@@ -263,6 +263,42 @@ $own->api('save_taxonomies', ['collection_id' => 'col_news', 'taxonomies' => [['
 $after = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=nw1');
 check('removing a taxonomy drops its terms from the items that had them', json_encode(json_decode((string)($after['json']['terms_json'] ?? '{}'), true)) === '{"cat":["c-news"]}', (string)($after['json']['terms_json'] ?? ''));
 
+echo "\nLISTING AND ARCHIVE PAGES (published)\n";
+$own->api('save_collection', ['id' => 'col_journal', 'name' => 'Journal', 'slug' => 'journal', 'fields' => [
+    ['id' => 'tier', 'key' => 'tier', 'label' => 'Tier', 'type' => 'choice', 'options' => [['value' => 'gold', 'label' => 'Gold'], ['value' => 'silver', 'label' => 'Silver']]]]]);
+$r = $own->api('save_collection', ['id' => 'col_journal', 'name' => 'Journal', 'slug' => 'journal', 'archive' => ['perPage' => 500, 'years' => true, 'filters' => true, 'sorts' => true]]);
+$jc = $own->api('get_collections');
+$jrow = array_values(array_filter($jc['json'] ?? [], function ($c) { return $c['id'] === 'col_journal'; }))[0] ?? [];
+check('the listing settings are saved, and the page size is kept within 3 to 50', !empty($r['json']['success']) && ($jrow['archive']['perPage'] ?? 0) === 50 && ($jrow['archive']['years'] ?? false) === true, json_encode($jrow['archive'] ?? null));
+$own->api('save_collection', ['id' => 'col_journal', 'name' => 'Journal', 'slug' => 'journal', 'archive' => ['perPage' => 5, 'years' => true, 'filters' => true, 'sorts' => true]]);
+for ($i = 1; $i <= 14; $i++) {
+    $title = chr(64 + $i) . ' item';   // A item .. N item
+    $date = $i <= 8 ? sprintf('2026-10-%02d', $i + 10) : sprintf('2025-03-%02d', $i - 8);
+    $own->api('save_item', ['id' => 'jn' . $i, 'collection_id' => 'col_journal', 'title' => $title, 'slug' => 'post-' . $i, 'status' => 'published', 'date' => $date,
+        'blocks' => [], 'field_values' => ['tier' => $i % 2 ? 'gold' : 'silver']]);
+}
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$lst1 = (string)@file_get_contents($web . '/journal/index.html');
+$lst2 = (string)@file_get_contents($web . '/journal/page/2/index.html');
+$lst3 = (string)@file_get_contents($web . '/journal/page/3/index.html');
+check('the listing is paginated, newest first: page 1 holds the 5 newest items', strpos($lst1, 'H item') !== false && strpos($lst1, 'D item') !== false && strpos($lst1, 'C item') === false, substr($lst1, 0, 0));
+check('…page 2 and page 3 hold the next items, and the page links go from one to the next', strpos($lst2, 'C item') !== false && strpos($lst2, 'M item') !== false && strpos($lst3, 'I item') !== false && strpos($lst3, 'Page 3 of 3') !== false && strpos($lst1, 'journal/page/2/') !== false);
+check('the first listing page links to its sorts, years, filters and taxonomies', strpos($lst1, 'journal/sort/title/') !== false && strpos($lst1, 'journal/2025/') !== false && strpos($lst1, 'journal/filter/tier/gold/') !== false);
+$y2025 = (string)@file_get_contents($web . '/journal/2025/index.html');
+check('a year archive holds its items only, paginated', strpos($y2025, 'N item') !== false && strpos($y2025, 'H item') === false && is_file($web . '/journal/2025/page/2/index.html'));
+$m = (string)@file_get_contents($web . '/journal/2026/10/index.html');
+check('a month archive holds the items of that month', strpos($m, 'H item') !== false && strpos($m, 'N item') === false && strpos($m, 'October 2026') !== false);
+$st = (string)@file_get_contents($web . '/journal/sort/title/index.html');
+check('the title sort lists the items A to Z', strpos($st, 'A item') !== false && strpos($st, 'A item') < strpos($st, 'B item'));
+$so = (string)@file_get_contents($web . '/journal/sort/oldest/index.html');
+check('the oldest-first listing starts with the oldest items (I item first; the newest are not on that page)', strpos($so, 'I item') !== false && strpos($so, 'A item') === false && strpos($so, 'I item') < strpos($so, 'M item'), substr($so, 0, 0));
+$gold = (string)@file_get_contents($web . '/journal/filter/tier/gold/index.html');
+check('a filter archive holds the items that have that choice (and not the others)', strpos($gold, 'A item') !== false && strpos($gold, 'C item') !== false && strpos($gold, 'B item') === false && is_file($web . '/journal/filter/tier/gold/page/2/index.html'));
+// an item whose address is a year keeps its page: the year archive does not replace it
+$own->api('save_item', ['id' => 'jn2026', 'collection_id' => 'col_journal', 'title' => 'The year item', 'slug' => '2026', 'status' => 'published', 'blocks' => [], 'field_values' => []]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('an item whose address is a year keeps that address (no year archive is written over it)', strpos((string)@file_get_contents($web . '/journal/2026/index.html'), 'The year item') !== false);
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

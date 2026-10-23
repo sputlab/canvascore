@@ -1138,6 +1138,23 @@ try {
     useStore.setState({ activePage: null });
   }
 
+  console.log('\nLISTING AND ARCHIVE SETTINGS');
+  {
+    const CA = (await vite.ssrLoadModule('/src/components/CollectionArchives.jsx')).default;
+    calls.length = 0;
+    mount(React.createElement(CA, { collection: { id: 'col_ar', name: 'Journal', slug: 'journal', archive: { perPage: 8, years: true, filters: false, sorts: true } }, canEdit: true })); await sleep(40);
+    click(btnHas('Listing & archives')); await sleep(30);
+    const pp = $('input[aria-label="Items per page"]');
+    check('the listing settings show the saved values', !!pp && pp.value === '8' && $$('input[type="checkbox"]').length === 3 && !$$('input[type="checkbox"]')[1].checked);
+    if (pp) typeIn(pp, '20');
+    click($$('input[type="checkbox"]')[1]); await sleep(20);
+    click(btnHas('Save listing settings')); await sleep(20);
+    const sentA = await waitFor(() => calls.find((c) => c.u.includes('save_collection')));
+    const bodyA = sentA ? JSON.parse(sentA.body) : {};
+    check('saving sends the page size and the archives switched on, with the collection\'s name and address', JSON.stringify(bodyA.archive) === '{"perPage":20,"years":true,"filters":true,"sorts":true}' && bodyA.name === 'Journal' && bodyA.slug === 'journal', JSON.stringify(bodyA.archive));
+    COL_SAVES.length = 0;
+  }
+
   console.log('\nCANVAS MENU');
   {
     const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;
