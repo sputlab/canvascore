@@ -3,6 +3,7 @@
 // CanvasCore — API backend (Phase 1: CSRF, hardened session, data outside the web root, hardening)
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
+require_once __DIR__ . '/publish.php';
 require_once __DIR__ . '/media.php';
 require_once __DIR__ . '/backup.php';
 header('Content-Type: application/json');
@@ -167,6 +168,10 @@ if ($action === 'version') {
 // Account management (admin only)
 // ---------------------------------------------------------------------------
 $is_admin = $account['role'] === 'admin';
+
+// Scheduled publishing: the first admin request after a scheduled time makes the due changes (cron.php does it on a server
+// with no admin in use). A failure here never stops the request.
+try { if (cc_schedules_pending($pdo)) cc_run_schedules($pdo, cc_data_dir()); } catch (Throwable $e) { error_log('CanvasCore schedules: ' . $e->getMessage()); }
 
 // Read-only requests release the session lock right away: PHP keeps one request per session at a time,
 // so a slow request (publish, big page list) would otherwise hold every other screen's data back.
@@ -858,6 +863,28 @@ if ($action === 'save_collection_design' && $_SERVER['REQUEST_METHOD'] === 'POST
     cc_sanitize_blocks($blocks);   // the same rules as any page
     $pdo->prepare("UPDATE collections SET design_json = ? WHERE id = ?")->execute([json_encode($blocks), $cid]);
     echo json_encode(['success' => true, 'blocks' => count($blocks)]); exit;
+}
+// Scheduled publishing of a page or an item: when it goes live and when it comes down ("YYYY-MM-DD HH:MM", server time;
+// '' clears it). The change itself is made by the scheduler (publish.php) at that time.
+if ($action === 'set_schedule' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true);
+    $kind = ($d['kind'] ?? '') === 'item' ? 'item' : 'page';
+    $id = is_string($d['id'] ?? null) ? $d['id'] : '';
+    $pa = cc_schedule_clean($d['publish_at'] ?? ''); $ua = cc_schedule_clean($d['unpublish_at'] ?? '');
+    if ($pa === false || $ua === false) { echo json_encode(['success' => false, 'message' => 'Use a date and a time, such as 2026-11-03 09:30.']); exit; }
+    if ($pa !== '' && $ua !== '' && $ua <= $pa) { echo json_encode(['success' => false, 'message' => 'The unpublish time must be after the publish time.']); exit; }
+    if ($kind === 'item') {
+        $st = $pdo->prepare("UPDATE collection_items SET publish_at = ?, unpublish_at = ? WHERE id = ?");
+    } else {
+        // a page being edited may be its hidden draft copy: the schedule belongs to the live page
+        $own = $pdo->prepare("SELECT is_draft_copy, parent_id FROM pages WHERE id = ?"); $own->execute([$id]);
+        $row = $own->fetch(PDO::FETCH_ASSOC);
+        if ($row && (int)$row['is_draft_copy'] === 1 && $row['parent_id']) $id = (string)$row['parent_id'];
+        $st = $pdo->prepare("UPDATE pages SET publish_at = ?, unpublish_at = ? WHERE id = ? AND is_draft_copy = 0");
+    }
+    $st->execute([$pa, $ua, $id]);
+    if ($st->rowCount() === 0) { echo json_encode(['success' => false, 'message' => 'That page or item does not exist.']); exit; }
+    echo json_encode(['success' => true, 'publish_at' => $pa, 'unpublish_at' => $ua]); exit;
 }
 // Categories and tags of a collection: its taxonomies and their terms
 if ($action === 'get_taxonomies') {

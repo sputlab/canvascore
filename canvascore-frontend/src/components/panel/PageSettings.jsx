@@ -6,6 +6,7 @@ import { labelStyle, inputStyle } from './helpers';
 import { slugify, slugOwner, uniqueSlug } from '../../utils/slug';
 import ItemFieldsSection from './ItemFieldsSection';
 import ItemTermsSection from './ItemTermsSection';
+import ScheduleSection from './ScheduleSection';
 
 // Page settings, shown when no block is selected: page info, URL, structure, SEO (and item fields for collection items).
 export default function PageSettings({ ctx }) {
@@ -56,6 +57,7 @@ export default function PageSettings({ ctx }) {
           </PanelAccordion>
         )}
 
+        {!activePage?.__part && !activePage?.__design && <ScheduleSection activePage={activePage} updateActivePage={updateActivePage} />}
         {activePage?.__item && <ItemFieldsSection activePage={activePage} updateActivePage={updateActivePage} />}
         {activePage?.__item && <ItemTermsSection activePage={activePage} updateActivePage={updateActivePage} />}
 

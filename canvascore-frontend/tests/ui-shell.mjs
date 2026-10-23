@@ -1155,6 +1155,24 @@ try {
     COL_SAVES.length = 0;
   }
 
+  console.log('\nSCHEDULED PUBLISHING (editor)');
+  {
+    useStore.setState({ currentView: 'editor', selectedBlockId: null, blocks: [], pastBlocks: [], futureBlocks: [],
+      activePage: { id: 'sp1', __item: true, collection_id: 'col_s', title: 'Later', slug: 'later', excerpt: '', cover_image: '', date: '2026-10-20', status: 'draft', seo_title: '', seo_description: '', __fieldDefs: [], field_values: {}, publish_at: '', unpublish_at: '' } });
+    calls.length = 0;
+    mount(React.createElement(PropertyPanel)); await sleep(60);
+    click(btnHas('Scheduled publishing')); await sleep(30);
+    const pa = $('input[aria-label="Publish at"]');
+    check('the schedule shows the publish and unpublish fields', !!pa && !!$('input[aria-label="Unpublish at"]') && /Not live/.test(doc.body.textContent));
+    if (pa) typeIn(pa, '2026-11-03T09:30');
+    await sleep(20);
+    click(btnHas('Save schedule')); await sleep(20);
+    const sentSch = await waitFor(() => calls.find((c) => c.u.includes('set_schedule')));
+    const bodySch = sentSch ? JSON.parse(sentSch.body) : {};
+    check('saving sends the schedule of the item (the editor\'s date and time; the server stores it as "YYYY-MM-DD HH:MM")', bodySch.kind === 'item' && bodySch.id === 'sp1' && bodySch.publish_at === '2026-11-03T09:30' && bodySch.unpublish_at === '', JSON.stringify(bodySch));
+    useStore.setState({ activePage: null });
+  }
+
   console.log('\nCANVAS MENU');
   {
     const BlockContextMenu = (await vite.ssrLoadModule('/src/components/BlockContextMenu.jsx')).default;

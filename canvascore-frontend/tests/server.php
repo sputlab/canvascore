@@ -3,6 +3,7 @@
 // code kept on editors' saves, re-linking after a slug change, client address behind a proxy,
 // SVG upload check, sanitizer, numbers, slider arrows and empty-text fallbacks.
 require __DIR__ . '/../../canvascore-admin/compiler.php';
+require_once __DIR__ . '/../../canvascore-admin/publish.php';
 $fails = 0; $total = 0;
 function check($name, $ok, $extra = '') { global $fails, $total; $total++; if ($ok) echo "  ✓ $name\n"; else { $fails++; echo "  ✗ $name" . ($extra !== '' ? "  → $extra" : '') . "\n"; } }
 
@@ -220,6 +221,10 @@ check('archive settings: an archive that is switched off stays off', cc_archive_
 check('pagination: the first page is the address, the next ones are in page/N/; the links go to the page before and after', cc_archive_nav('blog/', 1, 1) === '' && strpos(cc_archive_nav('blog/', 2, 3), 'href="{{BASE_URL}}blog/"') !== false && strpos(cc_archive_nav('blog/', 2, 3), 'href="{{BASE_URL}}blog/page/3/"') !== false && strpos(cc_archive_nav('blog/', 2, 3), 'Page 2 of 3') !== false);
 check('the browse links group the sorts, years and filters, and nothing is empty', strpos(cc_archive_browse_html([['Years', [['2026', 'blog/2026/']]], ['Sort', []]]), 'blog/2026/') !== false && strpos(cc_archive_browse_html([['Sort', []]]), 'cc-archive-browse') === false);
 check('an archive page carries its kind, title and description (escaped), and its cards', strpos(cc_archive_page_inner('Year', 'A <b>', 'Desc', '<a>card</a>', '', ''), 'A &lt;b&gt;') !== false && strpos(cc_archive_page_inner('Year', 'T', '', '<a>card</a>', '', ''), '<a>card</a>') !== false);
+
+echo "\nSCHEDULED PUBLISHING: TIMES\n";
+check('a schedule time takes the editor\'s value, or a stored one, and nothing else', cc_schedule_clean('2026-11-03T09:30') === '2026-11-03 09:30' && cc_schedule_clean('2026-11-03 09:30') === '2026-11-03 09:30' && cc_schedule_clean('') === '');
+check('…an impossible date or time is refused', cc_schedule_clean('2026-02-30T10:00') === false && cc_schedule_clean('2026-11-03T25:00') === false && cc_schedule_clean('tomorrow') === false && cc_schedule_clean('2026-11-03T09:60') === false);
 
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';

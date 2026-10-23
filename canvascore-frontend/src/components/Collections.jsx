@@ -143,6 +143,8 @@ export default function Collections() {
       __fieldDefs: active.fields || [], field_values: full.field_values || {},
       // categories and tags: the collection's taxonomies, and the terms this item has (taxonomy id => term ids)
       __taxonomies: taxes, terms: full.terms || {},
+      // scheduled publishing of the item
+      publish_at: full.publish_at || '', unpublish_at: full.unpublish_at || '',
       layout: 'full', bg_color: '#ffffff', boxed_width: '1100px',
     });
     // With a design, the item's page is the design: its blocks come from the design and stay as they are (read-only)

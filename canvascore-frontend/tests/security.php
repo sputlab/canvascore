@@ -299,6 +299,39 @@ $own->api('save_item', ['id' => 'jn2026', 'collection_id' => 'col_journal', 'tit
 $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 check('an item whose address is a year keeps that address (no year archive is written over it)', strpos((string)@file_get_contents($web . '/journal/2026/index.html'), 'The year item') !== false);
 
+echo "\nSCHEDULED PUBLISHING\n";
+$own->api('save_collection', ['id' => 'col_sched', 'name' => 'Sched', 'slug' => 'sched', 'fields' => []]);
+$own->api('save_item', ['id' => 'sc1', 'collection_id' => 'col_sched', 'title' => 'Due item', 'slug' => 'due', 'status' => 'draft', 'blocks' => []]);
+$own->api('save_item', ['id' => 'sc2', 'collection_id' => 'col_sched', 'title' => 'Later item', 'slug' => 'later', 'status' => 'draft', 'blocks' => []]);
+$own->api('save_item', ['id' => 'sc3', 'collection_id' => 'col_sched', 'title' => 'Ending item', 'slug' => 'ending', 'status' => 'published', 'blocks' => []]);
+$bad = $own->api('set_schedule', ['kind' => 'item', 'id' => 'sc1', 'publish_at' => '2026-13-45 10:00']);
+check('a schedule needs a real date and time', empty($bad['json']['success']) && strpos($bad['json']['message'] ?? '', 'date and a time') !== false, json_encode($bad['json'] ?? null));
+$order = $own->api('set_schedule', ['kind' => 'item', 'id' => 'sc3', 'publish_at' => '2026-05-01T10:00', 'unpublish_at' => '2026-04-01T10:00']);
+check('the unpublish time must come after the publish time', empty($order['json']['success']), json_encode($order['json'] ?? null));
+$due = $own->api('set_schedule', ['kind' => 'item', 'id' => 'sc1', 'publish_at' => '2020-01-01T10:00']);
+$own->api('set_schedule', ['kind' => 'item', 'id' => 'sc2', 'publish_at' => '2999-01-01T10:00']);
+$own->api('set_schedule', ['kind' => 'item', 'id' => 'sc3', 'unpublish_at' => '2020-06-01T09:00']);
+check('a schedule is saved as "YYYY-MM-DD HH:MM"', !empty($due['json']['success']) && ($due['json']['publish_at'] ?? '') === '2020-01-01 10:00');
+// any admin request makes the due changes (here, a list of items)
+$own->req('GET', '/canvascore-admin/api.php?action=get_items&collection=col_sched');
+$g1 = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=sc1');
+check('the due item goes live on the next admin request, and its schedule is cleared', ($g1['json']['status'] ?? '') === 'published' && ($g1['json']['publish_at'] ?? 'x') === '', json_encode([$g1['json']['status'] ?? null, $g1['json']['publish_at'] ?? null]));
+$g2 = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=sc2');
+check('an item scheduled for later stays as it is', ($g2['json']['status'] ?? '') === 'draft' && ($g2['json']['publish_at'] ?? '') === '2999-01-01 10:00');
+$g3 = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=sc3');
+check('an item whose unpublish time has come goes back to draft', ($g3['json']['status'] ?? '') === 'draft' && ($g3['json']['unpublish_at'] ?? 'x') === '');
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('the site is published again after the change: the due item has its page, the ended one none', is_file($web . '/sched/due/index.html') && !is_file($web . '/sched/ending/index.html'));
+// cron.php does the same on a server with no admin: here a page whose publish time has come
+$own->api('save_item', ['id' => 'sc4', 'collection_id' => 'col_sched', 'title' => 'Cron item', 'slug' => 'cron', 'status' => 'draft', 'blocks' => []]);
+$own->api('set_schedule', ['kind' => 'item', 'id' => 'sc4', 'publish_at' => '2020-02-02T10:00']);
+$out = [];
+exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($admin . '/cron.php') . ' 2>&1', $out, $code);
+$g4 = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=sc4');
+check('cron.php makes the due changes from the command line, and refuses to run from the web', $code === 0 && ($g4['json']['status'] ?? '') === 'published' && is_file($web . '/sched/cron/index.html') && implode(' ', $out) !== '', implode(' | ', $out));
+$webrun = $anon->req('GET', '/canvascore-admin/cron.php');
+check('cron.php is not served to the web', $webrun['code'] === 404 || $webrun['code'] === 403 || strpos((string)$webrun['body'], 'changes') === false);
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

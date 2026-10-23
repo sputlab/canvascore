@@ -11,6 +11,11 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Scheduled publishing**: a page or a collection item can go live at a date and time (**Publish at**) and come down
+  at one (**Unpublish at**), set in its settings (Page Settings › Scheduled publishing). The change is made by the server
+  at that time: on the next admin request, or by `cron.php` from the command line on a server with no admin in use
+  (for example `*/5 * * * * php /path/to/site/canvascore-admin/cron.php`). The site is published again after a change.
+  A page with unpublished edits waiting, or an address another live page uses, is left alone and reported.
 - **Listing and archive pages** of each collection, built from one paginated layout: the listing (`/<collection>/`,
   `/<collection>/page/2/`…), its sorts (oldest first, A–Z), its years and months (`/<collection>/2026/`,
   `/<collection>/2026/10/`), a filter archive for each choice of its choice fields (`/<collection>/filter/tier/gold/`),
@@ -18,6 +23,7 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - **Collections › Listing & archives** (admins): the items per page (3 to 50) and which archives are published.
   An address that an item already uses is never written over; the archive is skipped with a publish warning.
 - Database schema 13: `collections.archive_json` (added on update).
+- Database schema 14: `pages.publish_at`, `pages.unpublish_at`, `collection_items.publish_at`, `collection_items.unpublish_at` (added on update).
 
 ### Categories and tags per collection (Collections › Categories & tags, admins define them): a collection has
   taxonomies (for example Category, which takes one term, and Tags, which takes several). Each taxonomy has terms with
