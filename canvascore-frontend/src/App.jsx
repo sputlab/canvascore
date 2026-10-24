@@ -20,6 +20,9 @@ import DraftRestorePrompt from './components/DraftRestorePrompt';
 import AdminLayout from './components/AdminLayout';
 import Backup from './components/Backup';
 import Updates from './components/Updates';
+import BlockPackages from './components/BlockPackages';
+import ImportWordPress from './components/ImportWordPress';
+import { loadBlockPackages } from './editor/blockPackages';
 import { Toaster } from './ui/toast';
 import { DialogHost } from './ui/dialogHost';
 import { useBrandingHead } from './ui/branding';
@@ -40,6 +43,8 @@ export default function App() {
   }, [checkAuth, fetchBranding]);
   // The version is for signed-in users only
   useEffect(() => { if (isAuthenticated && !mustChangePw) fetchVersion(); }, [isAuthenticated, mustChangePw, fetchVersion]);
+  // The blocks of the installed block packages join the core ones once the user is signed in
+  useEffect(() => { if (isAuthenticated && !mustChangePw) loadBlockPackages(); }, [isAuthenticated, mustChangePw]);
 
   // The session manager runs while authenticated (even with the login overlay shown).
   useEffect(() => {
@@ -62,6 +67,8 @@ export default function App() {
   else if (currentView === 'collections') view = <Collections />;
   else if (currentView === 'backup' && userRole === 'admin') view = <Backup />;
   else if (currentView === 'updates' && userRole === 'admin') view = <Updates />;
+  else if (currentView === 'packages' && userRole === 'admin') view = <BlockPackages />;
+  else if (currentView === 'wpimport' && userRole === 'admin') view = <ImportWordPress />;
   // Every section except the full-screen page editor lives in the admin shell (sidebar navigation)
   if (currentView !== 'editor') view = <AdminLayout wide={currentView === 'manager'}>{view}</AdminLayout>;
 

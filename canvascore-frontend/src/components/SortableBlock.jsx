@@ -50,7 +50,8 @@ const TEXT_FIELDS = {
 };
 
 function canonicalHtml(block, viewport) {
-  return forViewport(renderBlock(block).replace(/\{\{BASE_URL\}\}/g, '#'), viewport);
+  // a package's images live in the site folder canvascore-blocks/, next to the admin folder
+  return forViewport(renderBlock(block).replace(/\{\{BASE_URL\}\}canvascore-blocks\//g, '../canvascore-blocks/').replace(/\{\{BASE_URL\}\}/g, '#'), viewport);
 }
 
 export default function SortableBlock({ block: rawBlock, isMasterPreview = false }) {

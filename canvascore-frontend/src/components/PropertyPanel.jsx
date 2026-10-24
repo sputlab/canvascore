@@ -7,7 +7,7 @@ import { blockOnDevice, deviceStylePatch } from '../editor/deviceStyles';
 import { notify } from '../ui/notify';
 import { blockInfo, CONTAINER_TYPES } from '../editor/blockCatalog';
 import { findLiveBlock } from './panel/helpers';
-import { CONTENT_PANELS } from './panel/blocks';
+import { contentPanelFor, renderContentPanel } from './panel/blocks';
 import StyleTab from './panel/StyleTab';
 import AdvancedTab from './panel/AdvancedTab';
 import PageSettings from './panel/PageSettings';
@@ -164,8 +164,8 @@ export default function PropertyPanel() {
   }
 
   // Layout blocks have no Content tab; the tab in use falls back to Style for them
-  const ContentPanel = CONTENT_PANELS[selectedBlock.type];
-  const tabs = TABS.filter(([id]) => id !== 'content' || !!CONTENT_PANELS[selectedBlock.type]); // blocks without a content panel (Section, Container) open on Style
+  const hasContentPanel = !!contentPanelFor(selectedBlock.type);
+  const tabs = TABS.filter(([id]) => id !== 'content' || hasContentPanel); // blocks without a content panel (Section, Container) open on Style
   const tab = tabs.some(([id]) => id === activeTab) ? activeTab : tabs[0][0];
   const c = selectedBlock.content || {};
   // The panel's fields show the block's values on the previewed device
@@ -206,8 +206,8 @@ export default function PropertyPanel() {
       </div>
 
       <div style={{ padding: 12 }} role="tabpanel">
-        {tab === 'content' && (ContentPanel
-          ? <ContentPanel ctx={ctx} />
+        {tab === 'content' && (hasContentPanel
+          ? renderContentPanel(selectedBlock.type, ctx)
           : (
             <div className="ui-hint" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: 8 }}>
               <MousePointerClick size={15} aria-hidden="true" style={{ flexShrink: 0 }} />

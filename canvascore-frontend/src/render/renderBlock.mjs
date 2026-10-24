@@ -294,7 +294,13 @@ function renderBlockBody(block, opts = {}) {
 
   // A block with a shared definition (canvascore-admin/blocks/) is rendered from it, here and on the site
   const def = blockDef(t);
-  if (def) { const h = renderDefBlock(def, block, { innerId, fields: !!opts.fields }); return h === null ? '' : customCss + h; }
+  if (def) {
+    // a block of a package can never break the page: a faulty one is left out
+    let h;
+    if (def._pkg) { try { h = renderDefBlock(def, block, { innerId, fields: !!opts.fields }); } catch { return `<!-- Block error: ${String(t).replace(/[^A-Za-z0-9_]/g, '')} -->\n`; } }
+    else h = renderDefBlock(def, block, { innerId, fields: !!opts.fields });
+    return h === null ? '' : customCss + h;
+  }
 
   switch (t) {
     case 'SECTION': {

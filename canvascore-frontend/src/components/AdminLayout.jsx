@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
   FileText, LayoutTemplate, Library, Image as ImageIcon, ListTree, Palette, Inbox, Users, LogOut, Globe,
-  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink, CircleArrowUp,
+  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink, CircleArrowUp, Package, DownloadCloud,
 } from 'lucide-react';
 import { Button } from '../ui/kit';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -28,6 +28,8 @@ const NAV = [
     { view: 'users', label: 'Accounts', icon: Users },
     { view: 'backup', label: 'Backup', icon: DatabaseBackup },
     { view: 'updates', label: 'Updates', icon: CircleArrowUp },
+    { view: 'packages', label: 'Block packages', icon: Package },
+    { view: 'wpimport', label: 'Import from WordPress', icon: DownloadCloud },
   ] },
 ];
 

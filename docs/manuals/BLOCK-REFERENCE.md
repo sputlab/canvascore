@@ -14,6 +14,8 @@ When you pick an image from the media library and the block's alt text field is 
 
 Most blocks are described in one definition file that both the editor and the published site read, so what you see on the canvas is what the site gets. A value that does not fit its setting (a text where a number is expected, an address with a scheme the block does not allow) is replaced by the setting's default on the page, so a wrong value never breaks the site.
 
+Blocks from an installed **block package** (Administration › Block packages) appear in the Add tab under **Block packages**. They are described by their author (the package's README) and behave like the blocks below: the same Content, Style and Advanced tabs, and the same rule that a value that does not fit its setting is replaced by the default.
+
 This manual covers each block's Content tab. For the editor in general, and for the Style and Advanced tabs, see the [User Guide](USER-GUIDE.md).
 
 ---

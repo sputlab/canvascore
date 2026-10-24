@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { normalizePalette } from '../editor/palette';
 import { flushDrafts, setDraftUser } from '../session/drafts';
 import { CONTAINER_TYPES } from '../editor/blockCatalog';
+import { blockDef } from '../render/blockDef.mjs';
 import { notify } from '../ui/notify';
 import { confirmDialog, promptDialog } from '../ui/dialog';
 let paletteRequest = null;   // one settings request for all the colour fields
@@ -174,6 +175,7 @@ export const useStore = create((set, get) => ({
   installed: true,           // false until install.php has run (the sign-in screen then points to it)
   appVersion: (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''),
   appBuild: (typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 0),
+  packagesVersion: 0,           // bumped when the block packages are (re)registered: what shows blocks re-renders
   serverVersion: null,
   palette: null,              // the global colours (Global Options), loaded once by the colour fields: [{id, name, value}]
   typography: null,           // the text styles (Global Options › Text styles), as normalizeTypography() returns them
@@ -487,7 +489,9 @@ export const useStore = create((set, get) => ({
 
   addBlock: (type, parentId = null) => {
     const defs = (typeof __BLOCK_DEFS__ !== 'undefined') ? __BLOCK_DEFS__ : { _baseStyles: {}, types: {} };
-    const def = defs.types[type] || {};
+    // a block of an installed package starts with the defaults its package gives (blockPackages.js registers them)
+    const pkgDef = defs.types[type] ? null : blockDef(type);
+    const def = defs.types[type] || (pkgDef && pkgDef._defaults) || {};
     const styles = { ...(defs._baseStyles || {}), ...(def.styles || {}) };
     // deep clone of content so blocks don't share references
     const content = def.content ? JSON.parse(JSON.stringify(def.content)) : {};

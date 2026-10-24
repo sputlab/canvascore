@@ -12,6 +12,10 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 
 - **Block editor**: more than 50 blocks (text, images, galleries, layout, heroes, forms, pricing, FAQs, maps, and more),
   drag and drop, with a canvas that shows the published page as it will look.
+- **Block packages**: add blocks made by other people from a ZIP (definition, panel, style sheet, images, tests). A package
+  holds no code that runs, is checked in full before it is installed, and is sandboxed like the core blocks.
+- **WordPress importer**: bring pages, posts, categories, tags and pictures over from a WordPress export file, as drafts
+  you can check first.
 - **Styles**: per-device styles (desktop, tablet and phone), global colours, text styles, button presets and a form
   field style, and copy and paste of a block's style.
 - **Collections** (blogs, news, portfolios, catalogues): custom fields of nine types, one design per collection with
@@ -45,6 +49,8 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 │   ├── update.php         One-click updates: signed release, backup, swap, rollback
 │   ├── update-keys.php    Public keys the releases are signed with
 │   ├── blockdef.php       Engine of the shared block definitions (PHP twin of src/render/blockDef.mjs)
+│   ├── blockpkg.php       Block packages: install checks, registry, scoped CSS
+│   ├── wpimport.php       WordPress importer (export reader, HTML to blocks, image download)
 │   ├── blocks/            One definition per block (settings, template, panel), read by PHP and the editor
 │   ├── submit_form.php    Public endpoint for form submissions
 │   ├── install.php        Setup wizard with setup key (delete after use)
@@ -64,7 +70,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 ## Requirements
 
 - Node.js ≥ 20 (developed with 24) and npm
-- PHP ≥ 8 with `pdo_sqlite` and `dom` (`zip` for backups; `sodium`, `zip` and `curl` for one-click updates); the PHP CLI
+- PHP ≥ 8 with `pdo_sqlite` and `dom` (`zip` for backups and block packages; `sodium`, `zip` and `curl` for one-click updates; `xml` for the WordPress importer and `curl` for its picture download); the PHP CLI
   is also needed for the tests (`test:security` also needs `curl` and `sodium`)
 
 ## Development

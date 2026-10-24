@@ -123,6 +123,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         // text styles (Global Options › Text styles) and button and field styles (Buttons & fields), as variables
         $template = str_replace('{{TYPE_CSS}}', cc_type_css($typo) . cc_kit_css(cc_kit($settings), ':root'), $template);
         $template = str_replace('{{EFFECTS_CSS}}', file_exists($effects_file) ? file_get_contents($effects_file) : '', $template);
+        $template = str_replace('{{PACKAGE_CSS}}', function_exists('cc_pkg_css') ? cc_pkg_css() : '', $template);   // the style sheets of the block packages, each confined to its own blocks
 
         // Only published/modified pages (the live version is always the parent row).
         $stmt = $pdo->query("SELECT * FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified')");

@@ -4,6 +4,7 @@ import { normalizePalette, paletteVars } from '../editor/palette';
 import { normalizeTypography, typeCanvasCss, typeFontsUsed } from '../render/typography.mjs';
 import { normalizeKit, kitCss } from '../render/kit.mjs';
 import SortableBlock from './SortableBlock';
+import { packageCss } from '../editor/blockPackages';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
@@ -100,6 +101,7 @@ export default function Canvas() {
     <div style={{ padding: viewport !== 'desktop' ? '40px 0' : '0', minHeight: '100%', display: 'flex', justifyContent: 'center', flexDirection: 'column' }} onClick={() => setSelectedBlockId(null)}>
       {banner && <div role="status" style={{ maxWidth: 1100, width: '100%', alignSelf: 'center', boxSizing: 'border-box', padding: '10px 14px', margin: '12px 0 0', background: '#0c4a6e', color: '#e0f2fe', borderRadius: 10, fontSize: 13, lineHeight: 1.45 }}>{banner}</div>}
       <style>{EFFECTS_CSS}</style>
+      <style data-cc-packages>{packageCss().replace(/\{\{BASE_URL\}\}canvascore-blocks\//g, '../canvascore-blocks/')}</style>
       {/* the text styles of the device being edited (Global Options › Text styles) */}
       <style>{typeCanvasCss(typography, viewport) + kitCss(kit || {}, '.cc-canvas')}</style>
       <div className="cc-canvas" style={wrapperStyle} onClick={(e) => {

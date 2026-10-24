@@ -67,7 +67,8 @@
 //     the block's behaviour script, named by "script"), _lb and _rb ({ and }: a literal { can't stand right before a
 //     tag, so CSS like .x{{{#a}}…{{/a}}} is written .x{{{_lb}}}{{#a}}…{{/a}}{{{_rb}}}; the parser refuses the former),
 //     _base (the {{BASE_URL}} placeholder that publishing replaces with the site's address), _editing (true on the
-//     editor's canvas while in-place editing is on: a template can wrap a field for it).
+//     editor's canvas while in-place editing is on: a template can wrap a field for it), _assets (the address of a block
+//     package's images; empty for a core block).
 //
 // The engine knows no block: a new block needs a definition file, its line in BLOCK_DEFS below, and nothing else.
 import { ccImgUrl, ccCssUrl, ccColorValue, buildInlineStyle, resolveBlockUrl, ccFmtNum, ccExtUrlValue, ccInitialsValue, ccMediaSrcValue, ccMediaMimeValue, ccEncValue } from './renderBlock.mjs';
@@ -125,6 +126,15 @@ export const BLOCK_DEFS = [ACCORDION, AUDIO_PLAYER, AUTHOR_BIO, BEFORE_AFTER, BE
 // <defs:end>
 const BY_TYPE = new Map(BLOCK_DEFS.map((d) => [d.type, d]));
 export const blockDef = (type) => BY_TYPE.get(type) || null;
+
+// Blocks of installed block packages (canvascore-admin/blockpkg.php) are registered at run time, from what the server
+// sends: the same definition format, with `_pkg` (the package id) and `_defaults` (what a new block starts with). A core
+// block is never replaced. Registering the packages again replaces the previous ones.
+export function registerPackageDefs(defs) {
+  for (const [t, d] of BY_TYPE) if (d._pkg) BY_TYPE.delete(t);
+  for (const d of defs || []) if (d && typeof d.type === 'string' && d._pkg && !BY_TYPE.has(d.type)) BY_TYPE.set(d.type, d);
+}
+export const packageDefs = () => [...BY_TYPE.values()].filter((d) => d._pkg);
 
 // ---------------------------------------------------------------------------------------------- values
 class Trusted { constructor(h) { this.h = h; } }
@@ -436,6 +446,8 @@ export function renderDefBlock(def, block, host) {
     if (s.inline) field[key] = trusted(host.fields ? ` data-cc-field="${key}" contenteditable="true" data-cc-placeholder="${esc(s.placeholder || '')}"` : '');
   }
   if (def.renderIf && !truthy(values[def.renderIf])) return null;   // nothing at all, not even the custom CSS
-  const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted(''), _lb: trusted('{'), _rb: trusted('}'), _base: trusted('{{BASE_URL}}'), _editing: !!host.fields };
+  const pkg = def._pkg || '';   // a block of a package: its class scopes the package's CSS, its images have an address
+  const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : '') + (pkg !== '' ? ' cc-pkg-' + pkg : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted(''), _lb: trusted('{'), _rb: trusted('}'), _base: trusted('{{BASE_URL}}'), _editing: !!host.fields,
+    _assets: trusted(pkg !== '' ? '{{BASE_URL}}canvascore-blocks/' + pkg + '/' : '') };
   return renderNodes(parsed(def), [builtIn, values]);
 }

@@ -24,7 +24,8 @@ web root (the folder the domain serves). Replace both with your own values.
 9. [Forms and email](#9-forms-and-email)
 10. [Security](#10-security)
 11. [Troubleshooting](#11-troubleshooting)
-12. [License](#12-license)
+12. [Block packages and the WordPress importer](#12-block-packages-and-the-wordpress-importer) (installing packages, importing a WordPress site)
+13. [License](#13-license)
 
 ---
 
@@ -81,6 +82,10 @@ root, and published pages are written to the folder above it (the web root itsel
 │   ├── updates/                  One-click updates (section 5.1): copies of the database and of the
 │   │                             code taken before each update (the newest 3 of each), the update
 │   │                             history and the last check; deny-all .htaccess
+│   ├── packages/                 Installed block packages (section 12.1), one folder each, and the
+│   │                             list of them (index.json)
+│   ├── imports/                  WordPress imports in progress or just finished (section 12.2); a job
+│   │                             folder is removed when you discard it and after 7 days; deny-all .htaccess
 │   └── .htaccess                 "Deny all" (safety net)
 └── public/                       Web root
     ├── index.html                Home page               ┐
@@ -95,12 +100,15 @@ root, and published pages are written to the folder above it (the web root itsel
     │                             "CanvasCore redirects" block
     ├── uploads/                  Media library (images), with its own .htaccess
     │   └── _cc/                  Optimized WebP copies (480/960/1600 px), made on upload
+    ├── canvascore-blocks/        Images of the installed block packages (one folder per package),
+    │                             with the same .htaccess as uploads/; a reserved address
     └── canvascore-admin/         The editor (PHP backend + built React app)
         ├── index.html, assets/   Editor build (from canvascore-frontend/dist/)
         ├── menu-preview.html     Menu Builder live preview (sandboxed)
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
         ├── blocks/               Definitions of the blocks (settings and template, one file per block)
         ├── update.php, update-keys.php   One-click updates and the public keys of the releases
+        ├── blockpkg.php, wpimport.php    Block packages and the WordPress importer (libraries)
         ├── .htaccess             Security headers and access rules (Apache, written automatically)
         └── version.json          Version of the installed release
 ```
@@ -229,6 +237,7 @@ CanvasCore writes its own `.htaccess` files; they work only if Apache reads them
 | `canvascore-data/.htaccess` and `canvascore-admin/data/.htaccess` | on every request, if missing or changed | Deny all access |
 | `backups/.htaccess` in the data directory | whenever the Backup page uses the folder | Deny all access |
 | `canvascore-admin/.htaccess` | on every request to `api.php` or `install.php`, if missing or changed (only while it is CanvasCore's own file) | Security headers for everything in the admin folder, including the editor page (`X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Cross-Origin-Opener-Policy: same-origin`; needs `mod_headers`), except `menu-preview.html`, which the editor frames itself (`SAMEORIGIN` / `frame-ancestors 'self'`). Denies the library files `config.php`, `compiler.php`, `migrations.php`, `media.php`, `backup.php` and any `.json`, `.md`, `.sqlite`, `.log`, `.zip`, `.part`, `.lock` file |
+| `canvascore-blocks/.htaccess` | when a block package with images is installed | The same rules as `uploads/.htaccess` (no scripts; the images are the package's own) |
 | `uploads/.htaccess` | on every image upload (and restore), if missing or changed | Deny `.php`, `.phtml`, `.phar`, `.php3`–`.php7`, `.phps`, `.pht`, `.cgi`, `.pl`, `.py`, `.sh`; `php_flag engine off` under mod_php; `X-Content-Type-Options: nosniff`; for `.svg`, the header `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'none'; sandbox` (needs `mod_headers`) |
 | `.htaccess` in the web root | on every publish | Created with `ErrorDocument 404 /404.html` (with the site's base path) if it does not exist. On every publish CanvasCore rewrites **only** the block between `# BEGIN CanvasCore redirects` and `# END CanvasCore redirects` (one `Redirect 301 /old/ /new/` line per redirect, inside `<IfModule mod_alias.c>`); the block is removed when there are no redirects |
 
@@ -242,7 +251,7 @@ instead (section 7.4).
 `# CanvasCore: written automatically…`). If you replace it with a file of your own (for example to
 add HTTP basic auth), CanvasCore leaves it alone: copy CanvasCore's rules into it, or the security
 headers and deny rules are lost. Whatever the server, the library files (`config.php`, `compiler.php`,
-`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `update.php`, `update-keys.php`) answer 404
+`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `update.php`, `update-keys.php`) answer 404
 when opened directly.
 
 ### 4.2 Nginx
@@ -277,7 +286,7 @@ server {
 
         location ^~ /canvascore-admin/data/ { deny all; return 404; }
         location ~ /\. { deny all; return 404; }
-        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|update|update-keys|update-source)\.php$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|update|update-keys|update-source)\.php$ { deny all; return 404; }
         location ~ ^/canvascore-admin/([^/]+/)?[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
 
         # The Menu Builder's live preview is framed by the editor itself
@@ -296,6 +305,16 @@ server {
 
     # Uploads: never execute scripts, no MIME sniffing, and sandbox SVGs
     location ^~ /uploads/ {
+        add_header X-Content-Type-Options "nosniff" always;
+        location ~* \.(php|phtml|phar|php[3-7]|phps|pht|cgi|pl|py|sh)$ { deny all; return 404; }
+        location ~* \.svg$ {
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'none'; sandbox" always;
+        }
+    }
+
+    # Images of block packages (0.22.0): the same rules as uploads
+    location ^~ /canvascore-blocks/ {
         add_header X-Content-Type-Options "nosniff" always;
         location ~* \.(php|phtml|phar|php[3-7]|phps|pht|cgi|pl|py|sh)$ { deny all; return 404; }
         location ~* \.svg$ {
@@ -328,7 +347,9 @@ so a script uploaded under another name can never reach PHP-FPM; that is also wh
 block has its own `\.php$` location. Inside a block, regular-expression locations are tried in
 order, so keep the deny rules above it. `add_header` inside a `location` replaces the headers of
 the outer block, which is why the preview's block repeats all four. If the site lives in a
-sub-folder (`example.com/site/`), prefix the paths: `/site/canvascore-admin/`, `/site/uploads/`.
+sub-folder (`example.com/site/`), prefix the paths: `/site/canvascore-admin/`, `/site/uploads/`,
+`/site/canvascore-blocks/`. **Updating from before 0.22.0:** add the `canvascore-blocks` block and
+`blockpkg|wpimport` to the library-file rule shown above (one-click updates do not change your server configuration).
 
 **Redirects on Nginx.** Nginx ignores the `.htaccess` block of 301s. The old addresses still
 work, because publishing also writes a small redirect page at each old address (it sends the
@@ -450,7 +471,8 @@ so always restore both together. The Backup page's safety copy restores the cont
    before an update, copy the data directory, `uploads/` and the site files (section 8.3).
 2. On your computer, build the new release: `cd canvascore-frontend && npm install && npm run build`.
 3. Upload the new `canvascore-admin/` files, overwriting the old ones (`*.php`, `*.json`,
-   `master.html`, `effects.css`, `version.json`, and the `blocks/` folder, new in 0.21.0).
+   `master.html`, `effects.css`, `version.json`, and the `blocks/` folder, new in 0.21.0; `blockpkg.php` and
+   `wpimport.php` are new in 0.22.0).
    - **Do not** delete or overwrite `canvascore-admin/data/` if your data lives there.
    - **Do not** touch `uploads/` or `canvascore-data/`.
 4. Copy the contents of the new `dist/` into `canvascore-admin/`. You can delete the old
@@ -474,7 +496,10 @@ so always restore both together. The Backup page's safety copy restores the cont
    | 13 | Listing and archive pages: `collections.archive_json` (page size and archives) |
    | 14 | Scheduled publishing: `publish_at` and `unpublish_at` on pages and items (section 7.9) |
 
-   0.21.0 adds no migration: the schema stays at 14.
+   0.22.0 adds no migration: the schema stays at 14. New in 0.22.0: the `packages/` and `imports/`
+   folders of the data directory and the `canvascore-blocks/` folder of the site are created when first
+   used (section 12), and the Nginx rules of section 4.2 gain `canvascore-blocks` (Apache writes its
+   own rules).
 
    Back up the data directory before updating: a migration cannot be undone by installing the
    older release again. (The one-click update does it for you, section 5.1.)
@@ -861,7 +886,9 @@ A backup contains:
 - a `manifest.json` with the CanvasCore version, database and content schema, date, site name
   and counts.
 
-It never contains user accounts or passwords, sessions, login/rate-limit state, `forms.json` or
+It never contains **installed block packages** (section 12.1; pages that use their blocks are saved, the
+blocks come back when you install the packages again, so keep the `.zip` files), the WordPress import
+folders, user accounts or passwords, sessions, login/rate-limit state, `forms.json` or
 `published_files.json` (both rebuilt by publishing), files in `uploads/` that are not images,
 or the published HTML (regenerated by publishing).
 
@@ -1058,6 +1085,11 @@ What CanvasCore does for you:
   `canvascore-admin/`, no `..`, no links, nothing for the data folder). Versions that are not newer
   are never installed. A backup is taken first and a failure after the swap is rolled back
   (section 5.1). The private key that signs releases is never part of the code or of a site.
+- **Block packages and the importer**: both are admin-only, and the demo refuses them. A package is checked in full before it is installed
+  (no scripts, no code fields, scoped CSS, safe images, hostile-value test, size and name limits) and again whenever it is loaded; the images
+  are served from `canvascore-blocks/` with the same no-script rules as `uploads/`. The importer reads the export without XML entities or network
+  access, cleans everything it imports, and downloads pictures only from public addresses (private, loopback and link-local networks are refused,
+  the connection is pinned to the checked address, redirects are re-checked, 25 MB and a real-image check each) (section 12).
 - **Sessions**: cookie `CCSESSID`, `HttpOnly`, `SameSite=Lax`, and `Secure` over HTTPS; no
   session is created for visitors who aren't signing in; the session ID is regenerated at login;
   session files are stored in the data directory (`sessions/`), isolated from other apps.
@@ -1322,6 +1354,23 @@ file the new version could not be read from, or a new version that did not start
 the previous version and its database are back; nothing else is needed. The history on the Updates
 page keeps the message. If the same update fails again, update by hand (section 5.2).
 
+**A package is refused with a list of problems**
+Each line names the file and the rule it broke (for example a script in a template, a `url()` outside the package, or a test that failed).
+Fix them and install again: the check `php canvascore-frontend/scripts/block-package.php check <folder>` finds the same problems on your computer.
+
+**A package's images do not show**
+Check that `canvascore-blocks/<package>/` exists in the site and that the server answers for it (on Nginx the `canvascore-blocks` block of section 4.2
+must not send everything to a 404 handler). Reinstalling the package copies the images again.
+
+**The WordPress import says the file could not be read or is too big**
+The message names the reason: not an export file, broken XML, more than 200 MB or 50,000 entries, or larger than `upload_max_filesize` / `post_max_size`
+(raise them, or export Posts and Pages separately). A file that declares an XML document type is refused on purpose.
+
+**Imported pictures are still on the old site**
+The old site could not be reached from your server (a firewall, a login in front of it, a private network), the file was larger than 25 MB, it was not a
+real image, or the server has no PHP `curl` extension. The report lists the pictures. Make the old site's `wp-content/uploads` public for the import, or add
+the pictures to the Media library by hand.
+
 **Version mismatch warning in the sidebar**
 `Editor vX / server vY: reload the page after updating`: reload the tab (hard refresh). If it
 persists, upload the new `dist/` contents into `canvascore-admin/` and make sure no cache or CDN
@@ -1341,7 +1390,80 @@ with `CanvasCore install:`, `CanvasCore database error:`, `CanvasCore publish:`,
 
 ---
 
-## 12. License
+## 12. Block packages and the WordPress importer
+
+Both are in the **Administration** group of the sidebar and are for admins only. Both are turned off in the demo.
+
+### 12.1 Block packages (Administration › Block packages)
+
+A block package is a `.zip` that adds blocks to the editor: block definitions (settings, template, panel), an optional style
+sheet and images. Its blocks appear in the Add tab under **Block packages**. A package **holds no code that runs**: no scripts,
+no code fields, no custom panel widgets, and the CSS is limited to the package's own blocks. It is still content on your public
+site, so install packages only from people you trust.
+
+- **Install**: choose the `.zip` (5 MB at most). Before anything is installed the server checks the layout and file names,
+  the manifest, every definition, the HTML written in the templates, the style sheet, every image (SVG files through the SVG
+  check) and the package's own tests, and types hostile values into every setting to see that no script, event attribute or
+  active address can come out. The page lists **every problem** found and installs nothing if there is one. A package needs
+  the PHP `zip` extension.
+- **Versions**: a newer version of an installed package replaces it; the same or an older version is refused. A package may
+  require a minimum CanvasCore version.
+- **On / Off**: switch a package off to take its blocks out of the Add tab and off the published pages; the blocks stay saved
+  in the pages and come back when it is switched on.
+- **Remove**: the page tells you how many saved pages, items or templates use its blocks. They stay saved but disappear from
+  the pages until the package is installed again.
+- **Where it lives**: `packages/<id>/` in the data folder (the files and the list `index.json`); the images are copied to
+  `canvascore-blocks/<id>/` in the site, a reserved address that no page can take. Apache gets its rules automatically; on
+  **Nginx add the `canvascore-blocks` block of section 4.2**. Without it package images still work, but nothing stops a script
+  placed there, so add it.
+- **A faulty block** (one that fails after an update, say) is left out of a published page instead of stopping the publish.
+  A package can never replace a core block.
+- **Backups do not contain packages** (section 8.1). Keep the `.zip` files; after restoring a backup on a new server install them
+  again, and the blocks reappear in the pages that use them.
+
+Writing a package is described in the Developer Guide (section 8.3, "As a package"), with an example in
+`docs/examples/block-packages/pull-quote`.
+
+### 12.2 Import from WordPress (Administration › Import from WordPress)
+
+Brings **pages, posts, categories, tags and pictures** over from a WordPress site. In WordPress choose **Tools › Export › All
+content** and download the `.xml` file, then:
+
+1. **Choose the file.** It is only read and summarised: how many pages, posts, pictures, categories and tags it holds, and what
+   will be left out (password-protected entries, the trash, menus and other WordPress entries). Nothing in your site changes yet.
+   The file may be up to 200 MB and 50,000 entries; it must also fit the server's `upload_max_filesize` and `post_max_size` (the
+   page shows the limit). For a bigger site export **Posts** and **Pages** separately and import them one after the other.
+2. **Choose what to bring over**: pages, posts (into a new collection, or an existing one), pictures. By default everything is imported
+   as **drafts**, so you can look at it before it goes online. You can import published entries as published instead, and forward
+   their old addresses to the new ones.
+3. **Watch it run.** The server works in slices of a few seconds and the page asks for the next slice until it is done; you can
+   leave the page open. A step can be repeated safely. A report lists what was added and what deserves a look.
+
+What happens to the content:
+
+- Posts become items with their date, excerpt, featured picture (cover image), SEO title and description (Yoast SEO and Rank Math) and their
+  categories and tags, which are added to the collection's **Categories** and **Tags** (category nesting is flattened). Pages become pages
+  (page hierarchy is flattened and menus are not imported: build the menu in Menu). Every address is made unique: a page that would take an
+  address you already use gets a number (`about-us-2`). Nothing is deleted or replaced.
+- Text, headings, lists, quotes and tables become Text blocks, pictures Image blocks (a `[gallery]` becomes its pictures), YouTube and Vimeo
+  links and embeds Video blocks, `<pre>` code blocks Code Snippet blocks, rules Dividers. Scripts, forms, other embeds and shortcodes are left
+  out and reported. Everything is cleaned like a normal save. Links between imported pages and posts are rewritten to the new addresses.
+- **Pictures** are downloaded from the old site into the Media library (25 MB each, images only; audio and video are not imported). The
+  server only downloads from public web addresses: never from a private or internal network, with no user name in the address, only on the
+  usual ports, and a redirect is checked again at every step. Every file passes the checks of a normal upload (a real image, a safe SVG). If
+  the server has no PHP `curl` extension, or a picture cannot be reached, it stays on the old site (a link to the old address) and the
+  report says so. Untick *Pictures* to keep all of them on the old site.
+- **Old addresses** are forwarded (Global Options › Redirects, section 7.4) only for entries imported as published, and never from an address
+  one of your live pages already uses.
+- Published entries go online at your next **Publish Site**; drafts stay drafts.
+
+The import keeps a working folder in `imports/` of the data folder (the converted content, deleted when you discard the import or finish and click
+*Import another file*, and after 7 days). The file you upload is read as a stream with XML entities and network access off, and a file that
+declares a document type is refused. The importer needs the PHP `xml` and `dom` extensions.
+
+---
+
+## 13. License
 
 CanvasCore is free software, licensed under the GNU Affero General Public License, version 3 or
 later (AGPL-3.0-or-later); the full text is in [LICENSE](../../LICENSE). In practice, for site

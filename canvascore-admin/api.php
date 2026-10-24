@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
-if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install']) && !$is_admin) {
+if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard']) && !$is_admin) {
     echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
@@ -1265,6 +1265,86 @@ if ($action === 'update_install' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $res = cc_update_install($pdo, $want, (string)($account['username'] ?? ''));
     $res['history'] = cc_update_history();
     echo json_encode($res); exit;
+}
+
+// ---------------------------------------------------------------------------
+// Block packages (blockpkg.php): third-party blocks installed from a ZIP. Everyone signed in reads the enabled ones
+// (the editor registers them); only admins list, install, switch and remove them.
+// ---------------------------------------------------------------------------
+if ($action === 'pkg_list') {
+    echo json_encode(['success' => true] + cc_pkg_editor_payload()); exit;
+}
+if ($action === 'pkg_info') {
+    echo json_encode(['success' => true, 'zip' => class_exists('ZipArchive'), 'demo' => cc_demo_on(), 'max_mb' => CC_PKG_MAX_ZIP / 1048576, 'packages' => cc_pkg_info($pdo)]); exit;
+}
+if ($action === 'pkg_install' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    session_write_close();
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Packages are turned off in the demo.', 'errors' => []]); exit; }
+    $f = $_FILES['package'] ?? null;
+    if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) {
+        echo json_encode(['success' => false, 'message' => 'The package did not arrive' . (in_array($f['error'] ?? null, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) ? ' (larger than this server accepts)' : '') . '. Try again.', 'errors' => []]); exit;
+    }
+    $res = cc_pkg_install($f['tmp_name'], (string)($account['username'] ?? ''));
+    cc_block_defs(true);
+    echo json_encode($res); exit;
+}
+if ($action === 'pkg_set_enabled' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Packages are turned off in the demo.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    if (!cc_pkg_set_enabled((string)($d['id'] ?? ''), !empty($d['enabled']))) { echo json_encode(['success' => false, 'message' => 'Package not found.']); exit; }
+    cc_block_defs(true);
+    echo json_encode(['success' => true, 'packages' => cc_pkg_info($pdo)]); exit;
+}
+if ($action === 'pkg_remove' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Packages are turned off in the demo.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    if (!cc_pkg_remove((string)($d['id'] ?? ''))) { echo json_encode(['success' => false, 'message' => 'Package not found.']); exit; }
+    cc_block_defs(true);
+    echo json_encode(['success' => true, 'message' => 'Package removed.', 'packages' => cc_pkg_info($pdo)]); exit;
+}
+
+// ---------------------------------------------------------------------------
+// WordPress importer (wpimport.php): an export file in, pages / posts / categories / tags / images out. Admins only. The editor
+// uploads the file (wp_analyze), shows what it holds, starts the import with the chosen options (wp_start) and repeats wp_step
+// until it is finished; a step is safe to repeat.
+// ---------------------------------------------------------------------------
+if (strpos($action, 'wp_') === 0) {
+    require_once __DIR__ . '/wpimport.php';
+    $wpDemo = function () { if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'The importer is turned off in the demo.']); exit; } };
+    if ($action === 'wp_info') {
+        echo json_encode(['success' => true, 'demo' => cc_demo_on(), 'curl' => function_exists('curl_init'), 'xml' => class_exists('XMLReader') && class_exists('DOMDocument'),
+            'max_mb' => (int)round(CC_WP_MAX_FILE / 1048576), 'upload_mb' => cc_php_bytes(ini_get('upload_max_filesize')) / 1048576,
+            'collections' => $pdo->query("SELECT id, name FROM collections ORDER BY name")->fetchAll(PDO::FETCH_ASSOC)]); exit;
+    }
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') { echo json_encode(['success' => false, 'message' => 'Not found.']); exit; }
+    $wpDemo();
+    session_write_close();
+    @set_time_limit(120);
+    if ($action === 'wp_analyze') {
+        $f = $_FILES['file'] ?? null;
+        if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) {
+            $big = in_array($f['error'] ?? null, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) || (empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0);
+            echo json_encode(['success' => false, 'message' => $big ? 'The file is larger than this server accepts (upload_max_filesize ' . ini_get('upload_max_filesize') . '). Export your content in parts, or ask your host to raise the limit.' : 'The file did not arrive. Try again.']); exit;
+        }
+        $res = cc_wp_analyze($f['tmp_name']);
+        echo json_encode(isset($res['error']) ? ['success' => false, 'message' => $res['error']] : ['success' => true] + $res); exit;
+    }
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    $job = cc_wp_job_id($d['job'] ?? '');
+    if ($job === '' || !is_dir(cc_wp_job_path($job))) { echo json_encode(['success' => false, 'message' => 'This import is no longer there. Upload the file again.']); exit; }
+    if ($action === 'wp_discard') { cc_wp_discard($job); echo json_encode(['success' => true]); exit; }
+    $lock = fopen(cc_wp_job_path($job, 'lock'), 'c');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) { echo json_encode(['success' => false, 'busy' => true, 'message' => 'The import is still working. Wait a moment.']); exit; }
+    if ($action === 'wp_start') {
+        $res = cc_wp_start($pdo, $job, $d['options'] ?? []);
+        if (isset($res['error'])) { echo json_encode(['success' => false, 'message' => $res['error']]); exit; }
+        $res = cc_wp_step($pdo, $job, 10);
+        echo json_encode(isset($res['error']) ? ['success' => false, 'message' => $res['error']] : ['success' => true] + $res); exit;
+    }
+    if ($action === 'wp_step') {
+        $res = cc_wp_step($pdo, $job, 15);
+        echo json_encode(isset($res['error']) ? ['success' => false, 'message' => $res['error']] : ['success' => true] + $res); exit;
+    }
 }
 
 if ($action === 'export_site') {

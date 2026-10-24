@@ -89,7 +89,7 @@ $GLOBALS['CC_HT_ADMIN'] =
     "  Header always set Referrer-Policy \"same-origin\"\n" .
     "  Header always set Cross-Origin-Opener-Policy \"same-origin\"\n" .
     "</IfModule>\n" .
-    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|update|update-keys|update-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
+    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|update|update-keys|update-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
     "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
     "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n" .
     "</FilesMatch>\n" .
@@ -692,7 +692,7 @@ function cc_archive_clean($raw) {
 // Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
 // (a page published there would replace or redirect the admin, the images or the data).
 function cc_reserved_slugs() {
-    return array_values(array_unique([cc_safe_slug(basename(__DIR__)), 'canvascore-admin', 'uploads', 'canvascore-data', 'data']));
+    return array_values(array_unique([cc_safe_slug(basename(__DIR__)), 'canvascore-admin', 'uploads', 'canvascore-data', 'canvascore-blocks', 'data']));
 }
 function cc_slug_reserved($slug) { return in_array(cc_safe_slug($slug), cc_reserved_slugs(), true); }
 
@@ -1226,7 +1226,8 @@ function cc_sanitize_html($html) {
 
     $out = '';
     foreach ($root->childNodes as $c) $out .= $dom->saveHTML($c);
-    return $out;
+    // libxml percent-encodes the braces of an address ("{{BASE_URL}}about/", what the link dialog inserts): restore the placeholder
+    return str_replace('%7B%7BBASE_URL%7D%7D', '{{BASE_URL}}', $out);
 }
 
 
@@ -1240,7 +1241,7 @@ function cc_sanitize_blocks(&$blocks) {
     if (isset($blocks['type']) && is_string($blocks['type'])) { $one = [&$blocks]; cc_sanitize_blocks($one); return; }
     foreach ($blocks as &$b) {
         if (!is_array($b)) continue;
-        $fields = CC_RICH_FIELDS[$b['type'] ?? ''] ?? [];
+        $fields = CC_RICH_FIELDS[$b['type'] ?? ''] ?? (function_exists('cc_pkg_rich_fields') ? cc_pkg_rich_fields((string)($b['type'] ?? '')) : []);
         if ($fields && isset($b['content']) && is_array($b['content'])) {
             // A rich-text value is text: anything else (an array, an object) is dropped, never stored unchecked
             $rich = function ($v) { return is_string($v) ? cc_sanitize_html($v) : (is_int($v) || is_float($v) ? (string)$v : ''); };

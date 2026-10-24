@@ -1,7 +1,7 @@
 // Content-tab panel of each block type (the Style and Advanced tabs are shared by all blocks). A block with a shared
 // definition that has a "panel" gets a panel generated from its settings (SchemaPanel); the others have their own here.
 import React from 'react';
-import { BLOCK_DEFS } from '../../../render/blockDef.mjs';
+import { BLOCK_DEFS, blockDef } from '../../../render/blockDef.mjs';
 import SchemaPanel from '../SchemaPanel';
 import CollectionListPanel from './CollectionListPanel';
 import CssGridPanel from './CssGridPanel';
@@ -35,3 +35,22 @@ for (const def of BLOCK_DEFS) {
   Generated.displayName = `SchemaPanel(${def.type})`;
   CONTENT_PANELS[def.type] = Generated;
 }
+
+// The Content panel of any block type: its own, or one generated from its definition (also for the blocks of installed
+// block packages, which are registered after the editor starts). null for a block with no Content tab.
+const GENERATED = new Map();
+export function contentPanelFor(type) {
+  if (CONTENT_PANELS[type]) return CONTENT_PANELS[type];
+  const def = blockDef(type);
+  if (!def || !Array.isArray(def.panel) || !def.panel.length) return null;
+  if (!GENERATED.has(def)) {
+    const Generated = ({ ctx }) => React.createElement(SchemaPanel, { def, ctx });
+    Generated.displayName = `SchemaPanel(${type})`;
+    GENERATED.set(def, Generated);
+  }
+  return GENERATED.get(def);
+}
+export const renderContentPanel = (type, ctx) => {
+  const Panel = contentPanelFor(type);
+  return Panel ? React.createElement(Panel, { ctx }) : null;
+};

@@ -16,3 +16,5 @@ The version and the block defaults are read from `../canvascore-admin/version.js
 
 `scripts/release-keygen.php` and `scripts/release-package.php` make the signing key and the signed update package of a
 release (see the Developer Guide, section 13).
+
+`scripts/block-package.php` checks and packs a block package (`check <folder|zip>`, `pack <folder>`; see the Developer Guide, section 8.3).

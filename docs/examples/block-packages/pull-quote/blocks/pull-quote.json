@@ -1,0 +1,174 @@
+{
+  "name": "pull-quote",
+  "catalog": {
+    "label": "Pull Quote",
+    "icon": "Quote",
+    "keywords": "quote testimonial citation blockquote",
+    "color": "#f59e0b"
+  },
+  "defaults": {
+    "content": {
+      "quote": "Design is not just what it looks like and feels like. Design is how it works.",
+      "author": "Steve Jobs",
+      "role": "Apple co-founder",
+      "accent": "#f59e0b",
+      "align": "left",
+      "avatar": "",
+      "linkText": "",
+      "link": ""
+    },
+    "styles": {
+      "padding": "24px 0",
+      "width": "100%"
+    }
+  },
+  "settings": {
+    "quote": {
+      "type": "text",
+      "default": "",
+      "label": "Quote",
+      "control": "textarea",
+      "rows": 3
+    },
+    "author": {
+      "type": "text",
+      "default": "",
+      "label": "Author"
+    },
+    "role": {
+      "type": "text",
+      "default": "",
+      "label": "Role or source (empty = none)"
+    },
+    "avatar": {
+      "type": "image",
+      "default": "",
+      "label": "Avatar (optional)"
+    },
+    "linkText": {
+      "type": "text",
+      "default": "",
+      "label": "Source link text (empty = no link)"
+    },
+    "link": {
+      "type": "text",
+      "default": "",
+      "transform": "blockUrl",
+      "label": "Source link",
+      "placeholder": "/page or https://…"
+    },
+    "accent": {
+      "type": "color",
+      "default": "#f59e0b",
+      "label": "Accent color"
+    },
+    "align": {
+      "type": "enum",
+      "default": "left",
+      "label": "Alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Centered"
+        }
+      ]
+    }
+  },
+  "template": [
+    "<figure id=\"{{_id}}\" class=\"pq{{_classes}}\" style=\"{{{_style}}}--pq-accent:{{accent}}; text-align:{{align}};\">",
+    "<blockquote class=\"pq-text\">{{quote}}</blockquote>",
+    "<figcaption class=\"pq-by\">{{^avatar=}}<img class=\"pq-avatar\" src=\"{{avatar}}\" alt=\"\" loading=\"lazy\">{{/avatar=}}<span class=\"pq-name\">{{author}}</span>{{^role=}}<span class=\"pq-role\">{{role}}</span>{{/role=}}</figcaption>",
+    "{{^linkText=}}<a class=\"pq-link\" href=\"{{link}}\">{{linkText}}</a>{{/linkText=}}",
+    "</figure>\n"
+  ],
+  "panel": [
+    {
+      "title": "Pull Quote",
+      "icon": "Quote",
+      "open": true,
+      "keys": [
+        "quote",
+        "author",
+        "role",
+        "avatar"
+      ]
+    },
+    {
+      "title": "Pull Quote Link",
+      "icon": "Link2",
+      "keys": [
+        "linkText",
+        "link"
+      ]
+    },
+    {
+      "title": "Pull Quote Style",
+      "icon": "Sliders",
+      "keys": [
+        "accent",
+        "align"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "name": "shows the quote and its author",
+      "content": {
+        "quote": "Hello",
+        "author": "Ann"
+      },
+      "contains": [
+        "<blockquote class=\"pq-text\">Hello</blockquote>",
+        "pq-name\">Ann<"
+      ]
+    },
+    {
+      "name": "escapes text",
+      "content": {
+        "quote": "<b>x</b>"
+      },
+      "contains": [
+        "&lt;b&gt;x&lt;/b&gt;"
+      ],
+      "notContains": [
+        "<b>x</b>"
+      ]
+    },
+    {
+      "name": "has no link without a text",
+      "content": {
+        "quote": "Q",
+        "link": "https://example.com"
+      },
+      "notContains": [
+        "pq-link"
+      ]
+    },
+    {
+      "name": "links internal pages",
+      "content": {
+        "quote": "Q",
+        "linkText": "More",
+        "link": "about/index.html"
+      },
+      "contains": [
+        "href=\"{{BASE_URL}}about/\""
+      ]
+    },
+    {
+      "name": "never makes an active address",
+      "content": {
+        "quote": "Q",
+        "linkText": "More",
+        "link": "javascript:alert(1)"
+      },
+      "notContains": [
+        "href=\"javascript:"
+      ]
+    }
+  ]
+}

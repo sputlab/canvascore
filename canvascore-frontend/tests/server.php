@@ -530,5 +530,227 @@ check('a behaviour script comes from the definition, only when it is needed', st
 check('content of the wrong type never stops a publish (it gets the defaults)', strpos(render_block(['id' => 'w', 'type' => 'TIMELINE', 'content' => ['items' => [['title' => ['x'], 'date' => ['y']]], 'layout' => ['z']]]), 'cc-timeline-left') !== false);
 check('a definition with a broken template is refused', (function () { try { cc_tpl_parse('{{#a}}x'); return false; } catch (Throwable $e) { return true; } })());
 
+echo "\nBLOCK PACKAGES\n";
+$GLOBALS['CC_PKG_APP_VERSION'] = '0.22.0';
+$pt = sys_get_temp_dir() . '/cc_pkg_' . getmypid(); @mkdir($pt . '/site', 0755, true); @mkdir($pt . '/data', 0755, true);
+$GLOBALS['CC_PACKAGES_DIR'] = $pt . '/data/packages'; $GLOBALS['CC_SITE_ROOT'] = $pt . '/site';
+$example = realpath(__DIR__ . '/../../docs/examples/block-packages/pull-quote');
+$pkgZip = function (array $files, $name = 'p.zip') use ($pt) {
+    $f = "$pt/$name"; @unlink($f);
+    $z = new ZipArchive(); $z->open($f, ZipArchive::CREATE);
+    foreach ($files as $n => $c) $z->addFromString($n, $c);
+    $z->close(); return $f;
+};
+$exFiles = function () use ($example) {
+    $out = [];
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($example, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) $out[str_replace('\\', '/', substr($f->getPathname(), strlen($example) + 1))] = file_get_contents($f->getPathname());
+    return $out;
+};
+// the example with one change: $edit gets the files and the decoded block, and returns them changed
+$mutant = function ($edit) use ($exFiles, $pkgZip) {
+    $files = $exFiles(); $b = json_decode($files['blocks/pull-quote.json'], true);
+    $m = json_decode($files['package.json'], true);
+    [$files, $b, $m] = $edit($files, $b, $m);
+    $files['blocks/pull-quote.json'] = json_encode($b); $files['package.json'] = json_encode($m);
+    return $pkgZip($files, 'mut.zip');
+};
+$refused = function ($zip, $needle) { $r = cc_pkg_install($zip); $all = implode(' | ', $r['errors']) . ' ' . $r['message']; return empty($r['success']) && stripos($all, $needle) !== false ? true : $all; };
+
+$ex = cc_pkg_read($example);
+check('the example package reads without problems', !$ex['errors'] && $ex['id'] === 'pull-quote' && count($ex['blocks']) === 1 && count($ex['assets']) === 1, json_encode($ex['errors']));
+check('its own tests and the hostile-value fuzz pass', cc_pkg_run_checks($ex['id'], $ex['blocks']) === [], json_encode(cc_pkg_run_checks($ex['id'], $ex['blocks'])));
+check('a block type is made from the package and block names, and cannot clash with a core type', cc_pkg_type('pull-quote', 'pull-quote') === 'X_PULL_QUOTE__PULL_QUOTE' && !isset(cc_block_defs()['X_PULL_QUOTE__PULL_QUOTE']));
+$zip1 = $pkgZip($exFiles(), 'ex.zip');
+$r = cc_pkg_install($zip1, 'ann');
+check('a valid package installs: files in the data folder, images in the site, registered and enabled', !empty($r['success']) && is_file($pt . '/data/packages/pull-quote/blocks/pull-quote.json') && is_file($pt . '/site/canvascore-blocks/pull-quote/quote.svg')
+    && (cc_pkg_registry()['pull-quote']['enabled'] ?? false) === true && (cc_pkg_registry()['pull-quote']['installed_by'] ?? '') === 'ann', json_encode($r));
+check('…the folder of images is closed to scripts (its own .htaccess)', strpos((string)@file_get_contents($pt . '/site/canvascore-blocks/.htaccess'), 'php') !== false);
+cc_block_defs(true);
+$T = 'X_PULL_QUOTE__PULL_QUOTE';
+$h = render_block(['id' => 'q1', 'type' => $T, 'content' => ['quote' => 'Hi <b>x</b>', 'author' => 'Ann', 'link' => 'javascript:alert(1)', 'linkText' => 'src'], 'styles' => ['padding' => '5px']]);
+check('its block is rendered by the site, escaped, with the package class for its CSS', strpos($h, 'class="pq cc-pkg-pull-quote"') !== false && strpos($h, 'Hi &lt;b&gt;x&lt;/b&gt;') !== false && strpos($h, 'href="javascript:') === false && strpos($h, 'padding: 5px;') !== false, $h);
+check('…and a type nobody installed is still "Unknown element"', strpos(render_block(['id' => 'z', 'type' => 'X_NOPE__NOPE', 'content' => []]), 'Unknown element') !== false);
+$css = cc_pkg_css();
+check('the package CSS is nested under its own class, with its image address, and nothing else is added', strpos($css, '.cc-pkg-pull-quote{') === 0 && strpos($css, '{{BASE_URL}}canvascore-blocks/pull-quote/quote.svg') !== false && strpos($css, '__ASSETS__') === false && substr_count($css, '.cc-pkg-') === 1 && substr($css, -2) === "}\n" && strpos($css, '{&.pq {') !== false, json_encode($css));
+$pl = cc_pkg_editor_payload();
+check('the editor gets the enabled packages: definition, catalog, defaults and the style sheet', count($pl['packages']) === 1 && $pl['packages'][0]['blocks'][0]['type'] === $T && $pl['packages'][0]['blocks'][0]['catalog']['label'] === 'Pull Quote'
+    && ($pl['packages'][0]['blocks'][0]['defaults']['content']['author'] ?? '') === 'Steve Jobs' && $pl['css'] === $css && !isset($pl['packages'][0]['blocks'][0]['definition']['_ast']));
+$r = cc_pkg_install($zip1);
+check('the same version again is refused (upload a newer one, or remove it first)', empty($r['success']) && stripos(implode(' ', $r['errors']), 'already installed') !== false);
+$up = $mutant(function ($f, $b, $m) { $m['version'] = '1.1.0'; $b['catalog']['label'] = 'Pull Quote 2'; return [$f, $b, $m]; });
+$r = cc_pkg_install($up);
+check('a newer version replaces it (and keeps it enabled)', !empty($r['success']) && (cc_pkg_registry()['pull-quote']['version'] ?? '') === '1.1.0' && (cc_pkg_load('pull-quote')['blocks'][0]['catalog']['label'] ?? '') === 'Pull Quote 2');
+cc_pkg_set_enabled('pull-quote', false); cc_block_defs(true);
+check('switched off, its blocks are not published and its CSS is left out', strpos(render_block(['id' => 'q1', 'type' => $T, 'content' => []]), 'Unknown element') !== false && cc_pkg_css() === '' && cc_pkg_editor_payload()['packages'] === []);
+cc_pkg_set_enabled('pull-quote', true); cc_block_defs(true);
+$mem = new PDO('sqlite::memory:'); $mem->exec("CREATE TABLE pages (id TEXT, content_json TEXT)");
+$mem->prepare("INSERT INTO pages VALUES ('p1', ?)")->execute([json_encode([['id' => 'a', 'type' => $T, 'content' => []]])]);
+check('the admin sees where a package is used', cc_pkg_info($mem)[0]['used'] === 1 && cc_pkg_info($mem)[0]['blocks'][0]['type'] === $T);
+cc_pkg_remove('pull-quote'); cc_block_defs(true);
+check('removing it deletes its files and its images and takes its blocks off', !is_dir($pt . '/data/packages/pull-quote') && !is_dir($pt . '/site/canvascore-blocks/pull-quote') && cc_pkg_registry() === [] && strpos(render_block(['id' => 'q1', 'type' => $T, 'content' => []]), 'Unknown element') !== false);
+
+echo "\nBLOCK PACKAGES: WHAT IS REFUSED\n";
+$tpl = function ($mut) use ($mutant) { return $mutant(function ($f, $b, $m) use ($mut) { $b['template'] = $mut($b['template']); return [$f, $b, $m]; }); };
+check('a <script> in a template', $refused($tpl(function ($t) { $t[] = '<script>alert(1)</script>'; return $t; }), '<script>') === true);
+check('a <style> in a template (CSS goes in style.css)', $refused($tpl(function ($t) { $t[] = '<style>body{display:none}</style>'; return $t; }), '<style>') === true);
+check('an event attribute written in a template', $refused($tpl(function ($t) { $t[0] = str_replace('<figure ', '<figure onclick="x()" ', $t[0]); return $t; }), 'event attribute') === true);
+check('an active address written in a template', $refused($tpl(function ($t) { $t[] = '<a href="java&#115;cript:alert(1)">x</a>'; return $t; }), 'active address') === true);
+check('an <iframe> or a <form>', $refused($tpl(function ($t) { $t[] = '<iframe src="https://x.example"></iframe>'; return $t; }), '<iframe>') === true && $refused($tpl(function ($t) { $t[] = '<form action="https://x.example"></form>'; return $t; }), '<form>') === true);
+check('a template without {{_id}} and {{_classes}}', $refused($tpl(function ($t) { return ['<div>{{quote}}</div>']; }), '{{_id}}') === true);
+check('a template that does not parse', $refused($tpl(function ($t) { $t[] = '{{#open}}'; return $t; }), 'not closed') === true);
+check('a script for the block', $refused($mutant(function ($f, $b, $m) { $b['script'] = 'progress'; return [$f, $b, $m]; }), 'no script') === true);
+$set = function ($key, $v) use ($mutant) { return $mutant(function ($f, $b, $m) use ($key, $v) { $b['settings'][$key] = $v; return [$f, $b, $m]; }); };
+check('a code setting (raw HTML)', $refused($set('x', ['type' => 'code']), 'code setting') === true);
+check('a panel widget', $refused($set('x', ['type' => 'text', 'control' => 'widget:hotspotPins']), 'widgets are not available') === true);
+check('an unknown transform', $refused($set('x', ['type' => 'text', 'transform' => 'evil']), 'unknown transform') === true);
+check('a regular expression that could take forever', $refused($set('x', ['type' => 'text', 'pattern' => '^(a+)+$']), 'safe regular expression') === true);
+check('a repeat text that carries a script', $refused($set('x', ['type' => 'number', 'transform' => 'repeat', 'text' => '<script>x</script>']), '<script>') === true);
+check('option data that carries an event attribute', $refused($set('x', ['type' => 'enum', 'default' => 'a', 'options' => [['value' => 'a', 'data' => ['h' => '<i onclick=x()>']]]]), 'event attribute') === true);
+$leak = $mutant(function ($f, $b, $m) { $b['settings']['page'] = ['type' => 'text', 'default' => '', 'label' => 'Page']; $b['template'][] = '<a href="{{page}}">go</a>'; unset($b['tests']); return [$f, $b, $m]; });
+check('a text that ends up in an address unchecked (found by the hostile-value fuzz)', $refused($leak, 'runs code') === true);
+$leak2 = $mutant(function ($f, $b, $m) { $b['settings']['u'] = ['type' => 'text', 'default' => '']; $b['template'][] = '<div {{u}}>x</div>'; unset($b['tests']); return [$f, $b, $m]; });
+check('a text placed inside a tag (an event attribute can be added)', $refused($leak2, 'onmouseover attribute') === true, (string)$refused($leak2, 'onmouseover attribute'));
+check('a failing test of the author', $refused($mutant(function ($f, $b, $m) { $b['tests'][] = ['name' => 'nope', 'content' => [], 'contains' => ['never there']]; return [$f, $b, $m]; }), 'never there') === true);
+$css2 = function ($css) use ($exFiles, $pkgZip) { $f = $exFiles(); $f['style.css'] = $css; return $pkgZip($f, 'css.zip'); };
+check('CSS with @import', $refused($css2('@import url(https://evil.example/x.css);'), '@import') === true || $refused($css2('@import url(https://evil.example/x.css);'), 'import') === true);
+check('CSS with an external image', $refused($css2('.a{background:url(https://evil.example/t.png)}'), 'url()') === true);
+check('CSS with an escape or an at-rule that cannot be nested', $refused($css2('.a{color:\\72 ed}'), 'backslash') === true && $refused($css2('@keyframes x{from{opacity:0}to{opacity:1}}'), '@keyframes') === true);
+check('CSS that would reach outside the block: & in the middle, & + sibling, a leading +, :has(&)', $refused($css2('html:has(&){display:none}'), '& anywhere but at its start') === true && $refused($css2('body &{color:red}'), '& anywhere') === true
+    && $refused($css2('& + .x{color:red}'), 'siblings') === true && $refused($css2('&.a ~ .b{color:red}'), 'siblings') === true && $refused($css2('+ .x{color:red}'), 'neighbours') === true && $refused($css2('.a:not(&){color:red}'), '& anywhere') === true
+    && $refused($css2('@media (min-width:1px){html:has(&){display:none}}'), '& anywhere') === true);
+check('CSS rules that stay inside are accepted: &, &.class, & .child, & > .child, child + sibling, pseudo-elements, @media', ($r = cc_pkg_css_problem("&{color:red} &.pq:hover::before{content:'x'} & .a{color:red} & > .b{color:red} .c + .d{color:red} .e:has(~ .f){color:red} @media (max-width:600px){&.pq{color:red} .g{color:red}}")) === null, (string)$r);
+check('CSS with active content', $refused($css2('.a{width:expression(alert(1))}'), 'active') === true);
+$files = function ($extra) use ($exFiles, $pkgZip) { return $pkgZip($extra($exFiles()), 'f.zip'); };
+check('a file that is not part of a package', $refused($files(function ($f) { $f['evil.php'] = '<?php echo 1;'; return $f; }), 'evil.php') === true);
+check('a path that climbs out of the package', $refused($files(function ($f) { $f['assets/../../evil.png'] = 'x'; return $f; }), 'not allowed') === true);
+check('an image that is not an image', $refused($files(function ($f) { $f['assets/fake.png'] = '<?php echo 1;'; return $f; }), 'valid image') === true);
+check('an SVG with a script', $refused($files(function ($f) { $f['assets/bad.svg'] = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'; return $f; }), 'safe SVG') === true);
+check('a package that is not a ZIP', ($r = cc_pkg_install(__FILE__)) && empty($r['success']) && stripos(implode(' ', $r['errors']), 'ZIP') !== false);
+check('a package for a newer CanvasCore', $refused($mutant(function ($f, $b, $m) { $m['minVersion'] = '9.0.0'; return [$f, $b, $m]; }), 'needs CanvasCore 9.0.0') === true);
+check('a bad package id', $refused($mutant(function ($f, $b, $m) { $m['id'] = '../x'; return [$f, $b, $m]; }), 'id must') === true);
+check('nothing was installed by all those refusals', cc_pkg_registry() === [] && !is_dir($pt . '/data/packages/pull-quote') && !is_dir($pt . '/site/canvascore-blocks/pull-quote'));
+
+echo "\nBLOCK PACKAGES: RICH TEXT IS CLEANED WHEN SAVED\n";
+$rich = $pkgZip([
+    'package.json' => json_encode(['id' => 'rt', 'name' => 'Rich', 'version' => '1.0.0']),
+    'blocks/note.json' => json_encode(['name' => 'note', 'catalog' => ['label' => 'Note'],
+        'settings' => ['body' => ['type' => 'richtext', 'default' => ''], 'rows' => ['type' => 'list', 'item' => ['cell' => ['type' => 'richtext', 'default' => '']]], 'tips' => ['type' => 'list', 'of' => ['type' => 'richtext']]],
+        'template' => ['<div id="{{_id}}" class="n{{_classes}}">{{{body}}}{{#rows}}<p>{{{cell}}}</p>{{/rows}}{{#tips}}<i>{{{.}}}</i>{{/tips}}</div>']]),
+], 'rich.zip');
+check('a package with rich text installs', !empty(cc_pkg_install($rich)['success'])); cc_block_defs(true);
+$blocks = [['id' => 'n', 'type' => 'X_RT__NOTE', 'content' => ['body' => '<p onclick="x()">Hi<script>bad()</script></p>', 'rows' => [['cell' => '<img src=x onerror=a()>'], 'junk'], 'tips' => ['<b onmouseover=x>t</b>', ['arr']]]]];
+cc_sanitize_blocks($blocks);
+$j = json_encode($blocks);
+check('its rich text settings are cleaned when saved (a field, a list field, a list of texts)', strpos($j, 'onclick') === false && strpos($j, 'script') === false && strpos($j, 'onerror') === false && strpos($j, 'onmouseover') === false && strpos($j, 'Hi') !== false, $j);
+check('…and when rendered', ($o = render_block(['id' => 'n', 'type' => 'X_RT__NOTE', 'content' => ['body' => '<p onclick="x()">Hi</p><script>bad()</script>']])) && strpos($o, 'onclick') === false && strpos($o, '<script') === false && strpos($o, 'Hi') !== false);
+unset($GLOBALS['CC_PACKAGES_DIR'], $GLOBALS['CC_SITE_ROOT'], $GLOBALS['CC_PKG_APP_VERSION']); cc_block_defs(true);
+cc_backup_rrmdir($pt);
+
+echo "\nWORDPRESS IMPORT\n";
+require_once __DIR__ . '/../../canvascore-admin/wpimport.php';
+require_once __DIR__ . '/../../canvascore-admin/migrations.php';
+$wd = sys_get_temp_dir() . '/cc_wp_' . getmypid();
+@mkdir($wd, 0755, true);
+$GLOBALS['CC_WP_DIR'] = $wd . '/imports'; $GLOBALS['CC_WP_UPLOADS'] = $wd . '/uploads'; $GLOBALS['CC_WP_BASE_DIR'] = '';
+$wpdb = new PDO('sqlite:' . $wd . '/t.sqlite'); $wpdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+cc_migrate($wpdb);
+$wpdb->exec("INSERT INTO pages (id, title, slug, clean_slug, status, is_draft_copy) VALUES ('p0', 'Old about', 'about-us', 'about-us', 'published', 0)");
+$fx = __DIR__ . '/fixtures/wordpress.xml';
+$wpFetched = [];
+$GLOBALS['CC_WP_FETCH'] = function ($u) use (&$wpFetched) {
+    $wpFetched[] = $u; $t = tempnam(sys_get_temp_dir(), 'x');
+    file_put_contents($t, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
+    return [$t, ''];
+};
+$an = cc_wp_analyze($fx);
+check('the export is read: pages, posts, images, categories and tags are counted', isset($an['job']) && $an['summary']['counts'] === ['pages' => 1, 'posts' => 2, 'media' => 2, 'categories' => 2, 'tags' => 1], json_encode($an));
+check('…password-protected and trashed entries and menu items are named as skipped, not imported', isset($an['summary']['skipped']['password-protected posts']) && isset($an['summary']['skipped']['post in the trash']) && isset($an['summary']['skipped']['nav_menu_item entries']));
+check('…the site address is read', $an['summary']['site']['url'] === 'https://old.example.com' && $an['summary']['site']['title'] === 'Old Shop');
+$job = $an['job'];
+check('nothing is changed in the site by reading the file', (int)$wpdb->query("SELECT COUNT(*) FROM collection_items")->fetchColumn() === 0 && (int)$wpdb->query("SELECT COUNT(*) FROM pages")->fetchColumn() === 1);
+check('a step before the start is refused', isset(cc_wp_step($wpdb, $job)['error']));
+$st = cc_wp_start($wpdb, $job, ['drafts' => false, 'collection_name' => 'Journal']);
+check('the import starts', !empty($st['ok']), json_encode($st));
+check('…and cannot be started twice', isset(cc_wp_start($wpdb, $job, [])['error']));
+$n = 0; do { $pg = cc_wp_step($wpdb, $job, 5); $n++; } while (empty($pg['finished']) && $n < 50);
+check('the import finishes', !empty($pg['finished']) && $pg['created']['pages'] === 1 && $pg['created']['posts'] === 2 && $pg['created']['media'] === 2 && $pg['failed'] === ['media' => 0, 'pages' => 0, 'posts' => 0], json_encode($pg));
+$col = $wpdb->query("SELECT * FROM collections")->fetch(PDO::FETCH_ASSOC);
+check('the posts go to a new collection with the chosen name', $col && $col['name'] === 'Journal' && $col['slug'] === 'journal');
+$tx = $wpdb->query("SELECT slug FROM collection_taxonomies ORDER BY position")->fetchAll(PDO::FETCH_COLUMN);
+$tm = $wpdb->query("SELECT slug FROM collection_terms ORDER BY slug")->fetchAll(PDO::FETCH_COLUMN);
+check('Categories and Tags are made with their terms', $tx === ['categories', 'tags'] && $tm === ['diy', 'guides', 'news'], json_encode([$tx, $tm]));
+$pageRows = $wpdb->query("SELECT * FROM pages WHERE id != 'p0'")->fetchAll(PDO::FETCH_ASSOC);
+check('the page is added; its address does not clash with the page that was already there', count($pageRows) === 1 && $pageRows[0]['clean_slug'] === 'about-us-2' && $pageRows[0]['status'] === 'published');
+check('…its SEO title and description come from Yoast', $pageRows[0]['seo_title'] === 'About - Old Shop' && $pageRows[0]['seo_description'] === 'Who we are');
+$pb = json_decode($pageRows[0]['content_json'], true);
+$types = array_column($pb, 'type');
+check('page content: text, picture, text, divider, video and code become blocks', $types === ['TEXT', 'IMAGE', 'TEXT', 'DIVIDER', 'VIDEO', 'CODE_SNIPPET'], json_encode($types));
+check('…the picture was copied into the uploads folder and the page points to it', preg_match('#^/uploads/\d+_team\.jpg$#', $pb[1]['content']['src']) && is_file($wd . '/uploads/' . basename($pb[1]['content']['src'])) && $pb[1]['content']['alt'] === 'The team');
+check('…the caption stays as text, headings are kept', strpos($pb[2]['content']['text'], '<em>Our team</em>') !== false && strpos($pb[2]['content']['text'], '<h2>Our story</h2>') !== false);
+check('…the video is a YouTube link and the code block knows its language', $pb[4]['content']['url'] === 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' && $pb[5]['content']['language'] === 'php' && $pb[5]['content']['code'] === 'echo "hi";');
+$all = json_encode($pb);
+check('…scripts, other iframes and shortcodes are left out and reported', strpos($all, 'alert(1)') === false && strpos($all, 'evil.example') === false && strpos($all, 'contact-form') === false && in_array('shortcode [contact-form-7] was left out', $pg['warnings'], true));
+check('…a link to another imported post points to its new address, other links stay', strpos($pb[0]['content']['text'], 'href="{{BASE_URL}}journal/hello-world/"') !== false && strpos($pb[0]['content']['text'], 'href="https://elsewhere.org/x"') !== false, $pb[0]['content']['text']);
+$items = $wpdb->query("SELECT * FROM collection_items ORDER BY date")->fetchAll(PDO::FETCH_ASSOC);
+check('the posts are items, in their order, with the date, the excerpt without tags and the status', count($items) === 2 && $items[0]['slug'] === 'hello-world' && $items[0]['date'] === '2023-05-04' && $items[0]['excerpt'] === 'A short intro' && $items[0]['status'] === 'published' && $items[1]['status'] === 'draft' && $items[1]['slug'] === 'draft-thoughts');
+check('the featured picture is the cover image', preg_match('#^/uploads/\d+_team\.jpg$#', $items[0]['cover_image']) === 1);
+$tj = json_decode($items[0]['terms_json'], true);
+check('categories and tags are set on the item (one term each, in their own taxonomy)', count($tj) === 2 && count(array_merge(...array_values($tj))) === 2);
+$ib = json_decode($items[0]['content_json'], true);
+check('a post without paragraph tags is split at blank lines; the gallery becomes pictures', array_column($ib, 'type') === ['TEXT', 'IMAGE', 'IMAGE'] && substr_count($ib[0]['content']['text'], '<p>') === 2 && strpos($ib[0]['content']['text'], 'href="{{BASE_URL}}about-us-2/"') !== false, json_encode($ib[0]));
+check('a link to the imported page uses its new address', strpos($ib[0]['content']['text'], '{{BASE_URL}}about-us-2/') !== false);
+check('the old address of a published post redirects to the new one', $wpdb->query("SELECT to_path FROM redirects WHERE from_path = '/2023/05/hello-world/'")->fetchColumn() === '/journal/hello-world/' && $pg['created']['redirects'] === 1);
+check('…but never from an address a live page already uses (the new page took another address, the old one must keep showing the page that was there)', (int)$wpdb->query("SELECT COUNT(*) FROM redirects WHERE from_path = '/about-us/'")->fetchColumn() === 0 && count(array_filter($pg['warnings'], function ($w) { return strpos($w, 'no redirect was made') === 0; })) === 1, json_encode($pg['warnings']));
+check('revisions are kept for what was imported', (int)$wpdb->query("SELECT COUNT(*) FROM page_revisions")->fetchColumn() === 3);
+check('the content files of a finished job are removed', !is_file(cc_wp_job_path($job, 'posts.jsonl')) && cc_wp_discard($job) && !is_dir(cc_wp_job_path($job)));
+
+// as drafts, into an existing collection, without downloading images
+$an2 = cc_wp_analyze($fx); $wpFetched = [];
+$st = cc_wp_start($wpdb, $an2['job'], ['drafts' => true, 'media' => false, 'pages' => false, 'collection' => $col['id']]);
+$n = 0; do { $pg2 = cc_wp_step($wpdb, $an2['job'], 5); $n++; } while (empty($pg2['finished']) && $n < 50);
+$items2 = $wpdb->query("SELECT slug, status, cover_image, content_json FROM collection_items WHERE collection_id = '" . $col['id'] . "' ORDER BY updated_at, slug")->fetchAll(PDO::FETCH_ASSOC);
+check('into an existing collection, as drafts, without images, without pages', count($items2) === 4 && $wpFetched === [] && (int)$wpdb->query("SELECT COUNT(*) FROM pages")->fetchColumn() === 2 && $pg2['created']['posts'] === 2 && $pg2['published'] === 0);
+check('…addresses that exist in the collection get a number', (int)$wpdb->query("SELECT COUNT(*) FROM collection_items WHERE slug = 'hello-world-2'")->fetchColumn() === 1);
+cc_wp_discard($an2['job']);
+
+// what is refused
+$bad = function ($xml) { $f = tempnam(sys_get_temp_dir(), 'wx'); file_put_contents($f, $xml); $r = cc_wp_analyze($f); @unlink($f); return $r; };
+check('a file with a document type (XML entity tricks) is refused', isset($bad('<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY x SYSTEM "file:///etc/passwd">]><rss><channel><item><title>&x;</title></item></channel></rss>')['error']));
+check('something that is not an export is refused', isset($bad('<html><body>' . str_repeat('x', 100) . '</body></html>')['error']) && isset($bad('{"a": 1}' . str_repeat(' ', 80))['error']));
+check('broken XML is refused with a message', isset($bad('<?xml version="1.0"?><rss><channel><title>x</title><item><title>a</wp:b></item>' . str_repeat(' ', 80))['error']));
+check('an export without content is refused', isset($bad('<?xml version="1.0"?><rss xmlns:wp="http://wordpress.org/export/1.2/"><channel><title>Empty</title><link>https://a.example</link></channel></rss>' . str_repeat(' ', 40))['error']));
+check('job ids are checked (no path tricks)', cc_wp_job_id('../../etc') === '' && cc_wp_job_id('0123456789abcdef') === '0123456789abcdef' && cc_wp_job_path('../x') === '');
+foreach (['http://127.0.0.1/a.jpg', 'http://localhost/a.jpg', 'http://10.0.0.5/a.jpg', 'http://192.168.1.1/a.jpg', 'http://169.254.169.254/latest/meta-data', 'http://[::1]/a.jpg', 'ftp://example.com/a.jpg', 'file:///etc/passwd', 'http://user:pw@8.8.8.8/a.jpg', 'http://8.8.8.8:22/a.jpg', 'gopher://8.8.8.8/x', 'javascript:alert(1)', '//8.8.8.8/a.jpg', 'http://0.0.0.0/a.jpg', 'http://100.64.0.1/a.jpg'] as $u) {
+    check("images are not downloaded from $u", cc_wp_url_check($u)[0] === false);
+}
+$GLOBALS['CC_WP_RESOLVE'] = function ($h) { return $h === 'rebind.example' ? ['127.0.0.1'] : ['93.184.216.34']; };
+check('a name that resolves to a private address is refused; a public one passes', cc_wp_url_check('https://rebind.example/a.jpg')[0] === false && cc_wp_url_check('https://cdn.example/a.jpg') === [true, '93.184.216.34']);
+unset($GLOBALS['CC_WP_RESOLVE']);
+$tmpf = tempnam(sys_get_temp_dir(), 'im');
+file_put_contents($tmpf, '<?php echo 1;');
+check('a download that is not an image is not stored (PHP renamed to .jpg)', cc_wp_store_image($tmpf, 'https://a.example/x.jpg', $wd . '/uploads', '')[0] === null);
+check('…nor a file of a type the library refuses (.php, .html)', cc_wp_store_image($tmpf, 'https://a.example/x.php', $wd . '/uploads', '')[0] === null && cc_wp_store_image($tmpf, 'https://a.example/x.html', $wd . '/uploads', '')[0] === null);
+file_put_contents($tmpf, '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+check('…nor an SVG with a script', cc_wp_store_image($tmpf, 'https://a.example/x.svg', $wd . '/uploads', '')[0] === null);
+file_put_contents($tmpf, '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1"/></svg>');
+check('…a plain SVG is fine', preg_match('#^/uploads/\d+_x\.svg$#', cc_wp_store_image($tmpf, 'https://a.example/x.svg', $wd . '/uploads', '')[0]) === 1);
+@unlink($tmpf);
+// content conversion on its own
+$cv = function ($h) { return cc_wp_blocks($h, ['media' => function ($u) { return null; }, 'link' => function ($u) { return null; }, 'warn' => function () {}]); };
+$b = $cv('<p>One</p><p><img src="https://a.example/p.jpg" alt="x"></p><ul><li>a</li></ul><blockquote>q</blockquote><table><tr><td>c</td></tr></table>');
+check('lists, quotes and tables stay in the text; a picture alone in a paragraph is an Image block', array_column($b, 'type') === ['TEXT', 'IMAGE', 'TEXT'] && strpos($b[2]['content']['text'], '<ul>') !== false && strpos($b[2]['content']['text'], '<table>') !== false);
+$b = $cv('<div class="wp-block-group"><div><p>Deep</p></div></div>');
+check('wrapper divs of layout blocks are unwrapped', count($b) === 1 && $b[0]['content']['text'] === '<p>Deep</p>');
+$b = $cv('<p onclick="x()">Hi <img src=x onerror=alert(1)></p><a href="javascript:alert(1)">bad</a>');
+cc_sanitize_blocks($b);
+check('imported content is cleaned like a normal save (event attributes, javascript: links)', strpos(json_encode($b), 'onclick') === false && strpos(json_encode($b), 'onerror') === false && strpos(json_encode($b), 'javascript:') === false, json_encode($b));
+check('empty content gives no blocks', $cv('') === [] && $cv('<p>&nbsp;</p>') === [] && $cv('<!-- wp:more --><!--more-->') === []);
+check('a YouTube address alone in a paragraph, and a Vimeo iframe, become Video blocks', ($v = $cv('<p>https://youtu.be/abcDEF12345</p><iframe src="https://player.vimeo.com/video/123456789"></iframe>')) && $v[0]['content']['url'] === 'https://www.youtube.com/watch?v=abcDEF12345' && $v[1]['content']['url'] === 'https://vimeo.com/123456789');
+check('a link in rich text to a page keeps its placeholder through the sanitizer', cc_sanitize_html('<p><a href="{{BASE_URL}}about/">x</a></p>') === '<p><a href="{{BASE_URL}}about/">x</a></p>');
+check('the image address key ignores the host and the size suffix', cc_wp_pathkey('https://old.example.com/wp-content/uploads/2023/01/team-300x200.jpg') === cc_wp_pathkey('http://cdn.other.net/wp-content/uploads/2023/01/Team.jpg') && cc_wp_pathkey('https://x/wp-content/uploads/a/b-scaled.png') === 'a/b.png');
+cc_backup_rrmdir($wd);
+unset($GLOBALS['CC_WP_DIR'], $GLOBALS['CC_WP_UPLOADS'], $GLOBALS['CC_WP_BASE_DIR'], $GLOBALS['CC_WP_FETCH']);
+
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

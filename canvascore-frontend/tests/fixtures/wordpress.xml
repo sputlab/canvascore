@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0" xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:wp="http://wordpress.org/export/1.2/">
+<channel>
+  <title>Old Shop</title>
+  <link>https://old.example.com</link>
+  <wp:base_site_url>https://old.example.com</wp:base_site_url>
+  <wp:category><wp:term_id>3</wp:term_id><wp:category_nicename>news</wp:category_nicename><wp:category_parent></wp:category_parent><wp:cat_name><![CDATA[News & Updates]]></wp:cat_name></wp:category>
+  <wp:category><wp:term_id>4</wp:term_id><wp:category_nicename>guides</wp:category_nicename><wp:category_parent>news</wp:category_parent><wp:cat_name><![CDATA[Guides]]></wp:cat_name></wp:category>
+  <wp:tag><wp:term_id>9</wp:term_id><wp:tag_slug>diy</wp:tag_slug><wp:tag_name><![CDATA[DIY]]></wp:tag_name></wp:tag>
+  <item>
+    <title>About us</title>
+    <link>https://old.example.com/about-us/</link>
+    <wp:post_id>10</wp:post_id><wp:post_date>2023-01-02 10:00:00</wp:post_date><wp:post_name>about-us</wp:post_name><wp:status>publish</wp:status><wp:post_type>page</wp:post_type><wp:post_password></wp:post_password>
+    <content:encoded><![CDATA[<!-- wp:paragraph --><p>We make <strong>things</strong>. See <a href="https://old.example.com/2023/05/hello-world/">our first post</a> or <a href="https://elsewhere.org/x">elsewhere</a>.</p><!-- /wp:paragraph -->
+<!-- wp:image --><figure class="wp-block-image"><img src="https://old.example.com/wp-content/uploads/2023/01/team-300x200.jpg" alt="The team" class="wp-image-20"/><figcaption>Our team</figcaption></figure><!-- /wp:image -->
+<h2>Our story</h2>
+<p>Since 2001.</p>
+<hr/>
+<p>https://www.youtube.com/watch?v=dQw4w9WgXcQ</p>
+<pre class="wp-block-code"><code class="language-php">echo "hi";</code></pre>
+<p>[contact-form-7 id="5"]</p>
+<script>alert(1)</script>
+<iframe src="https://evil.example/frame"></iframe>]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:postmeta><wp:meta_key>_yoast_wpseo_title</wp:meta_key><wp:meta_value><![CDATA[About - Old Shop]]></wp:meta_value></wp:postmeta>
+    <wp:postmeta><wp:meta_key>_yoast_wpseo_metadesc</wp:meta_key><wp:meta_value><![CDATA[Who we are]]></wp:meta_value></wp:postmeta>
+  </item>
+  <item>
+    <title>Hello world</title>
+    <link>https://old.example.com/2023/05/hello-world/</link>
+    <wp:post_id>11</wp:post_id><wp:post_date>2023-05-04 08:30:00</wp:post_date><wp:post_name>hello-world</wp:post_name><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><wp:post_password></wp:post_password>
+    <category domain="category" nicename="news"><![CDATA[News &amp; Updates]]></category>
+    <category domain="post_tag" nicename="diy"><![CDATA[DIY]]></category>
+    <content:encoded><![CDATA[First line.
+
+Second paragraph with a <a href="https://old.example.com/about-us/">link to about</a>.
+
+[gallery ids="20,21"]]]></content:encoded>
+    <excerpt:encoded><![CDATA[A short <b>intro</b>]]></excerpt:encoded>
+    <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value><![CDATA[20]]></wp:meta_value></wp:postmeta>
+  </item>
+  <item>
+    <title>Draft thoughts</title>
+    <link>https://old.example.com/?p=12</link>
+    <wp:post_id>12</wp:post_id><wp:post_date>2023-06-01 08:30:00</wp:post_date><wp:post_name></wp:post_name><wp:status>draft</wp:status><wp:post_type>post</wp:post_type><wp:post_password></wp:post_password>
+    <category domain="category" nicename="guides"><![CDATA[Guides]]></category>
+    <content:encoded><![CDATA[<p>Not done yet</p>]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+  </item>
+  <item>
+    <title>Secret</title><link>https://old.example.com/secret/</link>
+    <wp:post_id>13</wp:post_id><wp:post_name>secret</wp:post_name><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><wp:post_password>hunter2</wp:post_password>
+    <content:encoded><![CDATA[<p>hidden</p>]]></content:encoded><excerpt:encoded><![CDATA[]]></excerpt:encoded>
+  </item>
+  <item>
+    <title>Trashed</title><link>https://old.example.com/trashed/</link>
+    <wp:post_id>14</wp:post_id><wp:post_name>trashed</wp:post_name><wp:status>trash</wp:status><wp:post_type>post</wp:post_type><wp:post_password></wp:post_password>
+    <content:encoded><![CDATA[<p>gone</p>]]></content:encoded><excerpt:encoded><![CDATA[]]></excerpt:encoded>
+  </item>
+  <item>
+    <title>team</title><link>https://old.example.com/about-us/team/</link>
+    <wp:post_id>20</wp:post_id><wp:post_name>team</wp:post_name><wp:status>inherit</wp:status><wp:post_type>attachment</wp:post_type>
+    <wp:attachment_url>https://old.example.com/wp-content/uploads/2023/01/team.jpg</wp:attachment_url>
+    <content:encoded><![CDATA[]]></content:encoded><excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:postmeta><wp:meta_key>_wp_attachment_image_alt</wp:meta_key><wp:meta_value><![CDATA[The team]]></wp:meta_value></wp:postmeta>
+  </item>
+  <item>
+    <title>shot</title><link>https://old.example.com/shot/</link>
+    <wp:post_id>21</wp:post_id><wp:post_name>shot</wp:post_name><wp:status>inherit</wp:status><wp:post_type>attachment</wp:post_type>
+    <wp:attachment_url>https://old.example.com/wp-content/uploads/2023/05/shot.png</wp:attachment_url>
+    <content:encoded><![CDATA[]]></content:encoded><excerpt:encoded><![CDATA[]]></excerpt:encoded>
+  </item>
+  <item>
+    <title>Menu item</title><link>https://old.example.com/m/</link>
+    <wp:post_id>30</wp:post_id><wp:status>publish</wp:status><wp:post_type>nav_menu_item</wp:post_type>
+    <content:encoded><![CDATA[]]></content:encoded><excerpt:encoded><![CDATA[]]></excerpt:encoded>
+  </item>
+</channel>
+</rss>

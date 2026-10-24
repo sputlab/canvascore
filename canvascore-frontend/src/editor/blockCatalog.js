@@ -7,6 +7,8 @@ import {
   Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
   StarHalf, MessagesSquare, SquareMousePointer, ScrollText, MapPinned, TableOfContents, Share2, Code2,
   Calculator, ListChecks, Film, Headphones, Megaphone, MailPlus, Braces, Link2, Tags,
+  Package, Quote, Heart, Bell, Camera, Gift, Rocket, Sparkles, Zap, Globe, Layers, Palette, Award, Bookmark, Calendar, Clock,
+  Coffee, Flag, Lightbulb, MessageCircle, Music, Newspaper, Phone, Shield, ShoppingBag, Smile, ThumbsUp, Trophy, Video,
 } from 'lucide-react';
 
 export const CATEGORIES = [
@@ -16,6 +18,7 @@ export const CATEGORIES = [
   { id: 'interactive', label: 'Interactive', hint: 'Things visitors click or watch' },
   { id: 'data', label: 'Lists & data', hint: 'Steps, numbers, tables, people' },
   { id: 'business', label: 'Business & dynamic', hint: 'Contacts, maps, collections' },
+  { id: 'packages', label: 'Block packages', hint: 'Blocks from installed packages' },
 ];
 
 export const BLOCKS = [
@@ -84,15 +87,33 @@ export const BLOCKS = [
   { type: 'ITEM_TERMS', label: 'Categories & Tags', icon: Tags, category: 'business', color: '#34d399', keywords: 'categories tags taxonomy terms labels topics' },
 ];
 
+// The icons a block package can name in its catalog entry (anything else gets the package icon)
+export const PACKAGE_ICONS = {
+  Package, Quote, Heart, Bell, Camera, Gift, Rocket, Sparkles, Zap, Globe, Layers, Palette, Award, Bookmark, Calendar, Clock, Coffee, Flag,
+  Lightbulb, MessageCircle, Music, Newspaper, Phone, Shield, ShoppingBag, Smile, ThumbsUp, Trophy, Video, Star, Info, Mail, Search, Users, Store,
+  MapPin, Image: ImageIcon, Type, Code, Link2, Tags, Library, Table2, ListChecks, Film, Headphones, Megaphone, TrendingUp, Share2,
+};
+
+// Blocks of installed block packages, registered at run time from what the server sends (blockPackages.js); they sit in the
+// "Block packages" group and are never replaced by, or replace, a core block.
+let PACKAGE_BLOCKS = [];
+export function registerPackageCatalog(entries) {
+  PACKAGE_BLOCKS = (entries || []).filter((e) => e && typeof e.type === 'string' && !BLOCKS.some((b) => b.type === e.type)).map((e) => ({
+    type: e.type, label: String(e.label || e.type).slice(0, 40), icon: PACKAGE_ICONS[e.icon] || Package, category: 'packages',
+    color: /^#[0-9a-fA-F]{6}$/.test(e.color || '') ? e.color : '#94a3b8', keywords: String(e.keywords || ''), package: e.package || '',
+  }));
+}
+const allBlocks = () => [...BLOCKS, ...PACKAGE_BLOCKS];
+
 const BY_TYPE = Object.fromEntries(BLOCKS.map((b) => [b.type, b]));
 BY_TYPE.MASTER = { type: 'MASTER', label: 'Global Master', icon: Crown, category: 'layout', color: '#fcd34d' };
 
-export const blockInfo = (type) => BY_TYPE[type] || { type, label: String(type || 'Block').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()), icon: Square, color: '#94a3b8' };
+export const blockInfo = (type) => BY_TYPE[type] || PACKAGE_BLOCKS.find((b) => b.type === type) || { type, label: String(type || 'Block').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()), icon: Square, color: '#94a3b8' };
 export const blockLabel = (type) => blockInfo(type).label;
 export const CONTAINER_TYPES = ['SECTION', 'CONTAINER', 'FLEX_ROW', 'CSS_GRID'];
 
 // Blocks matching a search (name, type or keywords), for the Add panel
 export function searchBlocks(query, { admin = false } = {}) {
   const q = String(query || '').trim().toLowerCase();
-  return BLOCKS.filter((b) => (admin || !b.admin) && (!q || `${b.label} ${b.type} ${b.keywords || ''}`.toLowerCase().includes(q)));
+  return allBlocks().filter((b) => (admin || !b.admin) && (!q || `${b.label} ${b.type} ${b.keywords || ''}`.toLowerCase().includes(q)));
 }
