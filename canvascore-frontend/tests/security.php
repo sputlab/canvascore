@@ -23,6 +23,7 @@ $proc = proc_open([PHP_BINARY, '-S', "127.0.0.1:$port", '-t', $web], [0 => ['pip
 for ($i = 0; $i < 50 && !@fsockopen('127.0.0.1', $port); $i++) usleep(100000);
 register_shutdown_function(function () use ($proc, $T) {
     proc_terminate($proc); proc_close($proc);
+    if (function_exists('exec')) @exec('pkill -f -- ' . escapeshellarg('-t ' . $GLOBALS['web']) . ' 2>/dev/null');   // the server's worker processes too
     $rm = function ($d) use (&$rm) { foreach (array_diff(scandir($d) ?: [], ['.', '..']) as $f) { is_dir("$d/$f") && !is_link("$d/$f") ? $rm("$d/$f") : @unlink("$d/$f"); } @rmdir($d); };
     $rm($T);
 });

@@ -1846,66 +1846,6 @@ function cc_render_block_body($block) {
             $html .= $childrenHtml;
             $html .= "</div>\n";
             return $customCss . $html;
-        case 'BUTTON':
-            $url = htmlspecialchars($block['content']['url'] ?? '#');
-            if (!preg_match('~^(?:f|ht)tps?://~i', $url) && $url !== '#') {
-                if ($url === 'index.html' || $url === 'index/index.html' || $url === 'home/index.html' || $url === '/') {
-                    $url = '{{BASE_URL}}';
-                } else {
-                    $clean_url = str_replace(['index/index.html', 'index.html'], '', $url);
-                    $url = '{{BASE_URL}}' . ltrim($clean_url, '/');
-                }
-            }
-            $text = htmlspecialchars((string)(($block['content']['text'] ?? '') !== '' ? $block['content']['text'] : 'Click here'));
-            $align = htmlspecialchars($block['styles']['textAlign'] ?? 'center');
-            $margin = htmlspecialchars($block['styles']['margin'] ?? '0');
-            $useGlobal = $block['content']['useGlobal'] ?? true;
-            // Button styles = base + (global FIRST) + user styles AFTER (which therefore win),
-            // excluding margin/textAlign, which the container handles.
-            $btnOwn = $block['styles'] ?? [];
-            unset($btnOwn['margin'], $btnOwn['textAlign'], $btnOwn['animation']);
-            // A button preset (Global Options › Buttons & fields) gives the colours and corners, as variables
-            $preset = cc_button_preset_css($block['content']['preset'] ?? '');
-            $globalStyle = $preset !== '' ? $preset . 'padding: 12px 24px; ' : ($useGlobal ? "background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; " : "");
-            $c = $block['content'] ?? [];
-            $hv = cc_button_hover($c['btnHoverBg'] ?? null, $c['btnHoverColor'] ?? null, $c['btnHoverBorder'] ?? null, $c['btnEffect'] ?? null);
-            $btnStyle = "display:inline-block; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; " . $globalStyle . build_inline_style($btnOwn) . $hv['vars'];
-            $html = "<div id=\"$innerId\" class=\"cc-btn-wrap$animClass$innerClass\" style=\"text-align:$align; margin:$margin;\">\n<a href=\"$url\" class=\"cc-btn{$hv['cls']}\" style=\"$btnStyle\">$text</a>\n</div>\n";
-            return $customCss . $html;
-
-        case 'HERO':
-            $bgUrl = cc_css_url($block['content']['bgImage'] ?? '');
-            $bg = $bgUrl !== '' ? "background-image: url('".htmlspecialchars($bgUrl)."'); background-size: cover; background-position: center;" : "";
-            $title = cc_sanitize_html($block['content']['title'] ?? '');
-            $subtitle = cc_sanitize_html($block['content']['subtitle'] ?? '');
-            $minHeight = htmlspecialchars((string)($block['styles']['minHeight'] ?? 'auto'));
-            $buttonsHtml = "<div style=\"display:flex; gap:15px; flex-wrap:wrap; justify-content:".htmlspecialchars((string)($block['styles']['textAlign'] ?? 'center')).";\">";
-            // The legacy single button only for very old heroes without a list: an emptied list stays empty
-            $buttons = is_array($block['content']['buttons'] ?? null) ? $block['content']['buttons'] : [];
-            if (!is_array($block['content']['buttons'] ?? null)) { $buttons = [['text' => $block['content']['btnText'] ?? 'Start Now', 'url' => $block['content']['btnUrl'] ?? '#', 'bgColor' => 'var(--brand-color, #3b82f6)', 'textColor' => '#ffffff', 'borderRadius' => '8px']]; }
-            foreach($buttons as $btn) {
-                $bText = htmlspecialchars((string)($btn['text'] ?? ''));
-                $bUrl = htmlspecialchars((string)($btn['url'] ?? '#'));
-                if (!preg_match('~^(?:f|ht)tps?://~i', $bUrl) && $bUrl !== '#') {
-                    if ($bUrl === 'index.html' || $bUrl === 'index/index.html' || $bUrl === 'home/index.html' || $bUrl === '/') {
-                        $bUrl = '{{BASE_URL}}';
-                    } else {
-                        $clean_url = str_replace(['index/index.html', 'index.html'], '', $bUrl);
-                        $bUrl = '{{BASE_URL}}' . ltrim($clean_url, '/');
-                    }
-                }
-                $bBg = htmlspecialchars((string)($btn['bgColor'] ?? '')); $bColor = htmlspecialchars((string)($btn['textColor'] ?? ''));
-                $bRad = htmlspecialchars((string)($btn['borderRadius'] ?? ''));
-                $hv = cc_button_hover($btn['hoverBg'] ?? null, $btn['hoverColor'] ?? null, $btn['hoverBorder'] ?? null, $btn['effect'] ?? null);
-                $bBorder = !empty($btn['borderColor']) ? '2px solid ' . htmlspecialchars($btn['borderColor']) : 'none';
-                // a button preset (Global Options › Buttons & fields) replaces the button's own colours and corners
-                $look = cc_button_preset_css($btn['preset'] ?? '') ?: "background:$bBg; color:$bColor; border-radius:$bRad; border:$bBorder; ";
-                $buttonsHtml .= "<a href=\"$bUrl\" class=\"cc-btn{$hv['cls']}\" style=\"display:inline-block; padding:14px 28px; {$look}text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; {$hv['vars']}\">$bText</a>";
-            }
-            $buttonsHtml .= "</div>";
-            $html = "<section id=\"$innerId\" class=\"cc-hero$animClass$innerClass\" style=\"$styleAttr; $bg; min-height:$minHeight; display:flex; flex-direction:column; justify-content:center;\">\n<div>\n$title\n<div style=\"margin:20px 0;\">$subtitle</div>\n$buttonsHtml\n</div>\n</section>\n";
-            return $customCss . $html;
-
         case 'FORM':
             $raw_email = trim($block['content']['email'] ?? '');
             $btnText = htmlspecialchars((string)(($block['content']['btnText'] ?? '') !== '' ? $block['content']['btnText'] : 'Send Message'));

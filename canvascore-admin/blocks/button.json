@@ -1,0 +1,78 @@
+{
+  "type": "BUTTON",
+  "rootStyleOmit": [
+    "margin",
+    "textAlign"
+  ],
+  "settings": {
+    "url": {
+      "type": "text",
+      "default": "#",
+      "transform": "legacyUrl"
+    },
+    "text": {
+      "type": "text",
+      "default": "Click here",
+      "fallbackWhenEmpty": true
+    },
+    "align": {
+      "type": "text",
+      "default": "center",
+      "from": "styles",
+      "key": "textAlign"
+    },
+    "margin": {
+      "type": "text",
+      "default": "0",
+      "from": "styles"
+    },
+    "useGlobal": {
+      "type": "bool",
+      "default": true,
+      "phpTruthy": true
+    },
+    "preset": {
+      "type": "text",
+      "default": "",
+      "transform": "buttonPreset"
+    },
+    "btnHoverBg": {
+      "type": "text",
+      "default": "",
+      "stringsOnly": true
+    },
+    "btnHoverColor": {
+      "type": "text",
+      "default": "",
+      "stringsOnly": true
+    },
+    "btnHoverBorder": {
+      "type": "text",
+      "default": "",
+      "stringsOnly": true
+    },
+    "btnEffect": {
+      "type": "text",
+      "default": "",
+      "stringsOnly": true
+    },
+    "hv": {
+      "type": "text",
+      "default": "",
+      "key": "btnHoverBg",
+      "transform": "buttonHover",
+      "hover": {
+        "bg": "btnHoverBg",
+        "color": "btnHoverColor",
+        "border": "btnHoverBorder",
+        "effect": "btnEffect"
+      }
+    }
+  },
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-btn-wrap{{_classes}}\" style=\"text-align:{{align}}; margin:{{margin}};\">\n",
+    "<a href=\"{{url}}\" class=\"cc-btn{{hv.cls}}\" style=\"display:inline-block; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; ",
+    "{{#preset?}}{{{preset}}}padding: 12px 24px; {{/preset?}}{{^preset?}}{{#useGlobal}}background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; {{/useGlobal}}{{/preset?}}",
+    "{{{_style}}}{{hv.vars}}\">{{text}}</a>\n</div>\n"
+  ]
+}

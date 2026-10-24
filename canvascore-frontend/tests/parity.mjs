@@ -17,6 +17,19 @@ import { BLOCK_DEFS, blockDef, renderDefBlock } from '../src/render/blockDef.mjs
 import { readdirSync } from 'node:fs';
 
 const phpScript = fileURLToPath(new URL('./render_php.php', import.meta.url));
+// Every fixture is rendered by PHP in one process (render_php_list.php), the results kept by fixture
+const phpListScript = fileURLToPath(new URL('./render_php_list.php', import.meta.url));
+const PHP_HTML = new Map();
+const phpRender = (fx) => {
+  if (!PHP_HTML.has(fx)) PHP_HTML.set(fx, JSON.parse(execFileSync('php', [phpListScript], { input: JSON.stringify([fx]), maxBuffer: 1 << 28 }).toString())[0]);
+  return PHP_HTML.get(fx);
+};
+const phpRenderAll = (list) => {
+  const todo = list.filter((fx) => !PHP_HTML.has(fx));
+  if (!todo.length) return;
+  const out = JSON.parse(execFileSync('php', [phpListScript], { input: JSON.stringify(todo), maxBuffer: 1 << 28 }).toString());
+  todo.forEach((fx, i) => PHP_HTML.set(fx, out[i]));
+};
 
 // --- Fixtures: one representative block per type, with meaningful styles/content ---
 const fixtures = [
@@ -291,11 +304,13 @@ function styleTexts(html) {
 }
 
 let failures = 0;
+phpRenderAll(fixtures);
 for (const fx of fixtures) {
   const jsHtml = renderBlock(fx);
   let phpHtml;
   try {
-    phpHtml = execFileSync('php', [phpScript], { input: JSON.stringify(fx) }).toString();
+    phpHtml = phpRender(fx);
+    if (phpHtml.startsWith('PHP ERROR: ')) throw new Error(phpHtml);
   } catch (e) {
     console.error(`[${fx.type}] PHP error:`, e.message);
     failures++; continue;
@@ -360,7 +375,8 @@ console.log('\nSHARED BLOCK DEFINITIONS');
     { type: 'PROGRESS', content: { height: 999, showValue: false, animate: false, items: [{ value: 50, label: H }], ...extra }, styles: st },
   ].map((b, i) => ({ id: 'h' + i, ...b }));
   const defFixtures = [...fixtures.filter((f) => blockDef(f.type)), ...hostile];
-  const phpHtml = defFixtures.map((fx) => execFileSync('php', [phpScript], { input: JSON.stringify(fx) }).toString());
+  phpRenderAll(defFixtures);
+  const phpHtml = defFixtures.map(phpRender);
   let same = 0;
   defFixtures.forEach((fx, i) => {
     if (noScript(phpHtml[i]) === renderBlock(fx)) { same++; return; }
@@ -430,6 +446,14 @@ console.log('\nSHARED BLOCK DEFINITIONS');
       e: { type: 'enum', default: 'x', options: [{ value: 'x', data: { label: 'X' } }] }, sb: { type: 'flag', when: { 'opt.e.label': ['X'] } } },
       { jj: ['A', 'b', 'b', 'c', 'd'], t: 'H1 | H2\na|b|c\n\n d\te \nf', code: 'x\r\ny\rz\n\n', c: 'x\r\ny\n', tel: '+39 (06) 12-34', w: 'site.com/a', mp: 'Via Roma 1 \n\n 00100 Roma', mm: '/v/a.MP4?x=1',
         d: [{ day: 'Lun' }, {}, 'junk', {}], b: '   ' }),
+    T('{{a}}|{{b}}|{{#has}}L{{/has}}{{^has}}-{{/has}}{{#no}}L{{/no}}{{^no}}-{{/no}}|{{{p}}}|{{hv.cls}}/{{hv.vars}}|{{u1}} {{u2}} {{u3}} {{u4}} {{u5}}|{{#_editing}}E{{/_editing}}', {
+      a: { type: 'text', stringsOnly: true, default: 'd' }, b: { type: 'text', stringsOnly: true },
+      l: { type: 'list', presentAs: 'has', item: {} }, m: { type: 'list', key: 'missing', presentAs: 'no', item: {} },
+      p: { type: 'text', transform: 'buttonPreset' },
+      hb: { type: 'text', stringsOnly: true }, hc: { type: 'text', stringsOnly: true }, hd: { type: 'text', stringsOnly: true }, he: { type: 'text', stringsOnly: true },
+      hv: { type: 'text', transform: 'buttonHover', hover: { bg: 'hb', color: 'hc', border: 'hd', effect: 'he' } },
+      u1: { type: 'text', transform: 'legacyUrl' }, u2: { type: 'text', transform: 'legacyUrl' }, u3: { type: 'text', transform: 'legacyUrl' }, u4: { type: 'text', transform: 'legacyUrl' }, u5: { type: 'text', transform: 'legacyUrl' } },
+      { a: 42, b: 'x', l: { k: 1 }, p: 'primary', hb: '#111', hc: 5, hd: ' ', he: 'shine', u1: '', u2: 'chi-siamo/index.html', u3: 'mailto:a@b.c', u4: 'https://x.y', u5: 'home/index.html' }),
     T('{{i}}|{{m}}|{{x}}|{{e}}', { i: { type: 'text', transform: 'initials' }, m: { type: 'text', transform: 'mailto' }, x: { type: 'text', key: 'm', transform: 'mailto' }, e: { type: 'text', transform: 'extUrl' } },
       { i: '  émile   zola  rossi', m: 'bad@address', e: '//linkedin.com/in/x' }),
   );
@@ -466,7 +490,8 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   expect(24, '<A|#000>P|[a:33.3333333333:33][b:66.6666666667:67]|86.0|&#9733;&#9733;|one<br>two&lt;3|mailto:me@site.com|https://site.com/x');
   expect(25, '[x:<i>X</i>][z:Z]|HM|ac|2030-01-01 10:00|/media/a.mp3|');
   expect(26, '0.55|[&quot;b&quot;,&quot;c&quot;]|<H1><H2><>[a;b;c;][d;e;;o][f;;;]|1\n2\n3|x\ny|+39061234|site.com/a|https://www.google.com/maps/search/?api=1&amp;query=Via%20Roma%201%2C%2000100%20Roma|video/mp4|Lun,Tue,Wed,|Search|S|{{BASE_URL}}');
-  expect(27, 'éz|||https://linkedin.com/in/x');
+  expect(27, 'd|x|L-|' + 'background: var(--cc-btn-primary-bg, var(--brand-color, #3b82f6)); color: var(--cc-btn-primary-text, #ffffff); border: 2px solid var(--cc-btn-primary-border, transparent); border-radius: var(--cc-btn-primary-radius, 6px); ' + '| cc-hbg cc-bfx-shine/--cc-hover-bg:#111; |{{BASE_URL}} {{BASE_URL}}chi-siamo/ {{BASE_URL}}mailto:a@b.c https://x.y {{BASE_URL}}|');
+  expect(28, 'éz|||https://linkedin.com/in/x');
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

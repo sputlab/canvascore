@@ -9,7 +9,8 @@
 //   settings   { key: { type, default, … } }: every value the template may use. Raw content never reaches the
 //              template: each value is rebuilt from its setting, so a wrong type or a hostile value gets the default.
 //     text      a string (numbers and booleans as PHP casts them; arrays and objects → ''); trim, fallbackWhenEmpty,
-//               fallbackWhenBlank (the default when blank once trimmed, the value untrimmed otherwise),
+//               fallbackWhenBlank (the default when blank once trimmed, the value untrimmed otherwise), stringsOnly (a
+//               value that is not a string gets the default),
 //               pattern (a regex the whole value must match, else the default), maxLength
 //     richtext  HTML: sanitized by the server (cc_sanitize_html), as is in the editor; may be printed raw
 //     number    min, max, default; int (whole number) or round (decimals); parse: "int" reads the leading whole
@@ -44,7 +45,9 @@
 //               address → mailto:…, else extUrl), br (lines → escaped, joined by <br>), repeat (the setting's text,
 //               value times), mediaSrc (an audio or video address: http(s) or a path), mediaMime (its type from the
 //               extension), replace (from → to), plain (a number, ≤ 4 decimals), json, telDigits, stripScheme, mapsUrl,
-//               code, lineNumbers, tableData (rows of a pipe- or tab-separated text, with headerFrom)
+//               code, lineNumbers, tableData (rows of a pipe- or tab-separated text, with headerFrom), buttonPreset,
+//               buttonHover (with hover: { bg, color, border, effect } naming siblings), legacyUrl
+//     presentAs: on a list, the name of a value set to whether the content has that key as a list or object at all
 //   renderIf   a value that must be true, or the block (and its custom CSS) renders nothing
 //   script     the name of the block's behaviour script (site only; CC_TPL_SCRIPTS in blockdef.php)
 //
@@ -63,11 +66,13 @@
 //     _field.<key> (editor only: the in-place editing attributes of a setting with "inline"), _script (site only:
 //     the block's behaviour script, named by "script"), _lb and _rb ({ and }: a literal { can't stand right before a
 //     tag, so CSS like .x{{{#a}}…{{/a}}} is written .x{{{_lb}}}{{#a}}…{{/a}}{{{_rb}}}; the parser refuses the former),
-//     _base (the {{BASE_URL}} placeholder that publishing replaces with the site's address).
+//     _base (the {{BASE_URL}} placeholder that publishing replaces with the site's address), _editing (true on the
+//     editor's canvas while in-place editing is on: a template can wrap a field for it).
 //
 // The engine knows no block: a new block needs a definition file, its line in BLOCK_DEFS below, and nothing else.
 import { ccImgUrl, ccCssUrl, ccColorValue, buildInlineStyle, resolveBlockUrl, ccFmtNum, ccExtUrlValue, ccInitialsValue, ccMediaSrcValue, ccMediaMimeValue, ccEncValue } from './renderBlock.mjs';
-import { effectClasses } from './effects.mjs';
+import { effectClasses, buttonHover } from './effects.mjs';
+import { buttonPresetCss } from './kit.mjs';
 import { withTextPreset } from './typography.mjs';
 
 // <defs:begin> one import per file in canvascore-admin/blocks/ (tests/parity.mjs checks the two lists agree)
@@ -77,6 +82,7 @@ import AUTHOR_BIO from '../../../canvascore-admin/blocks/author-bio.json' with {
 import BEFORE_AFTER from '../../../canvascore-admin/blocks/before-after.json' with { type: 'json' };
 import BENTO from '../../../canvascore-admin/blocks/bento.json' with { type: 'json' };
 import BUSINESS from '../../../canvascore-admin/blocks/business.json' with { type: 'json' };
+import BUTTON from '../../../canvascore-admin/blocks/button.json' with { type: 'json' };
 import CALLOUT from '../../../canvascore-admin/blocks/callout.json' with { type: 'json' };
 import CARDS from '../../../canvascore-admin/blocks/cards.json' with { type: 'json' };
 import CASE_STUDY from '../../../canvascore-admin/blocks/case-study.json' with { type: 'json' };
@@ -87,6 +93,7 @@ import DIVIDER from '../../../canvascore-admin/blocks/divider.json' with { type:
 import FAQ from '../../../canvascore-admin/blocks/faq.json' with { type: 'json' };
 import GALLERY from '../../../canvascore-admin/blocks/gallery.json' with { type: 'json' };
 import GRID from '../../../canvascore-admin/blocks/grid.json' with { type: 'json' };
+import HERO from '../../../canvascore-admin/blocks/hero.json' with { type: 'json' };
 import HOTSPOTS from '../../../canvascore-admin/blocks/hotspots.json' with { type: 'json' };
 import HOVER_GRID from '../../../canvascore-admin/blocks/hover-grid.json' with { type: 'json' };
 import HTML from '../../../canvascore-admin/blocks/html.json' with { type: 'json' };
@@ -114,7 +121,7 @@ import TEXT from '../../../canvascore-admin/blocks/text.json' with { type: 'json
 import TIMELINE from '../../../canvascore-admin/blocks/timeline.json' with { type: 'json' };
 import VIDEO_HERO from '../../../canvascore-admin/blocks/video-hero.json' with { type: 'json' };
 import VIDEO from '../../../canvascore-admin/blocks/video.json' with { type: 'json' };
-export const BLOCK_DEFS = [ACCORDION, AUDIO_PLAYER, AUTHOR_BIO, BEFORE_AFTER, BENTO, BUSINESS, CALLOUT, CARDS, CASE_STUDY, CODE_SNIPPET, COUNTDOWN, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HOTSPOTS, HOVER_GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PRICING, PROGRESS, REVIEW_SUMMARY, SCROLLYTELLING, SEARCH, SHARE_BAR, SLIDER, SPLIT_CTA, STEPS, TABLE_OF_CONTENTS, TABLE, TABS, TEAM, TESTIMONIAL_WALL, TESTIMONIAL, TEXT, TIMELINE, VIDEO_HERO, VIDEO];
+export const BLOCK_DEFS = [ACCORDION, AUDIO_PLAYER, AUTHOR_BIO, BEFORE_AFTER, BENTO, BUSINESS, BUTTON, CALLOUT, CARDS, CASE_STUDY, CODE_SNIPPET, COUNTDOWN, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HERO, HOTSPOTS, HOVER_GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PRICING, PROGRESS, REVIEW_SUMMARY, SCROLLYTELLING, SEARCH, SHARE_BAR, SLIDER, SPLIT_CTA, STEPS, TABLE_OF_CONTENTS, TABLE, TABS, TEAM, TESTIMONIAL_WALL, TESTIMONIAL, TEXT, TIMELINE, VIDEO_HERO, VIDEO];
 // <defs:end>
 const BY_TYPE = new Map(BLOCK_DEFS.map((d) => [d.type, d]));
 export const blockDef = (type) => BY_TYPE.get(type) || null;
@@ -151,7 +158,7 @@ function cleanValue(s, raw, ctx) {
   const missing = raw === undefined || raw === null;
   switch (s.type) {
     case 'text': {
-      let v = missing ? str(s.default ?? '') : str(raw);
+      let v = missing || (s.stringsOnly && typeof raw !== 'string') ? str(s.default ?? '') : str(raw);   // stringsOnly: a number or a boolean is not a text here
       if (s.trim) v = phpTrim(v);
       if (s.fallbackWhenEmpty && v === '') v = str(s.default ?? '');
       if (s.fallbackWhenBlank && phpTrim(v) === '') v = str(s.default ?? '');   // blank once trimmed: the default (else kept as is)
@@ -230,6 +237,7 @@ function cleanSettings(settings, content, styles, ctx) {
     const src = s.from === 'styles' ? styles : content;
     const raw = own(src, s.key || key) ? src[s.key || key] : undefined;
     out[key] = cleanValue(s, raw, ctx);
+    if (s.presentAs) out[s.presentAs] = raw !== null && typeof raw === 'object';   // whether the content has the list at all (PHP's is_array())
     if (s.type === 'enum') {
       const o = (s.options || []).find((x) => x.value === out[key]);
       const data = {};
@@ -318,6 +326,21 @@ const TRANSFORMS = {
     for (const r of rows) ncols = Math.max(ncols, r.length);
     const pad = (r) => Array.from({ length: ncols }, (_, i) => r[i] ?? '');
     return { ncols, head: head ? pad(head) : [], rows: rows.map((r, i) => ({ cells: pad(r), odd: i % 2 === 1 })) };
+  },
+  // a button preset's colours and corners (Global Options › Buttons & fields), '' for none: trusted
+  buttonPreset: (v) => trusted(buttonPresetCss(asText(v))),
+  // { cls, vars } of a button's hover look, from the siblings named in hover: { bg, color, border, effect }
+  buttonHover: (v, s, sib) => {
+    const g = (k) => (s.hover && s.hover[k] ? asText(sib[s.hover[k]]) : '');
+    return buttonHover({ bg: g('bg'), color: g('color'), border: g('border'), effect: g('effect') });
+  },
+  // a page link as the Button and Hero blocks always read it: http(s) and # kept, the home page and any other address
+  // → {{BASE_URL}}… (mailto: and tel: are not special here; untrimmed)
+  legacyUrl: (v) => {
+    const u = asText(v);
+    if (/^(?:f|ht)tps?:\/\//i.test(u) || u === '#') return u;
+    if (['index.html', 'index/index.html', 'home/index.html', '/'].includes(u)) return '{{BASE_URL}}';
+    return '{{BASE_URL}}' + u.split('index/index.html').join('').split('index.html').join('').replace(/^\/+/, '');
   },
   fmtNum: (v, s, sib) => ccFmtNum(typeof v === 'number' ? v : 0, s.decimalsFrom ? sib[s.decimalsFrom] : (s.decimals ?? 0)),
 };
@@ -413,6 +436,6 @@ export function renderDefBlock(def, block, host) {
     if (s.inline) field[key] = trusted(host.fields ? ` data-cc-field="${key}" contenteditable="true" data-cc-placeholder="${esc(s.placeholder || '')}"` : '');
   }
   if (def.renderIf && !truthy(values[def.renderIf])) return null;   // nothing at all, not even the custom CSS
-  const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted(''), _lb: trusted('{'), _rb: trusted('}'), _base: trusted('{{BASE_URL}}') };
+  const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted(''), _lb: trusted('{'), _rb: trusted('}'), _base: trusted('{{BASE_URL}}'), _editing: !!host.fields };
   return renderNodes(parsed(def), [builtIn, values]);
 }

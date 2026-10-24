@@ -49,9 +49,12 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   Blocks moved to it: **Text, Image, Icon Box, Testimonial, Callout, Timeline, Steps, Progress Bars, Grid, Cards,
   Image + Text, FAQ, Map, Video, Custom HTML, Divider, Counters, Accordion, Tabs, Pricing, Gallery, Logos, Team, Bento,
   Split CTA, Case Study, Author Bio, Review Summary, Testimonial Wall, Hover Grid, Slider, Before / After, Countdown,
-  Table of Contents, Share Bar, Audio Player, Scrollytelling, Hotspots, Video Hero, Code Snippet, Data Table, Site Search
-  and Business Details**. Behaviour scripts and structured data (the Business JSON-LD) stay site-only, named by the
-  definition. Their published HTML is unchanged for real content
+  Table of Contents, Share Bar, Audio Player, Scrollytelling, Hotspots, Video Hero, Code Snippet, Data Table, Site Search,
+  Business Details, Button and Hero**: 45 blocks. Behaviour scripts and structured data (the Business JSON-LD) stay
+  site-only, named by the definition. Still written in code, on purpose: the containers (the editor draws their children),
+  Master, Collection List and the item blocks (Item Field, Related, Categories & tags: they read the database), the
+  form blocks (Form, Multi-step Form, Newsletter: they register their recipient for the form handler), the
+  Announcement Bar (shared with the site-wide bar) and the Price Calculator (it computes the prices on the server). Their published HTML is unchanged for real content
   (checked byte for byte against the previous renderer, with every field also fuzzed with wrong types and hostile
   values), and the editor and the site now give exactly the same HTML for them. The engine also has lists of plain
   values, value transforms (internal links, CSS addresses, URL encoding, line breaks, video players, number format),
@@ -71,8 +74,9 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   brand colour. Likewise Grid, Cards, FAQ and Counters with an object where a list belongs, Image + Text with a
   `javascript:` image, Divider with a colour that is not a colour; a Map zoom is kept between 1 and 21. Gallery,
   Logos and Team images go through the image address check (no `javascript:`), a Gallery aspect ratio or corner radius
-  that is not one gets the default, and an unknown Tabs or Team style gets the default style. Slider and Before / After images, aspect ratios and image fit
-  values go through the same checks.
+  that is not one gets the default, and an unknown Tabs or Team style gets the default style. Slider and Before / After
+  images, aspect ratios and image fit values go through the same checks, and so do a Hero button's colours and corner
+  radius. A Button with an empty text shows "Click here".
 
 ## [0.20.0] - 2026-10-24 — Categories and tags, archives, scheduled publishing, faceted search
 

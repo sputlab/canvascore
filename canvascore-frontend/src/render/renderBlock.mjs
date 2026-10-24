@@ -8,10 +8,9 @@
 // test the inner content is normalized, so it does not affect the comparison
 // of structure and styles.
 
-import { effectClasses, buttonHover } from './effects.mjs';
+import { effectClasses } from './effects.mjs';
 import { ccPlain } from './blockRuntime.mjs';
 import { withTextPreset } from './typography.mjs';
-import { buttonPresetCss } from './kit.mjs';
 import { blockDef, renderDefBlock } from './blockDef.mjs';
 
 export function escapeHtml(s) {
@@ -56,16 +55,6 @@ export function buildInlineStyle(styles) {
     str += `${kebab}: ${escapeHtml(v)}; `;
   }
   return str;
-}
-
-function resolveInternalUrl(url) {
-  if (!url) return '#';
-  if (/^(?:f|ht)tps?:\/\//i.test(url) || url === '#') return url;
-  if (url === 'index.html' || url === 'index/index.html' || url === 'home/index.html' || url === '/') {
-    return '{{BASE_URL}}';
-  }
-  const clean = url.replace(/index\/index\.html|index\.html/g, '');
-  return '{{BASE_URL}}' + clean.replace(/^\/+/, '');
 }
 
 // Canonical root of a block (single source shared editor<->compiler for containers).
@@ -329,44 +318,6 @@ function renderBlockBody(block, opts = {}) {
       html += `<div id="${r.id}" class="${r.className}" style="${buildInlineStyle(r.style)}">\n${childrenHtml}</div>\n`;
       return customCss + html;
     }
-    case 'BUTTON': {
-      const url = escapeHtml(resolveInternalUrl(content.url ?? '#'));
-      const text = escapeHtml(content.text || 'Click here');
-      const align = escapeHtml(styles.textAlign ?? 'center');
-      const margin = escapeHtml(styles.margin ?? '0');
-      const useGlobal = content.useGlobal !== false;
-      const own = { ...styles };
-      delete own.margin; delete own.textAlign; delete own.animation;
-      // A button preset (Global Options › Buttons & fields) gives the colours and corners, as variables
-      const preset = buttonPresetCss(content.preset);
-      const globalStyle = preset ? preset + 'padding: 12px 24px; ' : (useGlobal ? 'background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; ' : '');
-      const hv = buttonHover({ bg: content.btnHoverBg, color: content.btnHoverColor, border: content.btnHoverBorder, effect: content.btnEffect });
-      const btnStyle = 'display:inline-block; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; ' + globalStyle + buildInlineStyle(own) + escapeHtml(hv.vars);
-      return customCss + `<div id="${innerId}" class="cc-btn-wrap${animClass}${innerClass}" style="text-align:${align}; margin:${margin};">\n<a href="${url}" class="cc-btn${hv.cls}" style="${btnStyle}">${text}</a>\n</div>\n`;
-    }
-
-    case 'HERO': {
-      const bgUrl = ccCssUrl(content.bgImage);
-      const bg = bgUrl ? `background-image: url('${escapeHtml(bgUrl)}'); background-size: cover; background-position: center;` : '';
-      const title = content.title ?? '';
-      const subtitle = content.subtitle ?? '';
-      const minHeight = escapeHtml(styles.minHeight ?? 'auto');
-      // The legacy single button only for very old heroes without a list: an emptied list stays empty
-      let buttons = Array.isArray(content.buttons) ? content.buttons : [];
-      if (!Array.isArray(content.buttons)) buttons = [{ text: content.btnText ?? 'Start Now', url: content.btnUrl ?? '#', bgColor: 'var(--brand-color, #3b82f6)', textColor: '#ffffff', borderRadius: '8px' }];
-      let buttonsHtml = `<div style="display:flex; gap:15px; flex-wrap:wrap; justify-content:${escapeHtml(styles.textAlign ?? 'center')};">`;
-      for (const btn of buttons) {
-        const bUrl = escapeHtml(resolveInternalUrl(btn.url));
-        const hv = buttonHover({ bg: btn.hoverBg, color: btn.hoverColor, border: btn.hoverBorder, effect: btn.effect });
-        const bBorder = btn.borderColor ? `2px solid ${escapeHtml(btn.borderColor)}` : 'none';
-        // a button preset (Global Options › Buttons & fields) replaces the button's own colours and corners
-        const look = buttonPresetCss(btn.preset) || `background:${escapeHtml(btn.bgColor)}; color:${escapeHtml(btn.textColor)}; border-radius:${escapeHtml(btn.borderRadius)}; border:${bBorder}; `;
-        buttonsHtml += `<a href="${bUrl}" class="cc-btn${hv.cls}" style="display:inline-block; padding:14px 28px; ${look}text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; ${escapeHtml(hv.vars)}">${escapeHtml(btn.text)}</a>`;
-      }
-      buttonsHtml += `</div>`;
-      return customCss + `<section id="${innerId}" class="cc-hero${animClass}${innerClass}" style="${styleAttr} ${bg} min-height:${minHeight}; display:flex; flex-direction:column; justify-content:center;">\n<div>\n${opts.fields ? `<div${field('title', 'Title')}>${title}</div>` : title}\n<div style="margin:20px 0;"${field('subtitle', 'Subtitle')}>${subtitle}</div>\n${buttonsHtml}\n</div>\n</section>\n`;
-    }
-
     case 'FORM': {
       const btnText = escapeHtml(content.btnText || 'Send Message');
       const successMsg = escapeHtml(content.successMsg || 'Sent!');

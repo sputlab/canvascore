@@ -57,7 +57,7 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
     $def = $s['default'] ?? null;
     switch ($type) {
         case 'text':
-            $v = $missing ? cc_tpl_str($def ?? '') : cc_tpl_str($raw);
+            $v = ($missing || (!empty($s['stringsOnly']) && !is_string($raw))) ? cc_tpl_str($def ?? '') : cc_tpl_str($raw);
             if (!empty($s['trim'])) $v = trim($v);
             if (!empty($s['fallbackWhenEmpty']) && $v === '') $v = cc_tpl_str($def ?? '');
             if (!empty($s['fallbackWhenBlank']) && trim($v) === '') $v = cc_tpl_str($def ?? '');
@@ -143,6 +143,7 @@ function cc_tpl_clean_settings(array $settings, array $content, array $styles) {
         $k = $s['key'] ?? $key;
         $missing = !array_key_exists($k, $src) || $src[$k] === null;
         $out[$key] = cc_tpl_clean_value($s, $missing ? null : $src[$k], $missing);
+        if (!empty($s['presentAs'])) $out[$s['presentAs']] = !$missing && is_array($src[$k]);   // whether the content has the list at all
         if (($s['type'] ?? '') === 'enum') {
             $data = [];
             foreach ($s['options'] ?? [] as $o) if (($o['value'] ?? null) === $out[$key]) foreach (($o['data'] ?? []) as $dk => $dv) $data[$dk] = new CcTrusted($dv);
@@ -186,8 +187,27 @@ const CC_TPL_TRANSFORMS = [
     'mediaSrc' => 'cc_tpl_tf_media_src', 'replace' => 'cc_tpl_tf_replace',
     'plain' => 'cc_tpl_tf_plain', 'mediaMime' => 'cc_tpl_tf_media_mime', 'json' => 'cc_tpl_tf_json', 'telDigits' => 'cc_tpl_tf_tel',
     'stripScheme' => 'cc_tpl_tf_strip_scheme', 'mapsUrl' => 'cc_tpl_tf_maps', 'code' => 'cc_tpl_tf_code', 'lineNumbers' => 'cc_tpl_tf_line_numbers',
-    'tableData' => 'cc_tpl_tf_table',
+    'tableData' => 'cc_tpl_tf_table', 'buttonPreset' => 'cc_tpl_tf_button_preset', 'buttonHover' => 'cc_tpl_tf_button_hover', 'legacyUrl' => 'cc_tpl_tf_legacy_url',
 ];
+function cc_tpl_tf_button_preset($v) { return new CcTrusted(cc_button_preset_css(cc_tpl_text($v))); }
+// unescaped (the template escapes); twin of buttonHover() in effects.mjs
+function cc_tpl_tf_button_hover($v, $s, $sib) {
+    $g = function ($k) use ($s, $sib) { $n = $s['hover'][$k] ?? null; return $n !== null ? cc_tpl_text($sib[$n] ?? '') : ''; };
+    $cls = ''; $vars = '';
+    foreach ([['bg', 'cc-hbg', '--cc-hover-bg'], ['color', 'cc-hcol', '--cc-hover-color'], ['border', 'cc-hbd', '--cc-hover-border']] as [$k, $c, $var]) {
+        $x = $g($k);
+        if (trim($x) !== '') { $cls .= ' ' . $c; $vars .= $var . ':' . $x . '; '; }
+    }
+    $e = $g('effect');
+    if (in_array($e, CC_FX_BUTTON, true)) $cls .= ' cc-bfx-' . $e;
+    return ['cls' => $cls, 'vars' => $vars];
+}
+function cc_tpl_tf_legacy_url($v) {
+    $u = cc_tpl_text($v);
+    if (preg_match('~^(?:f|ht)tps?://~i', $u) || $u === '#') return $u;
+    if (in_array($u, ['index.html', 'index/index.html', 'home/index.html', '/'], true)) return '{{BASE_URL}}';
+    return '{{BASE_URL}}' . ltrim(str_replace(['index/index.html', 'index.html'], '', $u), '/');
+}
 function cc_tpl_tf_plain($v) { return cc_plain((is_int($v) || is_float($v)) ? $v : 0); }
 function cc_tpl_tf_media_mime($v) { return cc_media_mime(cc_media_src(cc_tpl_text($v))); }
 function cc_tpl_tf_json($v) { return json_encode(is_array($v) ? array_map('cc_tpl_text', $v) : cc_tpl_text($v), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); }
@@ -349,6 +369,6 @@ function cc_render_def_block(array $def, array $block, $innerId) {
     if ($fn) $script = $fn($innerId, $values);
     $builtIn = ['_id' => $innerId, '_classes' => cc_effect_classes($styles, $content) . ($custom !== '' ? ' ' . $custom : ''),
         '_style' => new CcTrusted(build_inline_style($rootStyles)), '_field' => $field, '_script' => new CcTrusted($script),
-        '_lb' => new CcTrusted('{'), '_rb' => new CcTrusted('}'), '_base' => new CcTrusted('{{BASE_URL}}')];
+        '_lb' => new CcTrusted('{'), '_rb' => new CcTrusted('}'), '_base' => new CcTrusted('{{BASE_URL}}'), '_editing' => false];
     return cc_tpl_render($def['_ast'], [$builtIn, $values]);
 }

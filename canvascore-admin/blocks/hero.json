@@ -1,0 +1,121 @@
+{
+  "type": "HERO",
+  "settings": {
+    "bgUrl": {
+      "type": "text",
+      "default": "",
+      "key": "bgImage",
+      "transform": "cssUrl"
+    },
+    "title": {
+      "type": "richtext",
+      "default": "",
+      "inline": "full",
+      "placeholder": "Title"
+    },
+    "subtitle": {
+      "type": "richtext",
+      "default": "",
+      "inline": "full",
+      "placeholder": "Subtitle"
+    },
+    "minHeight": {
+      "type": "text",
+      "default": "auto",
+      "from": "styles"
+    },
+    "justify": {
+      "type": "text",
+      "default": "center",
+      "from": "styles",
+      "key": "textAlign"
+    },
+    "buttons": {
+      "type": "list",
+      "presentAs": "hasList",
+      "item": {
+        "text": {
+          "type": "text",
+          "default": ""
+        },
+        "url": {
+          "type": "text",
+          "default": "#",
+          "transform": "legacyUrl"
+        },
+        "bgColor": {
+          "type": "color",
+          "default": ""
+        },
+        "textColor": {
+          "type": "color",
+          "default": ""
+        },
+        "borderRadius": {
+          "type": "text",
+          "default": "",
+          "pattern": "^[0-9a-zA-Z.% ]{0,40}$"
+        },
+        "borderColor": {
+          "type": "color",
+          "default": ""
+        },
+        "preset": {
+          "type": "text",
+          "default": "",
+          "transform": "buttonPreset"
+        },
+        "hoverBg": {
+          "type": "text",
+          "default": "",
+          "stringsOnly": true
+        },
+        "hoverColor": {
+          "type": "text",
+          "default": "",
+          "stringsOnly": true
+        },
+        "hoverBorder": {
+          "type": "text",
+          "default": "",
+          "stringsOnly": true
+        },
+        "effect": {
+          "type": "text",
+          "default": "",
+          "stringsOnly": true
+        },
+        "hv": {
+          "type": "text",
+          "default": "",
+          "key": "hoverBg",
+          "transform": "buttonHover",
+          "hover": {
+            "bg": "hoverBg",
+            "color": "hoverColor",
+            "border": "hoverBorder",
+            "effect": "effect"
+          }
+        }
+      }
+    },
+    "legacyText": {
+      "type": "text",
+      "default": "Start Now",
+      "key": "btnText"
+    },
+    "legacyUrl": {
+      "type": "text",
+      "default": "#",
+      "key": "btnUrl",
+      "transform": "legacyUrl"
+    }
+  },
+  "template": [
+    "<section id=\"{{_id}}\" class=\"cc-hero{{_classes}}\" style=\"{{{_style}}}; {{^bgUrl=}}background-image: url('{{bgUrl}}'); background-size: cover; background-position: center;{{/bgUrl=}}; min-height:{{minHeight}}; display:flex; flex-direction:column; justify-content:center;\">\n",
+    "<div>\n{{#_editing}}<div{{{_field.title}}}>{{{title}}}</div>{{/_editing}}{{^_editing}}{{{title}}}{{/_editing}}\n",
+    "<div style=\"margin:20px 0;\"{{{_field.subtitle}}}>{{{subtitle}}}</div>\n",
+    "<div style=\"display:flex; gap:15px; flex-wrap:wrap; justify-content:{{justify}};\">{{#hasList}}{{#buttons}}<a href=\"{{url}}\" class=\"cc-btn{{hv.cls}}\" style=\"display:inline-block; padding:14px 28px; {{#preset?}}{{{preset}}}{{/preset?}}{{^preset?}}background:{{bgColor}}; color:{{textColor}}; border-radius:{{borderRadius}}; border:{{#borderColor?}}2px solid {{borderColor}}{{/borderColor?}}{{^borderColor?}}none{{/borderColor?}}; {{/preset?}}text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; {{hv.vars}}\">{{text}}</a>{{/buttons}}{{/hasList}}{{^hasList}}<a href=\"{{legacyUrl}}\" class=\"cc-btn\" style=\"display:inline-block; padding:14px 28px; background:var(--brand-color, #3b82f6); color:#ffffff; border-radius:8px; border:none; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; \">{{legacyText}}</a>{{/hasList}}</div>\n",
+    "</div>\n</section>\n"
+  ]
+}
