@@ -599,8 +599,6 @@ function cc_money($v, $dec, $eu, $cur, $after) {
     if ($eu) $s = strtr($s, [',' => '.', '.' => ',']);
     return $after ? $s . "\xC2\xA0" . $cur : $cur . $s;
 }
-// Code Snippet languages: [id, label]. Twin of CODE_LANGS in src/render/renderBlock.mjs.
-const CC_CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
 
 // A media file address (audio, video): http(s) or a path on this site; any other scheme (javascript:, data:…) -> ''.
 // Twin of ccMediaSrc() in src/render/renderBlock.mjs.
@@ -1941,108 +1939,6 @@ function cc_render_block_body($block) {
             $html .= "<button type=\"submit\" style=\"padding:12px 24px; background:var(--brand-color, #3b82f6); color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;\">$btnText</button>\n</form>\n</div>\n";
             return $customCss . $html;
 
-        case 'TABLE': {
-            $c = $block['content'] ?? [];
-            $lines = cc_lines($c['data'] ?? '');
-            $rows = [];
-            foreach ($lines as $l) $rows[] = preg_split('/\s*\|\s*|\t/', $l);
-            $headerRow = ($c['headerRow'] ?? true) !== false;
-            $striped = ($c['striped'] ?? true) !== false;
-            $bordered = !empty($c['bordered']);
-            $compact = !empty($c['compact']);
-            $rowHeaders = !empty($c['rowHeaders']);
-            $sticky = !empty($c['stickyHeader']);
-            $maxH = (int)cc_num($c['maxHeight'] ?? 0, 0, 1200, 0);
-            $caption = htmlspecialchars($c['caption'] ?? '');
-            $head = ($headerRow && $rows) ? array_shift($rows) : null;
-            $ncols = 0;
-            if ($head) $ncols = count($head);
-            foreach ($rows as $r) $ncols = max($ncols, count($r));
-            $pad = $compact ? '6px 10px' : '12px 14px';
-            $wrap = 'overflow-x:auto;' . (($sticky && $maxH > 0) ? ' max-height:' . $maxH . 'px; overflow-y:auto;' : '');
-            $cellBorder = $bordered ? 'border:1px solid #e2e8f0;' : 'border-bottom:1px solid #e2e8f0;';
-            $thStyle = 'padding:' . $pad . '; background:#f1f5f9; border-bottom:2px solid #cbd5e1; font-weight:700;' . ($sticky ? ' position:sticky; top:0;' : '') . ($bordered ? ' border:1px solid #cbd5e1;' : '');
-            $table = '';
-            if ($ncols > 0) {
-                $table .= '<table class="cc-table" style="width:100%; border-collapse:collapse; font-size:14px; text-align:left;">';
-                if ($caption !== '') $table .= '<caption style="caption-side:top; text-align:left; font-weight:700; padding:0 0 10px 0;">' . $caption . '</caption>';
-                if ($head) {
-                    $table .= '<thead><tr>';
-                    for ($i = 0; $i < $ncols; $i++) $table .= '<th scope="col" style="' . $thStyle . '">' . htmlspecialchars($head[$i] ?? '') . '</th>';
-                    $table .= '</tr></thead>';
-                }
-                $table .= '<tbody>';
-                foreach ($rows as $ri => $r) {
-                    $table .= '<tr' . (($striped && $ri % 2 === 1) ? ' style="background:#f8fafc;"' : '') . '>';
-                    for ($i = 0; $i < $ncols; $i++) {
-                        $cell = htmlspecialchars($r[$i] ?? '');
-                        if ($i === 0 && $rowHeaders) $table .= '<th scope="row" style="padding:' . $pad . '; ' . $cellBorder . ' font-weight:600;">' . $cell . '</th>';
-                        else $table .= '<td style="padding:' . $pad . '; ' . $cellBorder . '">' . $cell . '</td>';
-                    }
-                    $table .= '</tr>';
-                }
-                $table .= '</tbody></table>';
-            }
-            return $customCss . '<div id="' . $innerId . '" class="cc-table-block' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n" . '<div class="cc-table-wrap" style="' . $wrap . '">' . $table . '</div>' . "\n</div>\n";
-        }
-
-        case 'BUSINESS': {
-            $c = $block['content'] ?? [];
-            $types = ['LocalBusiness', 'Restaurant', 'Store', 'CafeOrCoffeeShop', 'Dentist', 'HairSalon', 'HealthAndBeautyBusiness', 'ProfessionalService', 'LegalService', 'AutoRepair', 'Hotel', 'Organization'];
-            $type = in_array($c['businessType'] ?? '', $types, true) ? $c['businessType'] : 'LocalBusiness';
-            $nameRaw = trim((string)($c['name'] ?? ''));
-            $addrLines = cc_lines($c['address'] ?? '');
-            $phone = trim((string)($c['phone'] ?? ''));
-            $phoneDigits = preg_replace('/[^0-9+]/', '', $phone);
-            $email = trim((string)($c['email'] ?? ''));
-            $emailOk = preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $email) === 1;
-            $web = cc_ext_url($c['website'] ?? '');
-            $closedLabel = htmlspecialchars($c['closedLabel'] ?? 'Closed');
-            $hoursTitle = htmlspecialchars($c['hoursTitle'] ?? 'Opening hours');
-            $note = htmlspecialchars($c['note'] ?? '');
-            $hours = array_values((isset($c['hours']) && is_array($c['hours'])) ? array_slice($c['hours'], 0, 7) : []);
-            $dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-            $contact = '';
-            if ($nameRaw !== '') $contact .= '<h3 class="cc-biz-name" style="margin:0 0 10px 0; font-size:20px;">' . htmlspecialchars($nameRaw) . '</h3>';
-            if ($addrLines) $contact .= '<address class="cc-biz-address" style="font-style:normal; line-height:1.6; margin:0 0 10px 0;">' . cc_br($c['address'] ?? '') . '</address>';
-            if ($phoneDigits !== '') $contact .= '<div class="cc-biz-line" style="margin-bottom:4px;"><a class="cc-biz-link" href="tel:' . htmlspecialchars($phoneDigits) . '" style="color:inherit;">' . htmlspecialchars($phone) . '</a></div>';
-            if ($emailOk) $contact .= '<div class="cc-biz-line" style="margin-bottom:4px;"><a class="cc-biz-link" href="mailto:' . htmlspecialchars($email) . '" style="color:inherit;">' . htmlspecialchars($email) . '</a></div>';
-            if ($web !== '') $contact .= '<div class="cc-biz-line" style="margin-bottom:4px;"><a class="cc-biz-link" href="' . htmlspecialchars($web) . '" rel="noopener" style="color:inherit;">' . htmlspecialchars(preg_replace('~^https?://~i', '', $web)) . '</a></div>';
-            if ($addrLines && (($c['mapsLink'] ?? true) !== false)) {
-                $contact .= '<a class="cc-biz-directions" rel="noopener" href="' . htmlspecialchars('https://www.google.com/maps/search/?api=1&query=' . cc_enc(implode(', ', $addrLines))) . '" style="display:inline-block; margin-top:12px; padding:9px 16px; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; text-decoration:none; font-weight:600; font-size:14px;">' . htmlspecialchars($c['directionsLabel'] ?? 'Get directions') . '</a>';
-            }
-            $rows = '';
-            $specs = [];
-            foreach ($hours as $i => $hr) {
-                $closed = !empty($hr['closed']);
-                $open = trim((string)($hr['open'] ?? '')); $close = trim((string)($hr['close'] ?? ''));
-                $okTimes = preg_match('/^\d{2}:\d{2}$/', $open) && preg_match('/^\d{2}:\d{2}$/', $close);
-                $val = ($closed || !$okTimes) ? $closedLabel : htmlspecialchars($open) . '&ndash;' . htmlspecialchars($close);
-                $rows .= '<tr style="border-bottom:1px solid #e2e8f0;"><th scope="row" style="text-align:left; padding:8px 0; font-weight:600;">' . htmlspecialchars($hr['day'] ?? $dayNames[$i]) . '</th><td style="text-align:right; padding:8px 0;">' . $val . '</td></tr>';
-                if (!$closed && $okTimes) $specs[] = ['@type' => 'OpeningHoursSpecification', 'dayOfWeek' => $dayNames[$i], 'opens' => $open, 'closes' => $close];
-            }
-            $hoursHtml = '';
-            if ($rows !== '' || $note !== '') {
-                $hoursHtml = '<div class="cc-biz-hours"><h3 class="cc-biz-hours-title" style="margin:0 0 10px 0; font-size:20px;">' . $hoursTitle . '</h3>'
-                    . ($rows !== '' ? '<table class="cc-biz-table" style="width:100%; border-collapse:collapse; font-size:15px;"><tbody>' . $rows . '</tbody></table>' : '')
-                    . ($note !== '' ? '<p class="cc-biz-note" style="margin:10px 0 0 0; font-size:13px; color:#64748b;">' . $note . '</p>' : '') . '</div>';
-            }
-            $html = '<style>@media(max-width:768px){#' . $innerId . '{grid-template-columns:1fr !important}}</style>';
-            $html .= '<div id="' . $innerId . '" class="cc-business' . $animClass . $innerClass . '" style="' . $styleAttr . ' display:grid; grid-template-columns:repeat(2, 1fr); gap:32px;">' . "\n";
-            $html .= '<div class="cc-biz-contact">' . $contact . '</div>' . "\n" . $hoursHtml . "\n";
-            if (($c['jsonLd'] ?? true) !== false && $nameRaw !== '') {
-                $ld = ['@context' => 'https://schema.org', '@type' => $type, 'name' => $nameRaw];
-                if ($addrLines) $ld['address'] = ['@type' => 'PostalAddress', 'streetAddress' => implode(', ', $addrLines)];
-                if ($phoneDigits !== '') $ld['telephone'] = $phoneDigits;
-                if ($emailOk) $ld['email'] = $email;
-                if ($web !== '') $ld['url'] = $web;
-                if ($specs) $ld['openingHoursSpecification'] = $specs;
-                $html .= '<script type="application/ld+json">' . json_encode($ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . "</script>\n";
-            }
-            $html .= '</div>' . "\n";
-            return $customCss . $html;
-        }
-
         case 'COLLECTION_LIST': {
             $cid = $block['content']['collectionId'] ?? '';
             $cslugRaw = $block['content']['collectionSlug'] ?? '';
@@ -2099,66 +1995,6 @@ function cc_render_block_body($block) {
         case 'ITEM_TERMS':
             // the categories and tags of the item being published; nothing on other pages
             return $customCss . cc_render_item_terms($block);
-
-        case 'SEARCH':
-            // Site search: the script searches search-index.json (written by rebuild_all.php)
-            $c = $block['content'] ?? [];
-            $ph = htmlspecialchars(trim((string)($c['placeholder'] ?? '')) !== '' ? $c['placeholder'] : 'Search the site…');
-            $sbtn = htmlspecialchars(trim((string)($c['buttonText'] ?? '')) !== '' ? $c['buttonText'] : 'Search');
-            $empty = htmlspecialchars(trim((string)($c['noResults'] ?? '')) !== '' ? $c['noResults'] : 'No results for');
-            $limit = cc_int($c['limit'] ?? null, 10, 1, 50);
-            // faceted search: the facets the visitor can filter by (the collection, and a taxonomy: tax:<id>)
-            $facets = [];
-            foreach ((is_array($c['facets'] ?? null) ? $c['facets'] : []) as $fk) {
-                if (is_string($fk) && ($fk === 'collection' || preg_match('/^tax:[a-z0-9_-]{1,40}$/', $fk))) $facets[] = $fk;
-            }
-            $facets = array_slice(array_values(array_unique($facets)), 0, 10);
-            $fattr = $facets ? ' data-facets="' . htmlspecialchars(json_encode($facets)) . '"' : '';
-            $html = "<div id=\"$innerId\" class=\"cc-search$animClass$innerClass\" style=\"$styleAttr\" data-index=\"{{BASE_URL}}search-index.json\" data-empty=\"$empty\" data-limit=\"$limit\"$fattr>\n";
-            $html .= "<form class=\"cc-search-form\" role=\"search\" style=\"display:flex; gap:8px; flex-wrap:wrap;\">\n";
-            $html .= "<input type=\"search\" name=\"q\" aria-label=\"$ph\" placeholder=\"$ph\" style=\"flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:inherit; box-sizing:border-box;\">\n";
-            $html .= "<button type=\"submit\" style=\"padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;\">$sbtn</button>\n";
-            $html .= "</form>\n<div class=\"cc-search-results\" aria-live=\"polite\" style=\"margin-top:16px;\"></div>\n";
-            $html .= "<script>" . str_replace('%ID%', $innerId, CC_SEARCH_SCRIPT) . "</script>\n</div>\n";
-            return $customCss . $html;
-
-        case 'CODE_SNIPPET': {
-            $c = $block['content'] ?? [];
-            $langRow = null;
-            foreach (CC_CODE_LANGS as $l) { if ($l[0] === ($c['language'] ?? '')) { $langRow = $l; break; } }
-            if (!$langRow) $langRow = CC_CODE_LANGS[count(CC_CODE_LANGS) - 1];
-            $lang = $langRow[0];
-            $code = mb_substr(rtrim(preg_replace('/\r\n?/', "\n", cc_str($c['code'] ?? '')), "\n"), 0, 50000);
-            $filename = cc_esc($c['filename'] ?? '');
-            $dark = ($c['theme'] ?? '') !== 'light';
-            $fs = cc_int($c['fontSize'] ?? null, 14, 11, 20);
-            $maxH = cc_int($c['maxHeight'] ?? null, 0, 0, 1200);
-            $copy = ($c['copyButton'] ?? true) !== false;
-            $lineNums = ($c['lineNumbers'] ?? false) === true;
-            $pal = $dark ? ['#0f172a', '#e2e8f0', '#1e293b', '#111c33', '#94a3b8'] : ['#f8fafc', '#0f172a', '#e2e8f0', '#f1f5f9', '#64748b'];
-            $tk = $dark
-                ? ['c' => '#7c8aa5', 's' => '#86efac', 'k' => '#c4b5fd', 'n' => '#fdba74', 'f' => '#7dd3fc', 'v' => '#fca5a5', 't' => '#f472b6', 'a' => '#fcd34d']
-                : ['c' => '#64748b', 's' => '#15803d', 'k' => '#7c3aed', 'n' => '#c2410c', 'f' => '#0369a1', 'v' => '#b91c1c', 't' => '#be185d', 'a' => '#b45309'];
-            $tokCss = '';
-            foreach ($tk as $k => $col) $tokCss .= '#' . $innerId . ' .cc-tk-' . $k . '{color:' . $col . ($k === 'c' ? ';font-style:italic' : '') . '}';
-            $showBar = $filename !== '' || $langRow[1] !== '' || $copy;
-            $lines = substr_count($code, "\n") + 1;
-            $gutter = '';
-            if ($lineNums) { $nums = []; for ($i = 1; $i <= $lines; $i++) $nums[] = $i; $gutter = implode("\n", $nums); }
-            return $customCss . '<style>' . $tokCss . '#' . $innerId . ' .cc-code-copy:hover{filter:brightness(1.2)}</style>'
-                . '<figure id="' . $innerId . '" class="cc-code cc-code-' . ($dark ? 'dark' : 'light') . $animClass . $innerClass . '" data-lang="' . $lang . '" style="' . $styleAttr . ' margin:0; border-radius:12px; overflow:hidden; background:' . $pal[0] . '; color:' . $pal[1] . '; border:1px solid ' . $pal[2] . ';">' . "\n"
-                . ($showBar ? '<div class="cc-code-bar" style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:' . $pal[3] . '; border-bottom:1px solid ' . $pal[2] . '; font:600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:' . $pal[4] . ';">'
-                    . '<span class="cc-code-file" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' . ($filename !== '' ? $filename : $langRow[1]) . '</span>'
-                    . ($filename !== '' && $langRow[1] !== '' ? '<span class="cc-code-lang">' . $langRow[1] . '</span>' : '')
-                    . ($copy ? '<button type="button" class="cc-code-copy" hidden aria-label="Copy the code" style="padding:5px 10px; border-radius:6px; border:1px solid ' . $pal[2] . '; background:transparent; color:inherit; font:600 12px/1 inherit; cursor:pointer;">Copy</button>' : '')
-                    . '</div>' : '')
-                . '<div class="cc-code-scroll" style="overflow:auto;' . ($maxH > 0 ? ' max-height:' . $maxH . 'px;' : '') . '">'
-                . '<div class="cc-code-wrap" style="display:flex; min-width:max-content; font:' . $fs . 'px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">'
-                . ($lineNums ? '<span class="cc-code-gutter" aria-hidden="true" style="flex:0 0 auto; padding:16px 12px 16px 16px; text-align:right; white-space:pre; user-select:none; color:' . $pal[4] . ';">' . $gutter . '</span>' : '')
-                . '<pre class="cc-code-pre" style="flex:1; margin:0; padding:16px; white-space:pre; tab-size:2; font:inherit;"><code class="cc-code-code" style="font:inherit;">' . htmlspecialchars($code) . '</code></pre>'
-                . '</div></div>' . "\n</figure>\n"
-                . '<script>' . str_replace('%ID%', $innerId, CC_CODE_SCRIPT) . "</script>\n";
-        }
 
         case 'PRICE_CALCULATOR': {
             $c = $block['content'] ?? [];
@@ -2318,42 +2154,6 @@ function cc_render_block_body($block) {
                 . '<button type="button" class="cc-wz-next" hidden style="' . CC_WZ_BTN . ' background:' . $accent . '; color:#ffffff; border:none;">' . $text($c['nextText'] ?? '', 'Next', 30) . '</button>'
                 . '<button type="submit" class="cc-wz-submit" style="' . CC_WZ_BTN . ' background:' . $accent . '; color:#ffffff; border:none;">' . $text($c['btnText'] ?? '', 'Send', 30) . '</button></div>' . "\n</form>\n</div>\n</div>\n"
                 . '<script>' . str_replace('%ID%', $innerId, CC_WIZARD_SCRIPT) . "</script>\n";
-        }
-
-        case 'VIDEO_HERO': {
-            $c = $block['content'] ?? [];
-            $objs = function ($v) { return array_values(array_filter(is_array($v) ? $v : [], 'is_array')); };
-            $sources = array_values(array_filter([cc_media_src(cc_str($c['video'] ?? '')), cc_media_src(cc_str($c['video2'] ?? ''))], function ($u) { return $u !== ''; }));
-            $poster = cc_img_url(cc_str($c['poster'] ?? ''));
-            $overlay = cc_color($c['overlay'] ?? '', '#0f172a');
-            $op = cc_int($c['overlayOpacity'] ?? null, 55, 0, 90);
-            $h = cc_int($c['height'] ?? null, 560, 280, 1000);
-            $center = ($c['align'] ?? '') !== 'left';
-            $color = cc_color($c['textColor'] ?? '', '#ffffff');
-            $title = cc_esc($c['title'] ?? '');
-            $subtitle = cc_br(cc_str($c['subtitle'] ?? ''));
-            // the first two buttons are taken before the empty ones are dropped, as in the editor's renderer
-            $btns = array_values(array_filter(array_slice($objs($c['buttons'] ?? []), 0, 2), function ($b) { return trim(cc_str($b['text'] ?? '')) !== ''; }));
-            $btnHtml = '';
-            foreach ($btns as $b) {
-                $primary = ($b['style'] ?? '') !== 'secondary';
-                $btnHtml .= '<a class="cc-vh-btn cc-vh-btn-' . ($primary ? 'primary' : 'secondary') . '" href="' . htmlspecialchars(cc_block_url(cc_str($b['url'] ?? ''))) . '" style="padding:14px 28px; border-radius:10px; font-weight:700; text-decoration:none; ' . ($primary ? 'background:#ffffff; color:#0f172a;' : 'border:2px solid rgba(255,255,255,0.85); color:#ffffff;') . '">' . cc_esc($b['text'] ?? '') . '</a>';
-            }
-            $icon = function ($cls, $d, $hidden) { return '<svg class="' . $cls . '"' . ($hidden ? ' style="display:none"' : '') . ' aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">' . $d . '</svg>'; };
-            $srcHtml = '';
-            foreach ($sources as $u) $srcHtml .= '<source src="' . htmlspecialchars($u) . '"' . (cc_media_mime($u) !== '' ? ' type="' . cc_media_mime($u) . '"' : '') . '>';
-            return $customCss . '<style>#' . $innerId . ' [hidden]{display:none !important}</style>' . '<section id="' . $innerId . '" class="cc-vhero' . $animClass . $innerClass . '" data-mobile="' . (($c['mobileVideo'] ?? false) === true ? '1' : '0') . '" style="' . $styleAttr . ' position:relative; overflow:hidden; min-height:' . $h . 'px; display:flex; align-items:center; justify-content:center; background:#0f172a; color:' . $color . ';">' . "\n"
-                . ($poster !== '' ? '<div class="cc-vh-poster" aria-hidden="true" style="position:absolute; inset:0; background-image:url(\'' . htmlspecialchars(cc_css_url($poster)) . '\'); background-size:cover; background-position:center;"></div>' : '')
-                . ($sources ? '<video class="cc-vh-video" muted loop playsinline preload="none" aria-hidden="true"' . ($poster !== '' ? ' poster="' . htmlspecialchars($poster) . '"' : '') . ' style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">' . $srcHtml . '</video>' : '')
-                . '<div class="cc-vh-overlay" aria-hidden="true" style="position:absolute; inset:0; background:' . $overlay . '; opacity:' . cc_plain($op / 100) . ';"></div>'
-                . '<div class="cc-vh-inner" style="position:relative; width:100%; max-width:900px; padding:64px 24px; box-sizing:border-box; text-align:' . ($center ? 'center' : 'left') . '; ' . ($center ? 'margin:0 auto;' : 'margin-right:auto;') . '">'
-                . ($title !== '' ? '<h2 class="cc-vh-title" style="margin:0; font-size:clamp(32px, 5vw, 56px); line-height:1.1; font-weight:800; color:inherit;">' . $title . '</h2>' : '')
-                . ($subtitle !== '' ? '<p class="cc-vh-subtitle" style="margin:16px 0 0 0; font-size:clamp(16px, 2vw, 20px); line-height:1.6; opacity:0.92;">' . $subtitle . '</p>' : '')
-                . ($btnHtml !== '' ? '<div class="cc-vh-buttons" style="display:flex; gap:12px; flex-wrap:wrap; justify-content:' . ($center ? 'center' : 'flex-start') . '; margin-top:28px;">' . $btnHtml . '</div>' : '')
-                . '</div>'
-                . ($sources && ($c['showPause'] ?? true) !== false ? '<button type="button" class="cc-vh-toggle" hidden aria-label="Pause the background video" style="position:absolute; right:16px; bottom:16px; width:40px; height:40px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.55); color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">' . $icon('cc-vh-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', false) . $icon('cc-vh-i-play', '<path d="M8 5v14l11-7z"/>', true) . '</button>' : '')
-                . '</section>' . "\n"
-                . ($sources ? '<script>' . str_replace('%ID%', $innerId, CC_VIDEO_SCRIPT) . "</script>\n" : '');
         }
 
         case 'ANNOUNCEMENT_BAR':

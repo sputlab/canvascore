@@ -133,6 +133,7 @@ function ccInitials(name) {
 // A content value as text, cast the way PHP does (objects/arrays/null -> '', booleans -> '1' / ''). Twin of cc_str() / cc_esc().
 function ccStr(v) { if (v === null || v === undefined || typeof v === 'object') return ''; if (typeof v === 'boolean') return v ? '1' : ''; return String(v); }
 function ccEsc(v) { return escapeHtml(ccStr(v)); }
+export { ccEnc as ccEncValue };
 function ccEnc(s) { return encodeURIComponent(String(s ?? '')).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase()); }
 
 // Multi-step Form field types: the Form block's, plus choices. Twin of CC_WIZARD_TYPES in compiler.php.
@@ -146,8 +147,6 @@ function ccMoney(v, dec, eu, cur, after) {
   if (eu) s = s.replace(/[,.]/g, (ch) => (ch === ',' ? '.' : ','));
   return after ? s + '\u00a0' + cur : cur + s;
 }
-// Code Snippet languages: [id, label]. Twin of CC_CODE_LANGS in compiler.php.
-const CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['json', 'JSON'], ['php', 'PHP'], ['shell', 'Shell'], ['text', '']];
 
 // A media file address (audio, video): http(s) or a path on this site; any other scheme (javascript:, data:…) -> ''.
 // Twin of cc_media_src() in compiler.php.
@@ -161,6 +160,7 @@ function ccMediaSrc(u) {
 }
 // The MIME type a file's extension says ('' when unknown). Twin of cc_media_mime().
 const MEDIA_MIME = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav' };
+export { ccMediaMime as ccMediaMimeValue };
 function ccMediaMime(src) {
   const m = String(src).split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i);
   return m && Object.prototype.hasOwnProperty.call(MEDIA_MIME, m[1].toLowerCase()) ? MEDIA_MIME[m[1].toLowerCase()] : '';
@@ -390,145 +390,8 @@ function renderBlockBody(block, opts = {}) {
       return customCss + `<div id="${innerId}" class="cc-form-block${animClass}${innerClass}"${styleString}>\n<div style="margin-bottom:20px;"${field('title', 'Form title')}>${title}</div>\n<form id="${formId}" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST">\n<input type="hidden" name="_form" value="${formId}">\n<input type="hidden" name="_success" value="${successMsg}">\n<input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">\n${fieldsHtml}<button type="submit" style="padding:12px 24px; background:var(--brand-color, #3b82f6); color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">${btnText}</button>\n</form>\n</div>\n`;
     }
 
-    case 'TABLE': {
-      const c = content;
-      const rows = ccLines(c.data ?? '').map((l) => l.split(/\s*\|\s*|\t/));
-      const headerRow = (c.headerRow ?? true) !== false;
-      const striped = (c.striped ?? true) !== false;
-      const bordered = !!c.bordered;
-      const compact = !!c.compact;
-      const rowHeaders = !!c.rowHeaders;
-      const sticky = !!c.stickyHeader;
-      const maxH = Math.trunc(ccNum(c.maxHeight ?? 0, 0, 1200, 0));
-      const caption = escapeHtml(c.caption ?? '');
-      const head = (headerRow && rows.length) ? rows.shift() : null;
-      let ncols = head ? head.length : 0;
-      for (const r of rows) ncols = Math.max(ncols, r.length);
-      const pad = compact ? '6px 10px' : '12px 14px';
-      const wrap = 'overflow-x:auto;' + ((sticky && maxH > 0) ? ` max-height:${maxH}px; overflow-y:auto;` : '');
-      const cellBorder = bordered ? 'border:1px solid #e2e8f0;' : 'border-bottom:1px solid #e2e8f0;';
-      const thStyle = `padding:${pad}; background:#f1f5f9; border-bottom:2px solid #cbd5e1; font-weight:700;` + (sticky ? ' position:sticky; top:0;' : '') + (bordered ? ' border:1px solid #cbd5e1;' : '');
-      let table = '';
-      if (ncols > 0) {
-        table += `<table class="cc-table" style="width:100%; border-collapse:collapse; font-size:14px; text-align:left;">`;
-        if (caption !== '') table += `<caption style="caption-side:top; text-align:left; font-weight:700; padding:0 0 10px 0;">${caption}</caption>`;
-        if (head) {
-          table += '<thead><tr>';
-          for (let i = 0; i < ncols; i++) table += `<th scope="col" style="${thStyle}">${escapeHtml(head[i] ?? '')}</th>`;
-          table += '</tr></thead>';
-        }
-        table += '<tbody>';
-        rows.forEach((r, ri) => {
-          table += `<tr${(striped && ri % 2 === 1) ? ' style="background:#f8fafc;"' : ''}>`;
-          for (let i = 0; i < ncols; i++) {
-            const cell = escapeHtml(r[i] ?? '');
-            if (i === 0 && rowHeaders) table += `<th scope="row" style="padding:${pad}; ${cellBorder} font-weight:600;">${cell}</th>`;
-            else table += `<td style="padding:${pad}; ${cellBorder}">${cell}</td>`;
-          }
-          table += '</tr>';
-        });
-        table += '</tbody></table>';
-      }
-      return customCss + `<div id="${innerId}" class="cc-table-block${animClass}${innerClass}" style="${styleAttr}">\n<div class="cc-table-wrap" style="${wrap}">${table}</div>\n</div>\n`;
-    }
-
-    case 'BUSINESS': {
-      const c = content;
-      const types = ['LocalBusiness', 'Restaurant', 'Store', 'CafeOrCoffeeShop', 'Dentist', 'HairSalon', 'HealthAndBeautyBusiness', 'ProfessionalService', 'LegalService', 'AutoRepair', 'Hotel', 'Organization'];
-      void types;
-      const nameRaw = String(c.name ?? '').trim();
-      const addrLines = ccLines(c.address ?? '');
-      const phone = String(c.phone ?? '').trim();
-      const phoneDigits = phone.replace(/[^0-9+]/g, '');
-      const email = String(c.email ?? '').trim();
-      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      const web = ccExtUrl(c.website ?? '');
-      const closedLabel = escapeHtml(c.closedLabel ?? 'Closed');
-      const hoursTitle = escapeHtml(c.hoursTitle ?? 'Opening hours');
-      const note = escapeHtml(c.note ?? '');
-      const hours = Array.isArray(c.hours) ? c.hours.slice(0, 7) : [];
-      const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      let contact = '';
-      if (nameRaw !== '') contact += `<h3 class="cc-biz-name" style="margin:0 0 10px 0; font-size:20px;">${escapeHtml(nameRaw)}</h3>`;
-      if (addrLines.length) contact += `<address class="cc-biz-address" style="font-style:normal; line-height:1.6; margin:0 0 10px 0;">${ccBr(c.address ?? '')}</address>`;
-      if (phoneDigits !== '') contact += `<div class="cc-biz-line" style="margin-bottom:4px;"><a class="cc-biz-link" href="tel:${escapeHtml(phoneDigits)}" style="color:inherit;">${escapeHtml(phone)}</a></div>`;
-      if (emailOk) contact += `<div class="cc-biz-line" style="margin-bottom:4px;"><a class="cc-biz-link" href="mailto:${escapeHtml(email)}" style="color:inherit;">${escapeHtml(email)}</a></div>`;
-      if (web !== '') contact += `<div class="cc-biz-line" style="margin-bottom:4px;"><a class="cc-biz-link" href="${escapeHtml(web)}" rel="noopener" style="color:inherit;">${escapeHtml(web.replace(/^https?:\/\//i, ''))}</a></div>`;
-      if (addrLines.length && ((c.mapsLink ?? true) !== false)) {
-        contact += `<a class="cc-biz-directions" rel="noopener" href="${escapeHtml('https://www.google.com/maps/search/?api=1&query=' + ccEnc(addrLines.join(', ')))}" style="display:inline-block; margin-top:12px; padding:9px 16px; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; text-decoration:none; font-weight:600; font-size:14px;">${escapeHtml(c.directionsLabel ?? 'Get directions')}</a>`;
-      }
-      let rows = '';
-      hours.forEach((hr, i) => {
-        const closed = !!hr.closed;
-        const open = String(hr.open ?? '').trim(); const close = String(hr.close ?? '').trim();
-        const okTimes = /^\d{2}:\d{2}$/.test(open) && /^\d{2}:\d{2}$/.test(close);
-        const val = (closed || !okTimes) ? closedLabel : escapeHtml(open) + '&ndash;' + escapeHtml(close);
-        rows += `<tr style="border-bottom:1px solid #e2e8f0;"><th scope="row" style="text-align:left; padding:8px 0; font-weight:600;">${escapeHtml(hr.day ?? dayNames[i])}</th><td style="text-align:right; padding:8px 0;">${val}</td></tr>`;
-      });
-      let hoursHtml = '';
-      if (rows !== '' || note !== '') {
-        hoursHtml = `<div class="cc-biz-hours"><h3 class="cc-biz-hours-title" style="margin:0 0 10px 0; font-size:20px;">${hoursTitle}</h3>`
-          + (rows !== '' ? `<table class="cc-biz-table" style="width:100%; border-collapse:collapse; font-size:15px;"><tbody>${rows}</tbody></table>` : '')
-          + (note !== '' ? `<p class="cc-biz-note" style="margin:10px 0 0 0; font-size:13px; color:#64748b;">${note}</p>` : '') + `</div>`;
-      }
-      let h = `<style>@media(max-width:768px){#${innerId}{grid-template-columns:1fr !important}}</style>`;
-      h += `<div id="${innerId}" class="cc-business${animClass}${innerClass}" style="${styleAttr} display:grid; grid-template-columns:repeat(2, 1fr); gap:32px;">\n`;
-      h += `<div class="cc-biz-contact">${contact}</div>\n${hoursHtml}\n`;
-      h += `</div>\n`;
-      return customCss + h;
-    }
-
     case 'COLLECTION_LIST':
       return `<!-- CollectionList: ${escapeHtml(content.collectionSlug || content.collectionId || '')} -->\n`;
-
-    case 'SEARCH': {
-      // Site search: the published page's script searches search-index.json (written at publish)
-      const ph = escapeHtml(content.placeholder || 'Search the site…');
-      const btn = escapeHtml(content.buttonText || 'Search');
-      const empty = escapeHtml(content.noResults || 'No results for');
-      const limit = ccInt(content.limit, 10, 1, 50);
-      html = `<div id="${innerId}" class="cc-search${animClass}${innerClass}" style="${styleAttr}" data-index="{{BASE_URL}}search-index.json" data-empty="${empty}" data-limit="${limit}">\n`;
-      html += `<form class="cc-search-form" role="search" style="display:flex; gap:8px; flex-wrap:wrap;">\n`;
-      html += `<input type="search" name="q" aria-label="${ph}" placeholder="${ph}" style="flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:inherit; box-sizing:border-box;">\n`;
-      html += `<button type="submit" style="padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;">${btn}</button>\n`;
-      html += `</form>\n<div class="cc-search-results" aria-live="polite" style="margin-top:16px;"></div>\n</div>\n`;
-      return customCss + html;
-    }
-
-    case 'CODE_SNIPPET': {
-      const c = content;
-      const langRow = CODE_LANGS.find((l) => l[0] === c.language) || CODE_LANGS[CODE_LANGS.length - 1];
-      const lang = langRow[0];
-      const code = [...ccStr(c.code).replace(/\r\n?/g, '\n').replace(/\n+$/, '')].slice(0, 50000).join('');
-      const filename = ccEsc(c.filename);
-      const dark = c.theme !== 'light';
-      const fs = ccInt(c.fontSize, 14, 11, 20);
-      const maxH = ccInt(c.maxHeight, 0, 0, 1200);
-      const copy = c.copyButton !== false;
-      const lineNums = c.lineNumbers === true;
-      const pal = dark ? ['#0f172a', '#e2e8f0', '#1e293b', '#111c33', '#94a3b8'] : ['#f8fafc', '#0f172a', '#e2e8f0', '#f1f5f9', '#64748b'];
-      const tk = dark
-        ? { c: '#7c8aa5', s: '#86efac', k: '#c4b5fd', n: '#fdba74', f: '#7dd3fc', v: '#fca5a5', t: '#f472b6', a: '#fcd34d' }
-        : { c: '#64748b', s: '#15803d', k: '#7c3aed', n: '#c2410c', f: '#0369a1', v: '#b91c1c', t: '#be185d', a: '#b45309' };
-      let tokCss = '';
-      for (const k of Object.keys(tk)) tokCss += `#${innerId} .cc-tk-${k}{color:${tk[k]}${k === 'c' ? ';font-style:italic' : ''}}`;
-      const showBar = filename !== '' || langRow[1] !== '' || copy;
-      const lines = code.split('\n').length;
-      let gutter = '';
-      if (lineNums) { const nums = []; for (let i = 1; i <= lines; i++) nums.push(i); gutter = nums.join('\n'); }
-      return customCss + `<style>${tokCss}#${innerId} .cc-code-copy:hover{filter:brightness(1.2)}</style>`
-        + `<figure id="${innerId}" class="cc-code cc-code-${dark ? 'dark' : 'light'}${animClass}${innerClass}" data-lang="${lang}" style="${styleAttr} margin:0; border-radius:12px; overflow:hidden; background:${pal[0]}; color:${pal[1]}; border:1px solid ${pal[2]};">\n`
-        + (showBar ? `<div class="cc-code-bar" style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:${pal[3]}; border-bottom:1px solid ${pal[2]}; font:600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:${pal[4]};">`
-          + `<span class="cc-code-file" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${filename !== '' ? filename : langRow[1]}</span>`
-          + (filename !== '' && langRow[1] !== '' ? `<span class="cc-code-lang">${langRow[1]}</span>` : '')
-          + (copy ? `<button type="button" class="cc-code-copy" hidden aria-label="Copy the code" style="padding:5px 10px; border-radius:6px; border:1px solid ${pal[2]}; background:transparent; color:inherit; font:600 12px/1 inherit; cursor:pointer;">Copy</button>` : '')
-          + `</div>` : '')
-        + `<div class="cc-code-scroll" style="overflow:auto;${maxH > 0 ? ` max-height:${maxH}px;` : ''}">`
-        + `<div class="cc-code-wrap" style="display:flex; min-width:max-content; font:${fs}px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">`
-        + (lineNums ? `<span class="cc-code-gutter" aria-hidden="true" style="flex:0 0 auto; padding:16px 12px 16px 16px; text-align:right; white-space:pre; user-select:none; color:${pal[4]};">${gutter}</span>` : '')
-        + `<pre class="cc-code-pre" style="flex:1; margin:0; padding:16px; white-space:pre; tab-size:2; font:inherit;"><code class="cc-code-code" style="font:inherit;">${escapeHtml(code)}</code></pre>`
-        + `</div></div>\n</figure>\n`;
-    }
 
     case 'PRICE_CALCULATOR': {
       const c = content;
@@ -676,39 +539,6 @@ function renderBlockBody(block, opts = {}) {
         + `<div class="cc-wz-nav" style="display:flex; align-items:center; gap:10px; margin-top:24px;"><button type="button" class="cc-wz-back" hidden style="${WZ_BTN} background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;">${text(c.backText, 'Back', 30)}</button><span style="flex:1;"></span>`
         + `<button type="button" class="cc-wz-next" hidden style="${WZ_BTN} background:${accent}; color:#ffffff; border:none;">${text(c.nextText, 'Next', 30)}</button>`
         + `<button type="submit" class="cc-wz-submit" style="${WZ_BTN} background:${accent}; color:#ffffff; border:none;">${text(c.btnText, 'Send', 30)}</button></div>\n</form>\n</div>\n</div>\n`;
-    }
-
-    case 'VIDEO_HERO': {
-      const c = content;
-      const objs = (v) => (Array.isArray(v) ? v : []).filter((o) => o && typeof o === 'object');
-      const sources = [ccMediaSrc(ccStr(c.video)), ccMediaSrc(ccStr(c.video2))].filter((u) => u !== '');
-      const poster = ccImgUrl(ccStr(c.poster));
-      const overlay = ccColor(c.overlay, '#0f172a');
-      const op = ccInt(c.overlayOpacity, 55, 0, 90);
-      const h = ccInt(c.height, 560, 280, 1000);
-      const center = c.align !== 'left';
-      const color = ccColor(c.textColor, '#ffffff');
-      const title = ccEsc(c.title);
-      const subtitle = ccBr(ccStr(c.subtitle));
-      const btns = objs(c.buttons).slice(0, 2).filter((b) => ccStr(b.text).trim() !== '');
-      let btnHtml = '';
-      for (const b of btns) {
-        const primary = b.style !== 'secondary';
-        btnHtml += `<a class="cc-vh-btn cc-vh-btn-${primary ? 'primary' : 'secondary'}" href="${escapeHtml(resolveBlockUrl(ccStr(b.url)))}" style="padding:14px 28px; border-radius:10px; font-weight:700; text-decoration:none; ${primary ? 'background:#ffffff; color:#0f172a;' : 'border:2px solid rgba(255,255,255,0.85); color:#ffffff;'}">${ccEsc(b.text)}</a>`;
-      }
-      const icon = (cls, d, hidden) => `<svg class="${cls}"${hidden ? ' style="display:none"' : ''} aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">${d}</svg>`;
-      return customCss + `<style>#${innerId} [hidden]{display:none !important}</style>`
-        + `<section id="${innerId}" class="cc-vhero${animClass}${innerClass}" data-mobile="${c.mobileVideo === true ? '1' : '0'}" style="${styleAttr} position:relative; overflow:hidden; min-height:${h}px; display:flex; align-items:center; justify-content:center; background:#0f172a; color:${color};">\n`
-        + (poster !== '' ? `<div class="cc-vh-poster" aria-hidden="true" style="position:absolute; inset:0; background-image:url('${escapeHtml(ccCssUrl(poster))}'); background-size:cover; background-position:center;"></div>` : '')
-        + (sources.length ? `<video class="cc-vh-video" muted loop playsinline preload="none" aria-hidden="true"${poster !== '' ? ` poster="${escapeHtml(poster)}"` : ''} style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">${sources.map((u) => `<source src="${escapeHtml(u)}"${ccMediaMime(u) !== '' ? ` type="${ccMediaMime(u)}"` : ''}>`).join('')}</video>` : '')
-        + `<div class="cc-vh-overlay" aria-hidden="true" style="position:absolute; inset:0; background:${overlay}; opacity:${ccPlain(op / 100)};"></div>`
-        + `<div class="cc-vh-inner" style="position:relative; width:100%; max-width:900px; padding:64px 24px; box-sizing:border-box; text-align:${center ? 'center' : 'left'}; ${center ? 'margin:0 auto;' : 'margin-right:auto;'}">`
-        + (title !== '' ? `<h2 class="cc-vh-title" style="margin:0; font-size:clamp(32px, 5vw, 56px); line-height:1.1; font-weight:800; color:inherit;">${title}</h2>` : '')
-        + (subtitle !== '' ? `<p class="cc-vh-subtitle" style="margin:16px 0 0 0; font-size:clamp(16px, 2vw, 20px); line-height:1.6; opacity:0.92;">${subtitle}</p>` : '')
-        + (btnHtml !== '' ? `<div class="cc-vh-buttons" style="display:flex; gap:12px; flex-wrap:wrap; justify-content:${center ? 'center' : 'flex-start'}; margin-top:28px;">${btnHtml}</div>` : '')
-        + `</div>`
-        + (sources.length && c.showPause !== false ? `<button type="button" class="cc-vh-toggle" hidden aria-label="Pause the background video" style="position:absolute; right:16px; bottom:16px; width:40px; height:40px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.55); color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">${icon('cc-vh-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', false)}${icon('cc-vh-i-play', '<path d="M8 5v14l11-7z"/>', true)}</button>` : '')
-        + `</section>\n`;
     }
 
     case 'ANNOUNCEMENT_BAR':

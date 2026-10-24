@@ -9,6 +9,7 @@
 //   settings   { key: { type, default, … } }: every value the template may use. Raw content never reaches the
 //              template: each value is rebuilt from its setting, so a wrong type or a hostile value gets the default.
 //     text      a string (numbers and booleans as PHP casts them; arrays and objects → ''); trim, fallbackWhenEmpty,
+//               fallbackWhenBlank (the default when blank once trimmed, the value untrimmed otherwise),
 //               pattern (a regex the whole value must match, else the default), maxLength
 //     richtext  HTML: sanitized by the server (cc_sanitize_html), as is in the editor; may be printed raw
 //     number    min, max, default; int (whole number) or round (decimals); parse: "int" reads the leading whole
@@ -24,6 +25,8 @@
 //               plain values, {{.}} in the loop); max; skipEmpty (drops the values that are empty once trimmed);
 //               count: { as, min, max } adds a top-level number: the item count, clamped; skipNonObjects (drops
 //               items that are not objects, as PHP's is_array()); keepIf (a flag's conditions each item must meet);
+//               unique (lists of values); defaultsByIndex: { key: [values] } (a missing value takes the one at its
+//               position); for lists of values max applies after skipEmpty and unique
 //               share: { of, as, format: { key: decimals } } gives each item its share of the total of "of", in %
 //     object    item: { key: setting }: one object (a non-object gets the defaults); {{#key}}…{{/key}} enters it
 //     calc      a number from another one: of (or fallback when that one is 0), / div, * mul, + add, then min / max
@@ -33,13 +36,15 @@
 //     choices   options [{ value, data }]: the values picked (a list of texts), as a list of { value, …data } in the
 //               options' order (data is trusted, as for enum)
 //     from: "styles" reads the value from the block's styles (after its text style) instead of its content.
-//     transform: once every value is clean, one of TRANSFORMS below (twins of the PHP ones): blockUrl (an internal
+//     transform: once every value is clean, one of TRANSFORMS below (or a list of them, applied in order) (twins of the PHP ones): blockUrl (an internal
 //               link → {{BASE_URL}}…), cssUrl (for url('…')), urlencode, lines2br (escaped, a <br /> per line break:
 //               trusted), videoEmbed (a YouTube or Vimeo address → its player address, '' otherwise), fmtNum
 //               (thousands separators, decimals from the sibling named by decimalsFrom), extUrl (https:// added when
 //               missing), initials (of a name), mailto (a valid address → mailto:…, else ''), contactUrl (an email
 //               address → mailto:…, else extUrl), br (lines → escaped, joined by <br>), repeat (the setting's text,
-//               value times), mediaSrc (an audio or video address: http(s) or a path), replace (from → to)
+//               value times), mediaSrc (an audio or video address: http(s) or a path), mediaMime (its type from the
+//               extension), replace (from → to), plain (a number, ≤ 4 decimals), json, telDigits, stripScheme, mapsUrl,
+//               code, lineNumbers, tableData (rows of a pipe- or tab-separated text, with headerFrom)
 //   renderIf   a value that must be true, or the block (and its custom CSS) renders nothing
 //   script     the name of the block's behaviour script (site only; CC_TPL_SCRIPTS in blockdef.php)
 //
@@ -57,10 +62,11 @@
 //     starting with a space), _style (the block's inline style, minus the keys in rootStyleOmit; trusted),
 //     _field.<key> (editor only: the in-place editing attributes of a setting with "inline"), _script (site only:
 //     the block's behaviour script, named by "script"), _lb and _rb ({ and }: a literal { can't stand right before a
-//     tag, so CSS like .x{{{#a}}…{{/a}}} is written .x{{{_lb}}}{{#a}}…{{/a}}{{{_rb}}}; the parser refuses the former).
+//     tag, so CSS like .x{{{#a}}…{{/a}}} is written .x{{{_lb}}}{{#a}}…{{/a}}{{{_rb}}}; the parser refuses the former),
+//     _base (the {{BASE_URL}} placeholder that publishing replaces with the site's address).
 //
 // The engine knows no block: a new block needs a definition file, its line in BLOCK_DEFS below, and nothing else.
-import { ccImgUrl, ccCssUrl, ccColorValue, buildInlineStyle, resolveBlockUrl, ccFmtNum, ccExtUrlValue, ccInitialsValue, ccMediaSrcValue } from './renderBlock.mjs';
+import { ccImgUrl, ccCssUrl, ccColorValue, buildInlineStyle, resolveBlockUrl, ccFmtNum, ccExtUrlValue, ccInitialsValue, ccMediaSrcValue, ccMediaMimeValue, ccEncValue } from './renderBlock.mjs';
 import { effectClasses } from './effects.mjs';
 import { withTextPreset } from './typography.mjs';
 
@@ -70,9 +76,11 @@ import AUDIO_PLAYER from '../../../canvascore-admin/blocks/audio-player.json' wi
 import AUTHOR_BIO from '../../../canvascore-admin/blocks/author-bio.json' with { type: 'json' };
 import BEFORE_AFTER from '../../../canvascore-admin/blocks/before-after.json' with { type: 'json' };
 import BENTO from '../../../canvascore-admin/blocks/bento.json' with { type: 'json' };
+import BUSINESS from '../../../canvascore-admin/blocks/business.json' with { type: 'json' };
 import CALLOUT from '../../../canvascore-admin/blocks/callout.json' with { type: 'json' };
 import CARDS from '../../../canvascore-admin/blocks/cards.json' with { type: 'json' };
 import CASE_STUDY from '../../../canvascore-admin/blocks/case-study.json' with { type: 'json' };
+import CODE_SNIPPET from '../../../canvascore-admin/blocks/code-snippet.json' with { type: 'json' };
 import COUNTDOWN from '../../../canvascore-admin/blocks/countdown.json' with { type: 'json' };
 import COUNTERS from '../../../canvascore-admin/blocks/counters.json' with { type: 'json' };
 import DIVIDER from '../../../canvascore-admin/blocks/divider.json' with { type: 'json' };
@@ -91,19 +99,22 @@ import PRICING from '../../../canvascore-admin/blocks/pricing.json' with { type:
 import PROGRESS from '../../../canvascore-admin/blocks/progress.json' with { type: 'json' };
 import REVIEW_SUMMARY from '../../../canvascore-admin/blocks/review-summary.json' with { type: 'json' };
 import SCROLLYTELLING from '../../../canvascore-admin/blocks/scrollytelling.json' with { type: 'json' };
+import SEARCH from '../../../canvascore-admin/blocks/search.json' with { type: 'json' };
 import SHARE_BAR from '../../../canvascore-admin/blocks/share-bar.json' with { type: 'json' };
 import SLIDER from '../../../canvascore-admin/blocks/slider.json' with { type: 'json' };
 import SPLIT_CTA from '../../../canvascore-admin/blocks/split-cta.json' with { type: 'json' };
 import STEPS from '../../../canvascore-admin/blocks/steps.json' with { type: 'json' };
 import TABLE_OF_CONTENTS from '../../../canvascore-admin/blocks/table-of-contents.json' with { type: 'json' };
+import TABLE from '../../../canvascore-admin/blocks/table.json' with { type: 'json' };
 import TABS from '../../../canvascore-admin/blocks/tabs.json' with { type: 'json' };
 import TEAM from '../../../canvascore-admin/blocks/team.json' with { type: 'json' };
 import TESTIMONIAL_WALL from '../../../canvascore-admin/blocks/testimonial-wall.json' with { type: 'json' };
 import TESTIMONIAL from '../../../canvascore-admin/blocks/testimonial.json' with { type: 'json' };
 import TEXT from '../../../canvascore-admin/blocks/text.json' with { type: 'json' };
 import TIMELINE from '../../../canvascore-admin/blocks/timeline.json' with { type: 'json' };
+import VIDEO_HERO from '../../../canvascore-admin/blocks/video-hero.json' with { type: 'json' };
 import VIDEO from '../../../canvascore-admin/blocks/video.json' with { type: 'json' };
-export const BLOCK_DEFS = [ACCORDION, AUDIO_PLAYER, AUTHOR_BIO, BEFORE_AFTER, BENTO, CALLOUT, CARDS, CASE_STUDY, COUNTDOWN, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HOTSPOTS, HOVER_GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PRICING, PROGRESS, REVIEW_SUMMARY, SCROLLYTELLING, SHARE_BAR, SLIDER, SPLIT_CTA, STEPS, TABLE_OF_CONTENTS, TABS, TEAM, TESTIMONIAL_WALL, TESTIMONIAL, TEXT, TIMELINE, VIDEO];
+export const BLOCK_DEFS = [ACCORDION, AUDIO_PLAYER, AUTHOR_BIO, BEFORE_AFTER, BENTO, BUSINESS, CALLOUT, CARDS, CASE_STUDY, CODE_SNIPPET, COUNTDOWN, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HOTSPOTS, HOVER_GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PRICING, PROGRESS, REVIEW_SUMMARY, SCROLLYTELLING, SEARCH, SHARE_BAR, SLIDER, SPLIT_CTA, STEPS, TABLE_OF_CONTENTS, TABLE, TABS, TEAM, TESTIMONIAL_WALL, TESTIMONIAL, TEXT, TIMELINE, VIDEO_HERO, VIDEO];
 // <defs:end>
 const BY_TYPE = new Map(BLOCK_DEFS.map((d) => [d.type, d]));
 export const blockDef = (type) => BY_TYPE.get(type) || null;
@@ -143,6 +154,7 @@ function cleanValue(s, raw, ctx) {
       let v = missing ? str(s.default ?? '') : str(raw);
       if (s.trim) v = phpTrim(v);
       if (s.fallbackWhenEmpty && v === '') v = str(s.default ?? '');
+      if (s.fallbackWhenBlank && phpTrim(v) === '') v = str(s.default ?? '');   // blank once trimmed: the default (else kept as is)
       if (s.pattern && !new RegExp(s.pattern, 'u').test(v)) v = str(s.default ?? '');
       if (s.maxLength) v = [...v].slice(0, s.maxLength).join('');
       return v;
@@ -172,12 +184,21 @@ function cleanValue(s, raw, ctx) {
     case 'list': {
       let items = Array.isArray(raw) ? raw : [];
       if (s.skipNonObjects) items = items.filter((it) => it !== null && typeof it === 'object');   // PHP's is_array()
-      if (s.max) items = items.slice(0, s.max);
-      if (s.of) {
-        const vals = items.map((it) => cleanValue(s.of, it, ctx));
-        return s.skipEmpty ? vals.filter((v) => asText(v).trim() !== '') : vals;
+      if (s.of) {   // a list of values: cleaned, then skipEmpty, unique, max
+        let vals = items.map((it) => cleanValue(s.of, it, ctx));
+        if (s.skipEmpty) vals = vals.filter((v) => phpTrim(asText(v)) !== '');
+        if (s.unique) vals = vals.filter((v, i) => vals.findIndex((w) => asText(w) === asText(v)) === i);
+        return s.max ? vals.slice(0, s.max) : vals;
       }
-      let out = items.map((it) => cleanSettings(s.item || {}, isObj(it) ? it : {}, {}, ctx));
+      if (s.max) items = items.slice(0, s.max);
+      let out = items.map((it, i) => {
+        let src = isObj(it) ? it : {};
+        if (s.defaultsByIndex) {   // a missing value takes the default at the item's position
+          src = { ...src };
+          for (const [k, list] of Object.entries(s.defaultsByIndex)) if (src[k] === undefined || src[k] === null) src[k] = list[i] ?? '';
+        }
+        return cleanSettings(s.item || {}, src, {}, ctx);
+      });
       if (s.keepIf) out = out.filter((it) => condHolds(s.keepIf, it, false));
       if (s.share) {   // each item's share of the list's total, in % (0 when the total is 0)
         const sum = out.reduce((a, it) => a + (typeof it[s.share.of] === 'number' ? it[s.share.of] : 0), 0);
@@ -217,13 +238,13 @@ function cleanSettings(settings, content, styles, ctx) {
     }
     if (s.type === 'list' && s.count) out[s.count.as] = Math.max(s.count.min ?? 0, Math.min(s.count.max ?? Infinity, out[key].length));
   }
+  if (Object.keys(opt).length) out.opt = opt;
   // second pass: values computed from the clean ones
   for (const [key, s] of Object.entries(settings)) {
     if (s.type === 'calc') { const b = s.fallback && !truthy(out[s.of]) ? out[s.fallback] : out[s.of]; out[key] = Math.max(s.min ?? -Infinity, Math.min(s.max ?? Infinity, (typeof b === 'number' ? b : 0) / (s.div ?? 1) * (s.mul ?? 1) + (s.add ?? 0))); }
     if (s.type === 'flag') out[key] = condHolds(s.when || {}, out, !!s.any);
-    if (s.transform && TRANSFORMS[s.transform]) out[key] = TRANSFORMS[s.transform](out[key], s, out);
+    for (const t of [].concat(s.transform || [])) if (TRANSFORMS[t]) out[key] = TRANSFORMS[t](out[key], s, out);   // one transform or a chain
   }
-  if (Object.keys(opt).length) out.opt = opt;
   return out;
 }
 
@@ -231,7 +252,8 @@ function cleanSettings(settings, content, styles, ctx) {
 // (one of them), { key: { not: [texts] } } (none of them); all must hold, or one with "any"
 function condHolds(when, vals, any) {
   const one = ([k, want]) => {
-    const v = vals[k];
+    let v = vals;
+    for (const part of k.split('.')) v = own(v, part) ? v[part] : undefined;   // a dotted name reaches into objects (opt.x.y)
     if (want === true || want === false) return truthy(v) === want;
     if (Array.isArray(want)) return want.includes(asText(v));
     if (want.gt !== undefined || want.lt !== undefined) {   // a number above gt / below lt
@@ -243,6 +265,10 @@ function condHolds(when, vals, any) {
   const list = Object.entries(when);
   return any ? list.some(one) : list.every(one);
 }
+
+// The lines of a text, trimmed as PHP does, empty ones dropped (cc_lines())
+const textLines = (t) => t.split(/\r\n|\r|\n/).map(phpTrim).filter((l) => l !== '');
+const normCode = (t) => [...t.replace(/\r\n?/g, '\n').replace(/\n+$/, '')].slice(0, 50000).join('');
 
 // Value transforms: twins of CC_TPL_TRANSFORMS in blockdef.php
 const VIDEO_YT = /(?:youtube(?:-nocookie)?\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i;
@@ -272,6 +298,27 @@ const TRANSFORMS = {
   initials: (v) => ccInitialsValue(asText(v)),
   // a valid email address → mailto:…, anything else → ''
   mailto: (v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(asText(v)) ? 'mailto:' + asText(v) : ''),
+  // a number as plain text: at most 4 decimals, no trailing zeros (cc_plain())
+  plain: (v) => { const n = roundTo(typeof v === 'number' ? v : 0, 4); const t = n.toFixed(4).replace(/0+$/, '').replace(/\.$/, ''); return t === '-0' ? '0' : t; },
+  mediaMime: (v) => ccMediaMimeValue(ccMediaSrcValue(asText(v))),
+  json: (v) => JSON.stringify(Array.isArray(v) ? v.map(asText) : asText(v)),
+  telDigits: (v) => asText(v).replace(/[^0-9+]/g, ''),
+  stripScheme: (v) => asText(v).replace(/^https?:\/\//i, ''),
+  // an address (lines) → a Google Maps search link
+  mapsUrl: (v) => 'https://www.google.com/maps/search/?api=1&query=' + ccEncValue(textLines(asText(v)).join(', ')),
+  // code text: line breaks normalized, trailing ones removed, at most 50,000 characters
+  code: (v) => normCode(asText(v)),
+  // 1…n, one per line of the (normalized) code
+  lineNumbers: (v) => Array.from({ length: normCode(asText(v)).split('\n').length }, (_, i) => i + 1).join('\n'),
+  // "a | b | c" or tab-separated lines → { ncols, head: [cells] (when headerFrom is on), rows: [{ cells, odd }] }, padded
+  tableData: (v, s, sib) => {
+    const rows = textLines(asText(v)).map((l) => l.split(/\s*\|\s*|\t/));
+    const head = truthy(sib[s.headerFrom]) && rows.length ? rows.shift() : null;
+    let ncols = head ? head.length : 0;
+    for (const r of rows) ncols = Math.max(ncols, r.length);
+    const pad = (r) => Array.from({ length: ncols }, (_, i) => r[i] ?? '');
+    return { ncols, head: head ? pad(head) : [], rows: rows.map((r, i) => ({ cells: pad(r), odd: i % 2 === 1 })) };
+  },
   fmtNum: (v, s, sib) => ccFmtNum(typeof v === 'number' ? v : 0, s.decimalsFrom ? sib[s.decimalsFrom] : (s.decimals ?? 0)),
 };
 
@@ -366,6 +413,6 @@ export function renderDefBlock(def, block, host) {
     if (s.inline) field[key] = trusted(host.fields ? ` data-cc-field="${key}" contenteditable="true" data-cc-placeholder="${esc(s.placeholder || '')}"` : '');
   }
   if (def.renderIf && !truthy(values[def.renderIf])) return null;   // nothing at all, not even the custom CSS
-  const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted(''), _lb: trusted('{'), _rb: trusted('}') };
+  const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted(''), _lb: trusted('{'), _rb: trusted('}'), _base: trusted('{{BASE_URL}}') };
   return renderNodes(parsed(def), [builtIn, values]);
 }

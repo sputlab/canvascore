@@ -342,7 +342,7 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   const onDisk = files.map((f) => JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks/' + f, import.meta.url)), 'utf-8')).type).sort();
   if (JSON.stringify(listed) !== JSON.stringify(onDisk)) { failures++; console.error(`✗ BLOCK_DEFS (blockDef.mjs) and the files in blocks/ differ: ${listed} / ${onDisk}`); }
   else console.log(`✓ every definition file is listed in blockDef.mjs (${files.length})`);
-  const noScript = (h) => h.replace(/[ \t]*<script>[\s\S]*?<\/script>\n/g, '');   // site-only behaviour scripts (with their indentation)
+  const noScript = (h) => h.replace(/[ \t]*<script\b[^>]*>[\s\S]*?<\/script>\n/g, '');   // site-only behaviour scripts (with their indentation)
   const H = `a'b"c<d>&e`;
   const extra = { customId: 'my id!', customClass: `x"y z`, customCss: '__THIS__{color:red}', animDelay: 300, hoverEffect: 'lift' };
   const st = { padding: '10px', textAlign: 'right', animation: 'fade-up', textPreset: 'h2', color: 'red;}x{' };
@@ -419,6 +419,17 @@ console.log('\nSHARED BLOCK DEFINITIONS');
       t0: { type: 'bool', default: true, phpTruthy: true }, t1: { type: 'bool', default: true, phpTruthy: true }, t2: { type: 'bool', default: true, phpTruthy: true }, t3: { type: 'bool', default: false, phpTruthy: true },
       r: { type: 'text', transform: 'replace', from: 'T', to: ' ' }, m1: { type: 'text', transform: 'mediaSrc' }, m2: { type: 'text', transform: 'mediaSrc' } },
       { c: ['z', 'x', 7, 'nope', 'x'], n: 60, t1: 0, t2: 'no', r: '2030-01-01T10:00', m1: ' /media/a.mp3 ', m2: 'data:audio/mp3;base64,AA' }),
+    T('{{p}}|{{j}}|{{#t.head}}<{{.}}>{{/t.head}}{{#t.rows}}[{{#cells}}{{.}};{{/cells}}{{#odd}}o{{/odd}}]{{/t.rows}}|{{g}}|{{c}}|{{tel}}|{{w}}|{{mp}}|{{mm}}|{{#d}}{{day}},{{/d}}|{{b}}|{{#sb}}S{{/sb}}|{{{_base}}}', {
+      op: { type: 'number', default: 55 }, p: { type: 'calc', of: 'op', div: 100, transform: 'plain' },
+      j: { type: 'list', of: { type: 'text', pattern: '^[a-z]+$' }, skipEmpty: true, unique: true, max: 2, transform: 'json', key: 'jj' },
+      h: { type: 'bool', default: true }, t: { type: 'text', transform: 'tableData', headerFrom: 'h' },
+      g: { type: 'text', key: 'code', transform: 'lineNumbers' }, c: { type: 'text', transform: 'code' },
+      tel: { type: 'text', transform: 'telDigits' }, w: { type: 'text', transform: ['extUrl', 'stripScheme'] }, mp: { type: 'text', transform: 'mapsUrl' }, mm: { type: 'text', transform: 'mediaMime' },
+      d: { type: 'list', max: 3, defaultsByIndex: { day: ['Mon', 'Tue', 'Wed'] }, item: { day: { type: 'text' } } },
+      b: { type: 'text', default: 'Search', fallbackWhenBlank: true },
+      e: { type: 'enum', default: 'x', options: [{ value: 'x', data: { label: 'X' } }] }, sb: { type: 'flag', when: { 'opt.e.label': ['X'] } } },
+      { jj: ['A', 'b', 'b', 'c', 'd'], t: 'H1 | H2\na|b|c\n\n d\te \nf', code: 'x\r\ny\rz\n\n', c: 'x\r\ny\n', tel: '+39 (06) 12-34', w: 'site.com/a', mp: 'Via Roma 1 \n\n 00100 Roma', mm: '/v/a.MP4?x=1',
+        d: [{ day: 'Lun' }, {}, 'junk', {}], b: '   ' }),
     T('{{i}}|{{m}}|{{x}}|{{e}}', { i: { type: 'text', transform: 'initials' }, m: { type: 'text', transform: 'mailto' }, x: { type: 'text', key: 'm', transform: 'mailto' }, e: { type: 'text', transform: 'extUrl' } },
       { i: '  émile   zola  rossi', m: 'bad@address', e: '//linkedin.com/in/x' }),
   );
@@ -454,7 +465,8 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   expect(23, '[hi]S|3 2|AY');
   expect(24, '<A|#000>P|[a:33.3333333333:33][b:66.6666666667:67]|86.0|&#9733;&#9733;|one<br>two&lt;3|mailto:me@site.com|https://site.com/x');
   expect(25, '[x:<i>X</i>][z:Z]|HM|ac|2030-01-01 10:00|/media/a.mp3|');
-  expect(26, 'éz|||https://linkedin.com/in/x');
+  expect(26, '0.55|[&quot;b&quot;,&quot;c&quot;]|<H1><H2><>[a;b;c;][d;e;;o][f;;;]|1\n2\n3|x\ny|+39061234|site.com/a|https://www.google.com/maps/search/?api=1&amp;query=Via%20Roma%201%2C%2000100%20Roma|video/mp4|Lun,Tue,Wed,|Search|S|{{BASE_URL}}');
+  expect(27, 'éz|||https://linkedin.com/in/x');
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

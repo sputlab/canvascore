@@ -49,7 +49,9 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   Blocks moved to it: **Text, Image, Icon Box, Testimonial, Callout, Timeline, Steps, Progress Bars, Grid, Cards,
   Image + Text, FAQ, Map, Video, Custom HTML, Divider, Counters, Accordion, Tabs, Pricing, Gallery, Logos, Team, Bento,
   Split CTA, Case Study, Author Bio, Review Summary, Testimonial Wall, Hover Grid, Slider, Before / After, Countdown,
-  Table of Contents, Share Bar, Audio Player, Scrollytelling and Hotspots**. Their published HTML is unchanged for real content
+  Table of Contents, Share Bar, Audio Player, Scrollytelling, Hotspots, Video Hero, Code Snippet, Data Table, Site Search
+  and Business Details**. Behaviour scripts and structured data (the Business JSON-LD) stay site-only, named by the
+  definition. Their published HTML is unchanged for real content
   (checked byte for byte against the previous renderer, with every field also fuzzed with wrong types and hostile
   values), and the editor and the site now give exactly the same HTML for them. The engine also has lists of plain
   values, value transforms (internal links, CSS addresses, URL encoding, line breaks, video players, number format),

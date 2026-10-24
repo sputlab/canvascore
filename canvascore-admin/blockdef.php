@@ -60,6 +60,7 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
             $v = $missing ? cc_tpl_str($def ?? '') : cc_tpl_str($raw);
             if (!empty($s['trim'])) $v = trim($v);
             if (!empty($s['fallbackWhenEmpty']) && $v === '') $v = cc_tpl_str($def ?? '');
+            if (!empty($s['fallbackWhenBlank']) && trim($v) === '') $v = cc_tpl_str($def ?? '');
             if (!empty($s['pattern']) && !preg_match('~' . str_replace('~', '\\~', $s['pattern']) . '~u', $v)) $v = cc_tpl_str($def ?? '');
             if (!empty($s['maxLength'])) $v = mb_substr($v, 0, (int)$s['maxLength']);
             return $v;
@@ -89,16 +90,23 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
         case 'list':
             $items = (is_array($raw) && array_is_list($raw)) ? $raw : [];
             if (!empty($s['skipNonObjects'])) $items = array_values(array_filter($items, 'is_array'));
-            if (!empty($s['max'])) $items = array_slice($items, 0, (int)$s['max']);
             $out = [];
-            if (isset($s['of'])) {
+            if (isset($s['of'])) {   // a list of values: cleaned, then skipEmpty, unique, max
+                $seen = [];
                 foreach ($items as $it) {
                     $v = cc_tpl_clean_value($s['of'], $it, $it === null);
-                    if (empty($s['skipEmpty']) || trim(cc_tpl_text($v)) !== '') $out[] = $v;
+                    if (!empty($s['skipEmpty']) && trim(cc_tpl_text($v)) === '') continue;
+                    if (!empty($s['unique'])) { $t = cc_tpl_text($v); if (isset($seen[$t])) continue; $seen[$t] = true; }
+                    $out[] = $v;
                 }
-                return $out;
+                return !empty($s['max']) ? array_slice($out, 0, (int)$s['max']) : $out;
             }
-            foreach ($items as $it) $out[] = cc_tpl_clean_settings($s['item'] ?? [], cc_tpl_is_obj($it) ? $it : [], []);
+            if (!empty($s['max'])) $items = array_slice($items, 0, (int)$s['max']);
+            foreach ($items as $i => $it) {
+                $src = cc_tpl_is_obj($it) ? $it : [];
+                foreach (($s['defaultsByIndex'] ?? []) as $dk => $dl) if (!isset($src[$dk])) $src[$dk] = $dl[$i] ?? '';
+                $out[] = cc_tpl_clean_settings($s['item'] ?? [], $src, []);
+            }
             if (!empty($s['keepIf'])) $out = array_values(array_filter($out, function ($it) use ($s) { return cc_tpl_cond($s['keepIf'], $it, false); }));
             if (!empty($s['share'])) {   // each item's share of the list's total, in % (0 when the total is 0)
                 $of = $s['share']['of']; $num = function ($v) { return (is_int($v) || is_float($v)) ? $v : 0; };
@@ -142,13 +150,13 @@ function cc_tpl_clean_settings(array $settings, array $content, array $styles) {
         }
         if (($s['type'] ?? '') === 'list' && !empty($s['count'])) $out[$s['count']['as']] = max($s['count']['min'] ?? 0, min($s['count']['max'] ?? PHP_INT_MAX, count($out[$key])));
     }
+    if ($opt) $out['opt'] = $opt;
     // second pass: values computed from the clean ones
     foreach ($settings as $key => $s) {
         if (($s['type'] ?? '') === 'calc') { $b = (!empty($s['fallback']) && !cc_tpl_truthy($out[$s['of']] ?? null)) ? ($out[$s['fallback']] ?? 0) : ($out[$s['of']] ?? 0); $out[$key] = max($s['min'] ?? -INF, min($s['max'] ?? INF, ((is_int($b) || is_float($b)) ? $b : 0) / ($s['div'] ?? 1) * ($s['mul'] ?? 1) + ($s['add'] ?? 0))); }
         if (($s['type'] ?? '') === 'flag') $out[$key] = cc_tpl_cond($s['when'] ?? [], $out, !empty($s['any']));
-        if (!empty($s['transform']) && isset(CC_TPL_TRANSFORMS[$s['transform']])) $out[$key] = (CC_TPL_TRANSFORMS[$s['transform']])($out[$key], $s, $out);
+        foreach ((array)($s['transform'] ?? []) as $tf) if (is_string($tf) && isset(CC_TPL_TRANSFORMS[$tf])) $out[$key] = (CC_TPL_TRANSFORMS[$tf])($out[$key], $s, $out);   // one transform or a chain
     }
-    if ($opt) $out['opt'] = $opt;
     return $out;
 }
 
@@ -156,7 +164,8 @@ function cc_tpl_clean_settings(array $settings, array $content, array $styles) {
 function cc_tpl_cond(array $when, array $vals, $any) {
     $hits = 0;
     foreach ($when as $k => $want) {
-        $v = $vals[$k] ?? null;
+        $v = $vals;
+        foreach (explode('.', $k) as $part) $v = (is_array($v) && array_key_exists($part, $v)) ? $v[$part] : null;   // a dotted name reaches into objects
         if ($want === true || $want === false) $ok = cc_tpl_truthy($v) === $want;
         elseif (is_array($want) && array_is_list($want)) $ok = in_array(cc_tpl_text($v), $want, true);
         elseif (isset($want['gt']) || isset($want['lt'])) { $n = (is_int($v) || is_float($v)) ? $v : 0; $ok = (!isset($want['gt']) || $n > $want['gt']) && (!isset($want['lt']) || $n < $want['lt']); }
@@ -175,7 +184,30 @@ const CC_TPL_TRANSFORMS = [
     'extUrl' => 'cc_tpl_tf_ext_url', 'initials' => 'cc_tpl_tf_initials', 'mailto' => 'cc_tpl_tf_mailto',
     'contactUrl' => 'cc_tpl_tf_contact_url', 'br' => 'cc_tpl_tf_br', 'repeat' => 'cc_tpl_tf_repeat',
     'mediaSrc' => 'cc_tpl_tf_media_src', 'replace' => 'cc_tpl_tf_replace',
+    'plain' => 'cc_tpl_tf_plain', 'mediaMime' => 'cc_tpl_tf_media_mime', 'json' => 'cc_tpl_tf_json', 'telDigits' => 'cc_tpl_tf_tel',
+    'stripScheme' => 'cc_tpl_tf_strip_scheme', 'mapsUrl' => 'cc_tpl_tf_maps', 'code' => 'cc_tpl_tf_code', 'lineNumbers' => 'cc_tpl_tf_line_numbers',
+    'tableData' => 'cc_tpl_tf_table',
 ];
+function cc_tpl_tf_plain($v) { return cc_plain((is_int($v) || is_float($v)) ? $v : 0); }
+function cc_tpl_tf_media_mime($v) { return cc_media_mime(cc_media_src(cc_tpl_text($v))); }
+function cc_tpl_tf_json($v) { return json_encode(is_array($v) ? array_map('cc_tpl_text', $v) : cc_tpl_text($v), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); }
+function cc_tpl_tf_tel($v) { return preg_replace('/[^0-9+]/', '', cc_tpl_text($v)); }
+function cc_tpl_tf_strip_scheme($v) { return preg_replace('~^https?://~i', '', cc_tpl_text($v)); }
+function cc_tpl_tf_maps($v) { return 'https://www.google.com/maps/search/?api=1&query=' . cc_enc(implode(', ', cc_lines(cc_tpl_text($v)))); }
+function cc_tpl_norm_code($t) { return mb_substr(rtrim(preg_replace('/\r\n?/', "\n", $t), "\n"), 0, 50000); }
+function cc_tpl_tf_code($v) { return cc_tpl_norm_code(cc_tpl_text($v)); }
+function cc_tpl_tf_line_numbers($v) { return implode("\n", range(1, substr_count(cc_tpl_norm_code(cc_tpl_text($v)), "\n") + 1)); }
+function cc_tpl_tf_table($v, $s, $sib) {
+    $rows = [];
+    foreach (cc_lines(cc_tpl_text($v)) as $l) $rows[] = preg_split('/\s*\|\s*|\t/', $l);
+    $head = (cc_tpl_truthy($sib[$s['headerFrom'] ?? ''] ?? null) && $rows) ? array_shift($rows) : null;
+    $n = $head ? count($head) : 0;
+    foreach ($rows as $r) $n = max($n, count($r));
+    $pad = function ($r) use ($n) { $o = []; for ($i = 0; $i < $n; $i++) $o[] = $r[$i] ?? ''; return $o; };
+    $out = [];
+    foreach ($rows as $i => $r) $out[] = ['cells' => $pad($r), 'odd' => $i % 2 === 1];
+    return ['ncols' => $n, 'head' => $head ? $pad($head) : [], 'rows' => $out];
+}
 function cc_tpl_tf_media_src($v) { return cc_media_src(cc_tpl_text($v)); }
 function cc_tpl_tf_replace($v, $s) { return str_replace((string)($s['from'] ?? ''), (string)($s['to'] ?? ''), cc_tpl_text($v)); }
 function cc_tpl_tf_contact_url($v) { $t = cc_tpl_text($v); return preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $t) ? 'mailto:' . $t : cc_ext_url($t); }
@@ -268,7 +300,8 @@ function cc_tpl_render(array $nodes, array $scopes) {
 // (each gets the block's id and its clean values, and gives the whole <script> element)
 const CC_TPL_SCRIPTS = ['progress' => 'cc_tpl_script_progress', 'counters' => 'cc_tpl_script_counters', 'gallery' => 'cc_tpl_script_gallery', 'logos' => 'cc_tpl_script_logos',
     'slider' => 'cc_tpl_script_slider', 'countdown' => 'cc_tpl_script_countdown', 'beforeafter' => 'cc_tpl_script_beforeafter', 'toc' => 'cc_tpl_script_toc',
-    'share' => 'cc_tpl_script_share', 'audio' => 'cc_tpl_script_audio', 'story' => 'cc_tpl_script_story', 'hotspots' => 'cc_tpl_script_hotspots'];
+    'share' => 'cc_tpl_script_share', 'audio' => 'cc_tpl_script_audio', 'story' => 'cc_tpl_script_story', 'hotspots' => 'cc_tpl_script_hotspots',
+    'video' => 'cc_tpl_script_video', 'code' => 'cc_tpl_script_code', 'search' => 'cc_tpl_script_search', 'business' => 'cc_tpl_script_business'];
 function cc_tpl_script_progress($id, $v) { return "<script>\n" . cc_script_progress($id) . "\n</script>\n"; }
 function cc_tpl_script_counters($id, $v) { return "<script>\n" . cc_script_counters($id, $v['duration'] ?? 1800) . "\n</script>\n"; }
 function cc_tpl_script_gallery($id, $v) { return "<script>\n" . cc_script_gallery($id) . "\n</script>\n"; }
@@ -280,6 +313,24 @@ function cc_tpl_script_share($id, $v) { return '<script>' . str_replace('%ID%', 
 function cc_tpl_script_audio($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_AUDIO_SCRIPT) . "</script>\n"; }
 function cc_tpl_script_story($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_STORY_SCRIPT) . "</script>\n"; }
 function cc_tpl_script_hotspots($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_HOTSPOTS_SCRIPT) . "</script>\n"; }
+function cc_tpl_script_video($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_VIDEO_SCRIPT) . "</script>\n"; }
+function cc_tpl_script_code($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_CODE_SCRIPT) . "</script>\n"; }
+function cc_tpl_script_search($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_SEARCH_SCRIPT) . "</script>\n"; }
+// Business: its structured data (JSON-LD) for search engines, from the clean values
+function cc_tpl_script_business($id, $v) {
+    if (empty($v['jsonLd']) || ($v['name'] ?? '') === '') return '';
+    $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    $lines = cc_lines($v['addressText'] ?? '');
+    $ld = ['@context' => 'https://schema.org', '@type' => $v['businessType'], 'name' => $v['name']];
+    if ($lines) $ld['address'] = ['@type' => 'PostalAddress', 'streetAddress' => implode(', ', $lines)];
+    if (($v['tel'] ?? '') !== '') $ld['telephone'] = $v['tel'];
+    if (($v['emailHref'] ?? '') !== '') $ld['email'] = $v['email'];
+    if (($v['web'] ?? '') !== '') $ld['url'] = $v['web'];
+    $specs = [];
+    foreach ($v['hours'] ?? [] as $i => $h) if (!empty($h['isOpen'])) $specs[] = ['@type' => 'OpeningHoursSpecification', 'dayOfWeek' => $days[$i], 'opens' => $h['start'], 'closes' => $h['end']];
+    if ($specs) $ld['openingHoursSpecification'] = $specs;
+    return '<script type="application/ld+json">' . json_encode($ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) . "</script>\n";
+}
 function cc_tpl_script_logos($id, $v) { return '<script>' . str_replace(['%ID%', '%SPEED%'], [$id, (string)($v['speed'] ?? 30)], CC_LOGOS_SCRIPT) . "</script>\n"; }
 
 // The HTML of a block that has a definition (cc_render_block_body adds the custom CSS, render_block the device rules)
@@ -298,6 +349,6 @@ function cc_render_def_block(array $def, array $block, $innerId) {
     if ($fn) $script = $fn($innerId, $values);
     $builtIn = ['_id' => $innerId, '_classes' => cc_effect_classes($styles, $content) . ($custom !== '' ? ' ' . $custom : ''),
         '_style' => new CcTrusted(build_inline_style($rootStyles)), '_field' => $field, '_script' => new CcTrusted($script),
-        '_lb' => new CcTrusted('{'), '_rb' => new CcTrusted('}')];
+        '_lb' => new CcTrusted('{'), '_rb' => new CcTrusted('}'), '_base' => new CcTrusted('{{BASE_URL}}')];
     return cc_tpl_render($def['_ast'], [$builtIn, $values]);
 }

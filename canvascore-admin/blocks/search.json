@@ -1,0 +1,59 @@
+{
+  "type": "SEARCH",
+  "script": "search",
+  "settings": {
+    "placeholder": {
+      "type": "text",
+      "default": "Search the site\u2026",
+      "fallbackWhenBlank": true
+    },
+    "buttonText": {
+      "type": "text",
+      "default": "Search",
+      "fallbackWhenBlank": true
+    },
+    "noResults": {
+      "type": "text",
+      "default": "No results for",
+      "fallbackWhenBlank": true
+    },
+    "limit": {
+      "type": "number",
+      "parse": "int",
+      "default": 10,
+      "min": 1,
+      "max": 50
+    },
+    "facets": {
+      "type": "list",
+      "of": {
+        "type": "text",
+        "default": "",
+        "pattern": "^(collection|tax:[a-z0-9_-]{1,40})$"
+      },
+      "skipEmpty": true,
+      "unique": true,
+      "max": 10
+    },
+    "facetsJson": {
+      "type": "list",
+      "key": "facets",
+      "of": {
+        "type": "text",
+        "default": "",
+        "pattern": "^(collection|tax:[a-z0-9_-]{1,40})$"
+      },
+      "skipEmpty": true,
+      "unique": true,
+      "max": 10,
+      "transform": "json"
+    }
+  },
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-search{{_classes}}\" style=\"{{{_style}}}\" data-index=\"{{{_base}}}search-index.json\" data-empty=\"{{noResults}}\" data-limit=\"{{limit}}\"{{#facets?}} data-facets=\"{{facetsJson}}\"{{/facets?}}>\n",
+    "<form class=\"cc-search-form\" role=\"search\" style=\"display:flex; gap:8px; flex-wrap:wrap;\">\n",
+    "<input type=\"search\" name=\"q\" aria-label=\"{{placeholder}}\" placeholder=\"{{placeholder}}\" style=\"flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:inherit; box-sizing:border-box;\">\n",
+    "<button type=\"submit\" style=\"padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;\">{{buttonText}}</button>\n",
+    "</form>\n<div class=\"cc-search-results\" aria-live=\"polite\" style=\"margin-top:16px;\"></div>\n{{{_script}}}</div>\n"
+  ]
+}
