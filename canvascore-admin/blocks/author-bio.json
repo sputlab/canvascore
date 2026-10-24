@@ -3,32 +3,53 @@
   "settings": {
     "layout": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Layout",
+      "control": "select",
+      "choices": [
+        [
+          "horizontal",
+          "Photo beside text"
+        ],
+        [
+          "centered",
+          "Centered"
+        ]
+      ]
     },
     "boxed": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Show as a card"
     },
     "name": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Name"
     },
     "role": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Role"
     },
     "label": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Label (empty = none)",
+      "placeholder": "About the author"
     },
     "bio": {
       "type": "text",
       "default": "",
-      "transform": "br"
+      "transform": "br",
+      "label": "Bio",
+      "control": "textarea",
+      "rows": 3
     },
     "photo": {
       "type": "image",
-      "default": ""
+      "default": "",
+      "label": "Photo (empty = initials)"
     },
     "initials": {
       "type": "text",
@@ -55,11 +76,14 @@
         "url": {
           "type": "text",
           "default": "",
-          "trim": true
+          "trim": true,
+          "label": "Address or email",
+          "placeholder": "example.com or name@example.com"
         },
         "label": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Label"
         },
         "href": {
           "type": "text",
@@ -68,6 +92,17 @@
           "trim": true,
           "transform": "contactUrl"
         }
+      },
+      "itemTitle": "Link {n}",
+      "itemTitleKey": "label",
+      "itemKeys": [
+        "label",
+        "url"
+      ],
+      "addLabel": "+ Add link",
+      "newItem": {
+        "label": "New link",
+        "url": ""
       }
     }
   },
@@ -84,5 +119,34 @@
     "{{^bio=}}<p class=\"cc-author-bio\" style=\"margin:10px 0 0 0; font-size:15px; line-height:1.6; color:#334155;\">{{{bio}}}</p>{{/bio=}}",
     "{{#links?}}<div class=\"cc-author-links\" style=\"display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:14px; justify-content:{{#layout=centered}}center{{/layout=centered}}{{^layout=centered}}flex-start{{/layout=centered}};\">{{#links}}<a href=\"{{href}}\" class=\"cc-author-link\" rel=\"noopener\" style=\"color:var(--brand-color, #3b82f6); font-weight:600; text-decoration:none;\">{{label}}</a>{{/links}}</div>{{/links?}}",
     "</div></div>\n</aside>\n"
+  ],
+  "panel": [
+    {
+      "title": "Author",
+      "icon": "CircleUserRound",
+      "open": true,
+      "keys": [
+        "label",
+        "name",
+        "role",
+        "bio",
+        "photo"
+      ]
+    },
+    {
+      "title": "Author Links",
+      "icon": "Link2",
+      "keys": [
+        "links"
+      ]
+    },
+    {
+      "title": "Author Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "boxed"
+      ]
+    }
   ]
 }

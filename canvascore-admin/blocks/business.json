@@ -42,17 +42,24 @@
         {
           "value": "Organization"
         }
-      ]
+      ],
+      "label": "Business type (for Google)",
+      "control": "select",
+      "choicesFrom": "businessTypes"
     },
     "name": {
       "type": "text",
       "default": "",
-      "trim": true
+      "trim": true,
+      "label": "Business name"
     },
     "address": {
       "type": "text",
       "default": "",
-      "transform": "br"
+      "transform": "br",
+      "label": "Address (one line per row)",
+      "control": "textarea",
+      "rows": 3
     },
     "addressText": {
       "type": "text",
@@ -68,7 +75,8 @@
     "phone": {
       "type": "text",
       "default": "",
-      "trim": true
+      "trim": true,
+      "label": "Phone"
     },
     "tel": {
       "type": "text",
@@ -80,7 +88,8 @@
     "email": {
       "type": "text",
       "default": "",
-      "trim": true
+      "trim": true,
+      "label": "Email"
     },
     "emailHref": {
       "type": "text",
@@ -93,7 +102,8 @@
       "type": "text",
       "default": "",
       "key": "website",
-      "transform": "extUrl"
+      "transform": "extUrl",
+      "label": "Website"
     },
     "webShown": {
       "type": "text",
@@ -106,27 +116,40 @@
     },
     "mapsLink": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Show a \u201cGet directions\u201d button (Google Maps)"
     },
     "directionsLabel": {
       "type": "text",
-      "default": "Get directions"
+      "default": "Get directions",
+      "label": "Button text",
+      "placeholder": "Get directions",
+      "showIf": {
+        "mapsLink": true
+      }
     },
     "closedLabel": {
       "type": "text",
-      "default": "Closed"
+      "default": "Closed",
+      "label": "\u201cClosed\u201d text",
+      "placeholder": "Closed"
     },
     "hoursTitle": {
       "type": "text",
-      "default": "Opening hours"
+      "default": "Opening hours",
+      "label": "Section title",
+      "placeholder": "Opening hours"
     },
     "note": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Note (optional)",
+      "placeholder": "Closed on public holidays"
     },
     "jsonLd": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Add structured data for Google (LocalBusiness)"
     },
     "hours": {
       "type": "list",
@@ -181,7 +204,8 @@
             }
           }
         }
-      }
+      },
+      "control": "widget:businessHours"
     },
     "hasHours": {
       "type": "flag",
@@ -210,5 +234,34 @@
     "{{#hours?}}<table class=\"cc-biz-table\" style=\"width:100%; border-collapse:collapse; font-size:15px;\"><tbody>{{#hours}}<tr style=\"border-bottom:1px solid #e2e8f0;\"><th scope=\"row\" style=\"text-align:left; padding:8px 0; font-weight:600;\">{{day}}</th><td style=\"text-align:right; padding:8px 0;\">{{#isOpen}}{{start}}&ndash;{{end}}{{/isOpen}}{{^isOpen}}{{closedLabel}}{{/isOpen}}</td></tr>{{/hours}}</tbody></table>{{/hours?}}",
     "{{^note=}}<p class=\"cc-biz-note\" style=\"margin:10px 0 0 0; font-size:13px; color:#64748b;\">{{note}}</p>{{/note=}}</div>{{/hasHours}}",
     "\n{{{_script}}}</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Business Details",
+      "icon": "Store",
+      "open": true,
+      "keys": [
+        "name",
+        "businessType",
+        "address",
+        "phone",
+        "email",
+        "web",
+        "mapsLink",
+        "directionsLabel"
+      ]
+    },
+    {
+      "title": "Opening Hours",
+      "icon": "Clock",
+      "keys": [
+        "hours",
+        "hoursTitle",
+        "closedLabel",
+        "note",
+        "jsonLd"
+      ],
+      "hint": "Day labels can be in any language; Google always receives the standard day names, in order Monday \u2192 Sunday."
+    }
   ]
 }

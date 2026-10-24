@@ -11,19 +11,25 @@
       "item": {
         "name": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Name"
         },
         "role": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Role"
         },
         "bio": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Short bio",
+          "control": "textarea",
+          "rows": 2
         },
         "photo": {
           "type": "image",
-          "default": ""
+          "default": "",
+          "label": "Photo (empty = initials)"
         },
         "initials": {
           "type": "text",
@@ -68,7 +74,51 @@
             "twitterHref": true,
             "websiteHref": true
           }
+        },
+        "email": {
+          "type": "text",
+          "default": "",
+          "label": "Email"
+        },
+        "linkedin": {
+          "type": "text",
+          "default": "",
+          "label": "LinkedIn",
+          "placeholder": "linkedin.com/in/\u2026"
+        },
+        "twitter": {
+          "type": "text",
+          "default": "",
+          "label": "X / Twitter"
+        },
+        "website": {
+          "type": "text",
+          "default": "",
+          "label": "Website"
         }
+      },
+      "itemTitle": "Member {n}",
+      "itemTitleKey": "name",
+      "itemKeys": [
+        "name",
+        "role",
+        "bio",
+        "photo",
+        "email",
+        "linkedin",
+        "twitter",
+        "website"
+      ],
+      "addLabel": "+ Add member",
+      "newItem": {
+        "name": "New member",
+        "role": "",
+        "bio": "",
+        "photo": "",
+        "email": "",
+        "linkedin": "",
+        "twitter": "",
+        "website": ""
       }
     },
     "columns": {
@@ -76,7 +126,31 @@
       "default": 0,
       "min": 0,
       "max": 4,
-      "int": true
+      "int": true,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          0,
+          "Auto"
+        ],
+        [
+          1,
+          "1"
+        ],
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ]
+      ]
     },
     "photoShape": {
       "type": "enum",
@@ -86,21 +160,25 @@
           "value": "circle",
           "data": {
             "radius": "50%"
-          }
+          },
+          "label": "Circle"
         },
         {
           "value": "rounded",
           "data": {
             "radius": "16px"
-          }
+          },
+          "label": "Rounded"
         },
         {
           "value": "square",
           "data": {
             "radius": "0"
-          }
+          },
+          "label": "Square"
         }
-      ]
+      ],
+      "label": "Photo shape"
     },
     "layout": {
       "type": "enum",
@@ -110,15 +188,18 @@
           "value": "card",
           "data": {
             "card": "background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:24px; "
-          }
+          },
+          "label": "Cards"
         },
         {
           "value": "minimal",
           "data": {
             "card": "padding:8px; "
-          }
+          },
+          "label": "Minimal"
         }
-      ]
+      ],
+      "label": "Style"
     },
     "cols": {
       "type": "calc",
@@ -142,5 +223,24 @@
     "{{^bio=}}<p class=\"cc-member-bio\" style=\"margin:10px 0 0 0; font-size:14px; color:#64748b; line-height:1.55;\">{{bio}}</p>{{/bio=}}",
     "{{#hasLinks}}<div class=\"cc-member-links\" style=\"display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:12px; font-size:13px;\">{{^emailHref=}}<a href=\"{{emailHref}}\" class=\"cc-member-link\" rel=\"noopener\" aria-label=\"{{name}} - Email\" style=\"color:inherit;\">Email</a>{{/emailHref=}}{{^linkedinHref=}}<a href=\"{{linkedinHref}}\" class=\"cc-member-link\" rel=\"noopener\" aria-label=\"{{name}} - LinkedIn\" style=\"color:inherit;\">LinkedIn</a>{{/linkedinHref=}}{{^twitterHref=}}<a href=\"{{twitterHref}}\" class=\"cc-member-link\" rel=\"noopener\" aria-label=\"{{name}} - X\" style=\"color:inherit;\">X</a>{{/twitterHref=}}{{^websiteHref=}}<a href=\"{{websiteHref}}\" class=\"cc-member-link\" rel=\"noopener\" aria-label=\"{{name}} - Website\" style=\"color:inherit;\">Website</a>{{/websiteHref=}}</div>{{/hasLinks}}",
     "</div>{{/members}}</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Team Members",
+      "icon": "Users",
+      "open": true,
+      "keys": [
+        "members"
+      ]
+    },
+    {
+      "title": "Team Layout",
+      "icon": "Sliders",
+      "keys": [
+        "columns",
+        "layout",
+        "photoShape"
+      ]
+    }
   ]
 }

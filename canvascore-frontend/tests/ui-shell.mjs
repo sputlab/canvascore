@@ -1206,7 +1206,7 @@ try {
 
   console.log('\nFACETED SEARCH AND RELATED BY TAG (editor)');
   {
-    const SP = (await vite.ssrLoadModule('/src/components/panel/blocks/SearchPanel.jsx')).default;
+    const SP = (await vite.ssrLoadModule('/src/components/panel/widgets.jsx')).SearchFacets;   // the Site Search panel's filters widget
     const RP = (await vite.ssrLoadModule('/src/components/panel/blocks/RelatedPanel.jsx')).default;
     const sets = [];
     let sc = { facets: [] };

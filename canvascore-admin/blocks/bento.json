@@ -14,51 +14,70 @@
               "data": {
                 "cols": "1",
                 "rows": "1"
-              }
+              },
+              "label": "Normal (1\u00d71)"
             },
             {
               "value": "wide",
               "data": {
                 "cols": "2",
                 "rows": "1"
-              }
+              },
+              "label": "Wide (2\u00d71)"
             },
             {
               "value": "tall",
               "data": {
                 "cols": "1",
                 "rows": "2"
-              }
+              },
+              "label": "Tall (1\u00d72)"
             },
             {
               "value": "large",
               "data": {
                 "cols": "2",
                 "rows": "2"
-              }
+              },
+              "label": "Large (2\u00d72)"
             }
-          ]
+          ],
+          "label": "Size"
         },
         "image": {
           "type": "image",
-          "default": ""
+          "default": "",
+          "label": "Background image (optional)",
+          "altKey": "alt"
         },
         "alt": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Image alt text",
+          "showIf": {
+            "image": {
+              "not": [
+                ""
+              ]
+            }
+          }
         },
         "bg": {
           "type": "color",
-          "default": "#f1f5f9"
+          "default": "#f1f5f9",
+          "label": "Background"
         },
         "color": {
           "type": "color",
-          "default": ""
+          "default": "",
+          "label": "Text color (empty = automatic)"
         },
         "href": {
           "type": "text",
           "default": "",
-          "trim": true
+          "trim": true,
+          "label": "Link (optional)",
+          "placeholder": "/page or https://\u2026"
         },
         "link": {
           "type": "text",
@@ -68,16 +87,46 @@
         },
         "title": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Title"
         },
         "text": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Text",
+          "control": "textarea",
+          "rows": 2
         },
         "icon": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Icon (emoji)"
         }
+      },
+      "itemTitle": "Tile {n}",
+      "itemTitleKey": "title",
+      "itemKeys": [
+        "size",
+        "icon",
+        "title",
+        "text",
+        "image",
+        "alt",
+        "bg",
+        "color",
+        "href"
+      ],
+      "addLabel": "+ Add tile",
+      "newItem": {
+        "size": "normal",
+        "icon": "",
+        "title": "New tile",
+        "text": "",
+        "image": "",
+        "alt": "",
+        "bg": "#f1f5f9",
+        "color": "",
+        "href": ""
       }
     },
     "columns": {
@@ -85,36 +134,59 @@
       "parse": "int",
       "default": 3,
       "min": 2,
-      "max": 4
+      "max": 4,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ]
+      ]
     },
     "rowHeight": {
       "type": "number",
       "parse": "int",
       "default": 180,
       "min": 100,
-      "max": 400
+      "max": 400,
+      "label": "Row height px",
+      "step": 10
     },
     "gap": {
       "type": "number",
       "parse": "int",
       "default": 16,
       "min": 0,
-      "max": 48
+      "max": 48,
+      "label": "Gap px"
     },
     "hover": {
       "type": "enum",
       "default": "lift",
       "options": [
         {
-          "value": "lift"
+          "value": "lift",
+          "label": "Lift"
         },
         {
-          "value": "zoom"
+          "value": "zoom",
+          "label": "Zoom image"
         },
         {
-          "value": "none"
+          "value": "none",
+          "label": "None"
         }
-      ]
+      ],
+      "label": "Hover effect"
     }
   },
   "template": [
@@ -131,5 +203,25 @@
     "{{^title=}}<h3 class=\"cc-bento-title\" style=\"margin:0; font-size:20px; line-height:1.25; color:inherit;\">{{title}}</h3>{{/title=}}",
     "{{^text=}}<p class=\"cc-bento-text\" style=\"margin:6px 0 0 0; font-size:14px; line-height:1.5; opacity:0.85;\">{{text}}</p>{{/text=}}",
     "</div></{{#href=}}div{{/href=}}{{^href=}}a{{/href=}}>{{/tiles}}</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Bento Tiles",
+      "icon": "LayoutDashboard",
+      "open": true,
+      "keys": [
+        "tiles"
+      ]
+    },
+    {
+      "title": "Bento Layout",
+      "icon": "Sliders",
+      "keys": [
+        "columns",
+        "rowHeight",
+        "gap",
+        "hover"
+      ]
+    }
   ]
 }

@@ -19,26 +19,48 @@
             "direction": "row-reverse"
           }
         }
-      ]
+      ],
+      "label": "Layout"
     },
     "src": {
       "type": "image",
-      "default": ""
+      "default": "",
+      "label": "Image URL",
+      "altKey": "alt"
     },
     "alt": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Image description (alt text)",
+      "placeholder": "What the image shows, for screen readers and search engines"
     },
     "text": {
       "type": "richtext",
       "default": "",
       "inline": "full",
-      "placeholder": "Type your text\u2026"
+      "placeholder": "Type your text\u2026",
+      "label": "Text",
+      "control": "editor",
+      "variant": "full",
+      "minHeight": 140
     }
   },
   "template": [
     "<section id=\"{{_id}}\" class=\"cc-img-text{{_classes}}\" style=\"{{{_style}}}; display:flex; gap:40px; align-items:center; flex-direction:{{{opt.layout.direction}}}; flex-wrap:wrap;\">\n",
     "<div style=\"flex:1 1 300px; width:100%;\"><img src=\"{{src}}\" alt=\"{{alt}}\" style=\"width:100%; border-radius:8px; display:block;\"></div>\n",
     "<div style=\"flex:1 1 300px; width:100%;\"{{{_field.text}}}>{{{text}}}</div>\n</section>\n"
+  ],
+  "panel": [
+    {
+      "title": "Text Content",
+      "icon": "Layout",
+      "open": true,
+      "keys": [
+        "src",
+        "alt",
+        "layout",
+        "text"
+      ]
+    }
   ]
 }

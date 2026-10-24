@@ -5,35 +5,56 @@
     "src": {
       "type": "text",
       "default": "",
-      "transform": "mediaSrc"
+      "transform": "mediaSrc",
+      "label": "Audio file (MP3, M4A, OGG or WAV)",
+      "control": "file",
+      "fileKind": "audio"
     },
     "cover": {
       "type": "image",
-      "default": ""
+      "default": "",
+      "label": "Cover image (optional)"
     },
     "title": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Title (empty = none)"
     },
     "artist": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Artist or show (empty = none)"
     },
     "accent": {
       "type": "color",
-      "default": "var(--brand-color, #3b82f6)"
+      "default": "var(--brand-color, #3b82f6)",
+      "label": "Accent color (empty = brand color)"
     },
     "layout": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Style",
+      "control": "select",
+      "choices": [
+        [
+          "card",
+          "Card"
+        ],
+        [
+          "plain",
+          "Plain"
+        ]
+      ]
     },
     "skip": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Skip back / forward 15 seconds"
     },
     "speed": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Playback speed button"
     },
     "hasHead": {
       "type": "flag",
@@ -74,5 +95,29 @@
     "{{#skip}}<button type=\"button\" class=\"cc-au-fwd\" aria-label=\"Forward 15 seconds\" style=\"min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;\">+15s</button>{{/skip}}",
     "{{#speed}}<button type=\"button\" class=\"cc-au-speed\" aria-label=\"Playback speed\" style=\"min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;\">1&times;</button>{{/speed}}",
     "</div></div>\n</div>\n</div>\n{{{_script}}}"
+  ],
+  "panel": [
+    {
+      "title": "Audio",
+      "icon": "Headphones",
+      "open": true,
+      "keys": [
+        "src",
+        "title",
+        "artist",
+        "cover"
+      ],
+      "hint": "The file is only downloaded when a visitor presses play. Without JavaScript the browser's own player is used."
+    },
+    {
+      "title": "Player Style",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "accent",
+        "skip",
+        "speed"
+      ]
+    }
   ]
 }

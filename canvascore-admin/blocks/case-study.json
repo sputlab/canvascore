@@ -3,60 +3,99 @@
   "settings": {
     "accent": {
       "type": "color",
-      "default": "var(--brand-color, #3b82f6)"
+      "default": "var(--brand-color, #3b82f6)",
+      "label": "Accent color (empty = brand color)"
     },
     "layout": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Layout",
+      "control": "select",
+      "choices": [
+        [
+          "horizontal",
+          "Image beside text"
+        ],
+        [
+          "vertical",
+          "Image above text"
+        ]
+      ]
     },
     "image": {
       "type": "image",
-      "default": ""
+      "default": "",
+      "label": "Image (empty = none)",
+      "altKey": "alt"
     },
     "logo": {
       "type": "image",
-      "default": ""
+      "default": "",
+      "label": "Client logo (optional)"
     },
     "alt": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Image alt text",
+      "showIf": {
+        "image": {
+          "not": [
+            ""
+          ]
+        }
+      }
     },
     "client": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Client"
     },
     "metric": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Headline metric",
+      "placeholder": "+240%"
     },
     "metricLabel": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Metric label"
     },
     "title": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Title"
     },
     "text": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Story",
+      "control": "textarea",
+      "rows": 3
     },
     "quote": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Quote (empty = none)",
+      "control": "textarea",
+      "rows": 2
     },
     "quoteAuthor": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Quote author"
     },
     "linkText": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Link text (empty = no link)"
     },
     "linkUrl": {
       "type": "text",
       "default": "",
-      "transform": "blockUrl"
+      "transform": "blockUrl",
+      "label": "Link",
+      "placeholder": "/page or https://\u2026"
     },
     "hasClient": {
       "type": "flag",
@@ -88,5 +127,46 @@
     "{{^quote=}}<blockquote class=\"cc-case-quote\" style=\"margin:0; padding-left:14px; border-left:3px solid {{accent}}; font-style:italic; color:#334155; font-size:15px; line-height:1.55;\">{{quote}}{{^quoteAuthor=}}<cite class=\"cc-case-quote-author\" style=\"display:block; margin-top:6px; font-style:normal; font-weight:600; font-size:13px; color:#64748b;\">&mdash; {{quoteAuthor}}</cite>{{/quoteAuthor=}}</blockquote>{{/quote=}}",
     "{{^linkText=}}<a class=\"cc-case-link\" href=\"{{linkUrl}}\" style=\"margin-top:auto; color:{{accent}}; font-weight:700; text-decoration:none;\">{{linkText}} &rarr;</a>{{/linkText=}}",
     "</div></div>\n</article>\n"
+  ],
+  "panel": [
+    {
+      "title": "Case Study",
+      "icon": "TrendingUp",
+      "open": true,
+      "keys": [
+        "client",
+        "metric",
+        "metricLabel",
+        "title",
+        "text",
+        "linkText",
+        "linkUrl"
+      ]
+    },
+    {
+      "title": "Case Study Quote",
+      "icon": "Quote",
+      "keys": [
+        "quote",
+        "quoteAuthor"
+      ]
+    },
+    {
+      "title": "Case Study Images",
+      "icon": "Image",
+      "keys": [
+        "image",
+        "alt",
+        "logo"
+      ]
+    },
+    {
+      "title": "Case Study Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "accent"
+      ]
+    }
   ]
 }

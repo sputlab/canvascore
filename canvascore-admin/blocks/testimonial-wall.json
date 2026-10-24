@@ -7,20 +7,26 @@
       "item": {
         "name": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Name"
         },
         "role": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Role or company"
         },
         "quote": {
           "type": "text",
           "default": "",
-          "transform": "br"
+          "transform": "br",
+          "label": "Quote",
+          "control": "textarea",
+          "rows": 3
         },
         "avatar": {
           "type": "image",
-          "default": ""
+          "default": "",
+          "label": "Photo (empty = initials)"
         },
         "initials": {
           "type": "text",
@@ -33,7 +39,35 @@
           "parse": "int",
           "default": 0,
           "min": 0,
-          "max": 5
+          "max": 5,
+          "label": "Stars",
+          "control": "select",
+          "choices": [
+            [
+              0,
+              "None"
+            ],
+            [
+              5,
+              "5"
+            ],
+            [
+              4,
+              "4"
+            ],
+            [
+              3,
+              "3"
+            ],
+            [
+              2,
+              "2"
+            ],
+            [
+              1,
+              "1"
+            ]
+          ]
         },
         "stars": {
           "type": "number",
@@ -59,6 +93,23 @@
           "transform": "repeat",
           "text": "&#9733;"
         }
+      },
+      "itemTitle": "Testimonial {n}",
+      "itemTitleKey": "name",
+      "itemKeys": [
+        "quote",
+        "name",
+        "role",
+        "rating",
+        "avatar"
+      ],
+      "addLabel": "+ Add testimonial",
+      "newItem": {
+        "quote": "",
+        "name": "New customer",
+        "role": "",
+        "avatar": "",
+        "rating": 5
       }
     },
     "columns": {
@@ -66,26 +117,61 @@
       "parse": "int",
       "default": 3,
       "min": 1,
-      "max": 4
+      "max": 4,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          1,
+          "1"
+        ],
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ]
+      ]
     },
     "gap": {
       "type": "number",
       "parse": "int",
       "default": 20,
       "min": 0,
-      "max": 48
+      "max": 48,
+      "label": "Gap px"
     },
     "cardStyle": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Style",
+      "control": "select",
+      "choices": [
+        [
+          "card",
+          "Cards"
+        ],
+        [
+          "minimal",
+          "Minimal"
+        ]
+      ]
     },
     "showRatings": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Show star ratings"
     },
     "starColor": {
       "type": "color",
-      "default": "#f59e0b"
+      "default": "#f59e0b",
+      "label": "Star color"
     },
     "mobileColumns": {
       "type": "calc",
@@ -105,5 +191,26 @@
     "<span style=\"min-width:0;\"><span class=\"cc-tw-name\" style=\"display:block; font-weight:700; font-size:14px; color:#0f172a;\">{{name}}</span>",
     "{{^role=}}<span class=\"cc-tw-role\" style=\"display:block; font-size:13px; color:#64748b;\">{{role}}</span>{{/role=}}",
     "</span></figcaption></figure>{{/items}}</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Testimonials",
+      "icon": "MessagesSquare",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "title": "Wall Layout",
+      "icon": "Sliders",
+      "keys": [
+        "columns",
+        "gap",
+        "cardStyle",
+        "showRatings",
+        "starColor"
+      ]
+    }
   ]
 }

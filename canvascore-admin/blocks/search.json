@@ -5,24 +5,31 @@
     "placeholder": {
       "type": "text",
       "default": "Search the site\u2026",
-      "fallbackWhenBlank": true
+      "fallbackWhenBlank": true,
+      "label": "Placeholder",
+      "placeholder": "Search the site\u2026"
     },
     "buttonText": {
       "type": "text",
       "default": "Search",
-      "fallbackWhenBlank": true
+      "fallbackWhenBlank": true,
+      "label": "Button text",
+      "placeholder": "Search"
     },
     "noResults": {
       "type": "text",
       "default": "No results for",
-      "fallbackWhenBlank": true
+      "fallbackWhenBlank": true,
+      "label": "When nothing is found",
+      "placeholder": "No results for"
     },
     "limit": {
       "type": "number",
       "parse": "int",
       "default": 10,
       "min": 1,
-      "max": 50
+      "max": 50,
+      "label": "Results to show (1\u201350)"
     },
     "facets": {
       "type": "list",
@@ -33,7 +40,8 @@
       },
       "skipEmpty": true,
       "unique": true,
-      "max": 10
+      "max": 10,
+      "control": "widget:searchFacets"
     },
     "facetsJson": {
       "type": "list",
@@ -55,5 +63,23 @@
     "<input type=\"search\" name=\"q\" aria-label=\"{{placeholder}}\" placeholder=\"{{placeholder}}\" style=\"flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:inherit; box-sizing:border-box;\">\n",
     "<button type=\"submit\" style=\"padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;\">{{buttonText}}</button>\n",
     "</form>\n<div class=\"cc-search-results\" aria-live=\"polite\" style=\"margin-top:16px;\"></div>\n{{{_script}}}</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Site Search",
+      "icon": "Search",
+      "open": true,
+      "keys": [
+        "placeholder",
+        "buttonText",
+        "noResults",
+        "limit",
+        "facets"
+      ],
+      "hint": [
+        "Visitors tick the choices to narrow the results: the choices of one filter combine with \"or\", and the filters with \"and\". Choices are listed from the published content.",
+        "Searches the titles, descriptions and text of every published page and collection item (pages hidden from search engines are left out). The search list is rebuilt each time you publish. Tip: put this block on a page called \u201cSearch\u201d; a link to /search/?q=word opens it with results."
+      ]
+    }
   ]
 }

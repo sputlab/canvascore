@@ -20,5 +20,18 @@
     "<style>@media(max-width: 768px){ #{{_id}} { grid-template-columns: 1fr !important; } }</style>",
     "<div id=\"{{_id}}\" class=\"cc-grid {{_classes}}\" style=\"{{{_style}}}; display:grid; grid-template-columns:repeat({{columns}}, 1fr); gap:20px; overflow:hidden;\">\n",
     "{{#items}}  <div style=\"min-width:0;\">\n{{{.}}}\n  </div>\n{{/items}}</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Grid Settings",
+      "icon": "Columns3",
+      "open": true,
+      "widget": "gridCount"
+    },
+    {
+      "title": "Columns Content",
+      "icon": "Layout",
+      "widget": "gridItems"
+    }
   ]
 }

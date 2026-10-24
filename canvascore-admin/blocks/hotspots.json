@@ -83,11 +83,14 @@
     },
     "image": {
       "type": "image",
-      "default": ""
+      "default": "",
+      "label": "Image",
+      "altKey": "alt"
     },
     "alt": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Image alt text"
     },
     "ratio": {
       "type": "enum",
@@ -108,26 +111,57 @@
         {
           "value": "21 / 9"
         }
+      ],
+      "label": "Empty image shape",
+      "control": "select",
+      "showIf": {
+        "image": false
+      },
+      "choices": [
+        [
+          "16 / 9",
+          "16:9"
+        ],
+        [
+          "4 / 3",
+          "4:3"
+        ],
+        [
+          "3 / 2",
+          "3:2"
+        ],
+        [
+          "1 / 1",
+          "1:1"
+        ],
+        [
+          "21 / 9",
+          "21:9"
+        ]
       ]
     },
     "pinColor": {
       "type": "color",
-      "default": "#3b82f6"
+      "default": "#3b82f6",
+      "label": "Pin color"
     },
     "pinTextColor": {
       "type": "color",
-      "default": "#ffffff"
+      "default": "#ffffff",
+      "label": "Pin number color"
     },
     "radius": {
       "type": "number",
       "parse": "int",
       "default": 12,
       "min": 0,
-      "max": 40
+      "max": 40,
+      "label": "Corner radius px"
     },
     "pulse": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Pulsing ring (off for visitors who prefer reduced motion)"
     }
   },
   "template": [
@@ -148,5 +182,34 @@
     "{{^text=}}<span class=\"cc-hs-text\" style=\"display:block; color:#475569;\">{{{text}}}</span>{{/text=}}",
     "{{^linkText=}}<a class=\"cc-hs-link\" href=\"{{href}}\" style=\"display:inline-block; margin-top:8px; font-weight:700; color:var(--brand-color, #3b82f6); text-decoration:none;\">{{linkText}} &rarr;</a>{{/linkText=}}",
     "</div></div>{{/pins}}</div>\n</div>\n{{#pins?}}{{{_script}}}{{/pins?}}"
+  ],
+  "panel": [
+    {
+      "title": "Hotspot Image",
+      "icon": "Image",
+      "open": true,
+      "keys": [
+        "image",
+        "alt",
+        "ratio"
+      ]
+    },
+    {
+      "title": "Hotspot Pins",
+      "icon": "MapPinned",
+      "open": true,
+      "widget": "hotspotPins"
+    },
+    {
+      "title": "Hotspot Style",
+      "icon": "Sliders",
+      "keys": [
+        "pinColor",
+        "pinTextColor",
+        "pulse",
+        "radius"
+      ],
+      "hint": "The text opens on hover, keyboard focus, or a tap or click."
+    }
   ]
 }

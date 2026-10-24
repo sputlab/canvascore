@@ -62,7 +62,7 @@ export const NumF = ({ label, value, onChange, min, max, step, placeholder }) =>
   <Fld label={label}><input type="number" min={min} max={max} step={step} style={fldInput} value={value ?? ''} placeholder={placeholder} onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))} /></Fld>
 );
 export const SelF = ({ label, value, onChange, options }) => (
-  <Fld label={label}><select style={fldInput} value={value} onChange={e => onChange(e.target.value)}>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>
+  <Fld label={label}><select style={fldInput} aria-label={label || undefined} value={value} onChange={e => onChange(e.target.value)}>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Fld>
 );
 export const ChkF = ({ label, checked, onChange }) => (
   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1', cursor: 'pointer', marginTop: '8px' }}><input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)} /> {label}</label>

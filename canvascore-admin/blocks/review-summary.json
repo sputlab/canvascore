@@ -3,17 +3,32 @@
   "settings": {
     "color": {
       "type": "color",
-      "default": "#f59e0b"
+      "default": "#f59e0b",
+      "label": "Star and bar color"
     },
     "layout": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Layout",
+      "control": "select",
+      "choices": [
+        [
+          "side",
+          "Score beside the bars"
+        ],
+        [
+          "stacked",
+          "Score above the bars"
+        ]
+      ]
     },
     "average": {
       "type": "number",
       "default": 0,
       "min": 0,
-      "max": 5
+      "max": 5,
+      "label": "Average rating (0\u20135)",
+      "step": 0.1
     },
     "averageText": {
       "type": "number",
@@ -38,47 +53,62 @@
       "min": 0,
       "max": 1000000000,
       "transform": "fmtNum",
-      "decimals": 0
+      "decimals": 0,
+      "label": "Number of reviews"
     },
     "title": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Title (empty = none)"
     },
     "totalLabel": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Reviews label",
+      "placeholder": "reviews"
     },
     "source": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Source (optional)",
+      "placeholder": "Based on verified reviews"
     },
     "linkText": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Link text (empty = no link)",
+      "placeholder": "Read all reviews"
     },
     "linkUrl": {
       "type": "text",
       "default": "",
-      "transform": "blockUrl"
+      "transform": "blockUrl",
+      "label": "Link",
+      "placeholder": "/reviews or https://\u2026"
     },
     "rowValue": {
       "type": "enum",
       "default": "percent",
       "options": [
         {
-          "value": "percent"
+          "value": "percent",
+          "label": "Percentage"
         },
         {
-          "value": "count"
+          "value": "count",
+          "label": "Number of reviews"
         },
         {
-          "value": "none"
+          "value": "none",
+          "label": "Nothing"
         }
-      ]
+      ],
+      "label": "Next to each bar"
     },
     "showDistribution": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Show the breakdown bars"
     },
     "distribution": {
       "type": "list",
@@ -97,13 +127,38 @@
           "parse": "int",
           "default": 5,
           "min": 1,
-          "max": 5
+          "max": 5,
+          "label": "Stars",
+          "control": "select",
+          "choices": [
+            [
+              5,
+              "5"
+            ],
+            [
+              4,
+              "4"
+            ],
+            [
+              3,
+              "3"
+            ],
+            [
+              2,
+              "2"
+            ],
+            [
+              1,
+              "1"
+            ]
+          ]
         },
         "count": {
           "type": "number",
           "default": 0,
           "min": 0,
-          "max": 1000000000
+          "max": 1000000000,
+          "label": "Number of reviews"
         },
         "countText": {
           "type": "number",
@@ -114,6 +169,16 @@
           "transform": "fmtNum",
           "decimals": 0
         }
+      },
+      "itemTitle": "{stars|?} stars",
+      "itemKeys": [
+        "stars",
+        "count"
+      ],
+      "addLabel": "+ Add row",
+      "newItem": {
+        "stars": 1,
+        "count": 0
       }
     }
   },
@@ -136,5 +201,39 @@
     "{{^rowValue=none}}<span class=\"cc-rs-row-value\" style=\"width:48px; text-align:right; flex-shrink:0; color:#64748b;\">{{#rowValue=percent}}{{pctText}}%{{/rowValue=percent}}{{#rowValue=count}}{{countText}}{{/rowValue=count}}</span>{{/rowValue=none}}",
     "</li>{{/distribution}}</ul>{{/distribution?}}{{/showDistribution}}",
     "</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Rating",
+      "icon": "StarHalf",
+      "open": true,
+      "keys": [
+        "title",
+        "average",
+        "total",
+        "totalLabel",
+        "source",
+        "linkText",
+        "linkUrl"
+      ],
+      "hint": "Shown as a visual summary only: no rating markup for search engines, which don't accept ratings a business publishes about itself."
+    },
+    {
+      "title": "Rating Breakdown",
+      "icon": "BarChart3",
+      "keys": [
+        "showDistribution",
+        "rowValue",
+        "distribution"
+      ]
+    },
+    {
+      "title": "Rating Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "color"
+      ]
+    }
   ]
 }

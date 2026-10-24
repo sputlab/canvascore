@@ -4,7 +4,8 @@
   "settings": {
     "title": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Title (empty = none)"
     },
     "ariaLabel": {
       "type": "text",
@@ -14,12 +15,25 @@
     },
     "levels": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Headings to list",
+      "control": "select",
+      "choices": [
+        [
+          "h2",
+          "Main headings (H2)"
+        ],
+        [
+          "h2h3",
+          "Main and sub-headings (H2 + H3)"
+        ]
+      ]
     },
     "sticky": {
       "type": "bool",
       "default": false,
-      "strict": true
+      "strict": true,
+      "label": "Stay in view while scrolling (sticky)"
     },
     "top": {
       "type": "number",
@@ -27,31 +41,51 @@
       "default": 90,
       "key": "stickyTop",
       "min": 0,
-      "max": 300
+      "max": 300,
+      "label": "Distance from the top px",
+      "showIf": {
+        "sticky": true
+      }
     },
     "offset": {
       "type": "number",
       "parse": "int",
       "default": 80,
       "min": 0,
-      "max": 300
+      "max": 300,
+      "label": "Space above a heading when jumping to it px"
     },
     "layout": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Style",
+      "control": "select",
+      "choices": [
+        [
+          "card",
+          "Card"
+        ],
+        [
+          "plain",
+          "Plain"
+        ]
+      ]
     },
     "accent": {
       "type": "color",
-      "default": "var(--brand-color, #3b82f6)"
+      "default": "var(--brand-color, #3b82f6)",
+      "label": "Accent color (empty = brand color)"
     },
     "numbered": {
       "type": "bool",
       "default": false,
-      "strict": true
+      "strict": true,
+      "label": "Number the entries"
     },
     "highlight": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Highlight the section being read"
     }
   },
   "template": [
@@ -62,5 +96,30 @@
     "<ol class=\"cc-toc-list\" style=\"list-style:none; margin:0; padding:0; font-size:14px; line-height:1.4; color:#475569;\"></ol>",
     "<p class=\"cc-toc-empty\" hidden style=\"margin:0; font-size:13px; color:#94a3b8;\">The headings of this page appear here.</p>",
     "</div>\n</nav>\n{{{_script}}}"
+  ],
+  "panel": [
+    {
+      "title": "Table of Contents",
+      "icon": "TableOfContents",
+      "open": true,
+      "keys": [
+        "title",
+        "levels",
+        "numbered",
+        "highlight"
+      ],
+      "hint": "Lists the headings of the page automatically: set the style of a Text block to Heading 2 or 3. With no headings the block is hidden on the published page."
+    },
+    {
+      "title": "Contents Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "accent",
+        "sticky",
+        "top",
+        "offset"
+      ]
+    }
   ]
 }

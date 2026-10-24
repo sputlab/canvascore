@@ -52,6 +52,7 @@ const vite = await createServer({
 
 const doc = w.document;
 const $$ = (sel, root = doc) => [...root.querySelectorAll(sel)];
+const $ = (sel, root = doc) => root.querySelector(sel);
 const click = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
 function setValue(el, value) {
   const proto = el instanceof w.HTMLTextAreaElement ? w.HTMLTextAreaElement.prototype : el instanceof w.HTMLSelectElement ? w.HTMLSelectElement.prototype : w.HTMLInputElement.prototype;
@@ -221,6 +222,94 @@ try {
   click(checkbox('Count up when scrolled into view')); await sleep(40);
   check('COUNTERS: …and hides when it is off', content().animate === false && !field('Duration ms'));
   check('COUNTERS: values computed for the page are never shown in the panel', !field('shown') && !$$('label').some((l) => /^shown/.test(l.textContent)));
+
+  // --- every block with a shared definition gets its panel generated from it (SchemaPanel + named widgets)
+  {
+    const { BLOCK_DEFS } = await vite.ssrLoadModule('/src/render/blockDef.mjs');
+    const { PANEL_WIDGETS } = await vite.ssrLoadModule('/src/components/panel/widgetRegistry.js');
+    const { CONTENT_PANELS } = await vite.ssrLoadModule('/src/components/panel/blocks/index.js');
+    const problems = [];
+    const look = (settings, keys, where) => {
+      for (const k of keys) {
+        const st = settings[k];
+        if (!st) { problems.push(`${where}: no setting "${k}"`); continue; }
+        const ctl = st.control || '';
+        if (ctl.startsWith('widget:') && !PANEL_WIDGETS[ctl.slice(7)]) problems.push(`${where}: no widget ${ctl}`);
+        if (st.itemKeys) look(st.item || {}, st.itemKeys, `${where}.${k}`);
+      }
+    };
+    for (const d of BLOCK_DEFS) {
+      if (!Array.isArray(d.panel)) { problems.push(`${d.type}: no panel`); continue; }
+      if (!/SchemaPanel/.test((CONTENT_PANELS[d.type] || {}).displayName || '')) problems.push(`${d.type}: its panel is not the generated one`);
+      for (const g of d.panel) {
+        look(d.settings, g.keys || [], `${d.type} / ${g.title}`);
+        if (g.widget && !PANEL_WIDGETS[g.widget]) problems.push(`${d.type} / ${g.title}: no widget ${g.widget}`);
+      }
+    }
+    check(`every one of the ${BLOCK_DEFS.length} definitions has a generated panel whose fields and widgets all exist`, problems.length === 0, problems.join('; '));
+    const notShown = [];
+    for (const d of BLOCK_DEFS) {
+      addAndSelect(d.type); mount(React.createElement(PropertyPanel));
+      if (!(await waitFor(() => d.panel.every((g) => $$('button').some((b) => b.textContent.includes(g.title))), 1500))) notShown.push(d.type);
+    }
+    check('…and each one mounts with all its sections (no rendering error)', notShown.length === 0, notShown.join(', '));
+  }
+  const realFetch0 = globalThis.fetch;
+  globalThis.fetch = async (u) => new Response(JSON.stringify(String(u).includes('get_media_folders') ? [] : String(u).includes('get_media') ? [{ name: 'photo.jpg', url: '/uploads/photo.jpg', alt: 'A photo' }] : []), { status: 200 });
+  addAndSelect('GALLERY'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add image from media'));
+  const nImgs = content().images.length;
+  click(buttonByText('+ Add image from media'));
+  click(await waitFor(() => $('[aria-label="Choose A photo"]'))); await sleep(40);
+  const lastImg = content().images[content().images.length - 1];
+  check('GALLERY: "+ Add image from media" adds an item with the picked image and its alt text', content().images.length === nImgs + 1 && lastImg.src === '/uploads/photo.jpg' && lastImg.alt === 'A photo' && lastImg.caption === '', JSON.stringify(lastImg));
+  addAndSelect('BEFORE_AFTER'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button[title="Choose from the media library"]').length);
+  st().updateBlock(st().blocks[0].id, { content: { ...content(), before: { label: 'Prima' } } }); await sleep(40);
+  click($$('button[title="Choose from the media library"]')[0]);
+  click(await waitFor(() => $('[aria-label="Choose A photo"]'))); await sleep(40);
+  check('BEFORE_AFTER: the library fills the BEFORE side (image and alt text), keeping its other values', content().before.src === '/uploads/photo.jpg' && content().before.alt === 'A photo' && content().before.label === 'Prima', JSON.stringify(content().before));
+  check('BEFORE_AFTER: the sides are boxed with their titles; the slider label shows its value', doc.body.textContent.includes('BEFORE (left)') && doc.body.textContent.includes('AFTER (right)') && (click(buttonByText('Compare Settings')), true));
+  await waitFor(() => $$('label').some((l) => /^Starting position \(50%\)$/.test(l.textContent)));
+  check('…"Starting position (50%)"', $$('label').some((l) => /^Starting position \(50%\)$/.test(l.textContent)));
+  globalThis.fetch = realFetch0;
+
+  addAndSelect('SHARE_BAR'); mount(React.createElement(PropertyPanel)); await waitFor(() => checkbox('Print'));
+  st().updateBlock(st().blocks[0].id, { content: { ...content(), networks: [] } }); await sleep(40);
+  click(checkbox('Print')); await sleep(40); click(checkbox('Facebook')); await sleep(40);
+  check('SHARE_BAR: the network checkboxes keep the networks in their own order', JSON.stringify(content().networks) === '["facebook","print"]', JSON.stringify(content().networks));
+
+  addAndSelect('PRICING'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Features'));
+  setValue(field('Features'), 'One\nTwo'); await sleep(40);
+  check('PRICING: features are edited one per line', JSON.stringify(content().plans[0].features) === '["One","Two"]');
+  check('PRICING: the highlighted plan is starred in its card title', $$('span').some((x) => /^Plan \d ★$/.test(x.textContent)));
+
+  addAndSelect('BUSINESS'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Button text'));
+  click(checkbox('Show a “Get directions” button')); await sleep(40);
+  check('BUSINESS: the directions button text hides with the button', content().mapsLink === false && !field('Button text'));
+  click(buttonByText('Opening Hours')); await sleep(40);
+  const hoursBefore = (content().hours || []).length;
+  if (hoursBefore === 0) { click(await waitFor(() => buttonByText('+ Add weekly hours'))); await sleep(40); }
+  check('BUSINESS: the opening hours widget: one row per day with times and a closed box', (content().hours || []).length === 7 && $$('input[type="time"]').length === 14 && !!buttonByText('Remove opening hours'));
+
+  addAndSelect('HERO'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Hero Buttons'));
+  click(buttonByText('Hero Buttons')); await waitFor(() => $('[aria-label="Button style"]'));
+  click([...$('[aria-label="Button style"]').querySelectorAll('button')].find((b) => b.textContent === 'Outline')); await sleep(40);
+  check('HERO: the button look widget turns a button into an outline one', content().buttons[0].bgColor === 'transparent' && !!content().buttons[0].borderColor);
+  check('…and its hover border appears once it has a border', !!$$('label').find((l) => l.textContent.trim() === 'Border') && !!$$('span').find((x) => x.textContent === 'ON HOVER'));
+
+  addAndSelect('BUTTON'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Colors'));
+  click(buttonByText('Colors')); click(buttonByText('Hover')); await waitFor(() => $$('label').some((l) => l.textContent.startsWith('Background (empty = brand color)')));
+  check('BUTTON: with the global style on, the background field says the brand colour is used; no hover border without a border', !!$$('label').find((l) => l.textContent.startsWith('Background (empty = brand color)')) && !$$('label').find((l) => l.textContent.startsWith('Border on hover')));
+  setValue($$('input').find((i) => i.getAttribute('aria-label') === 'Background (empty = brand color)'), '#ff0000'); await sleep(40);
+  check('BUTTON: a colour of the Colors section is a style of the block', st().blocks[0].styles.backgroundColor === '#ff0000');
+
+  addAndSelect('COUNTDOWN'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Countdown Display'));
+  click(buttonByText('Countdown Display')); await waitFor(() => field('Days label'));
+  check('COUNTDOWN: the unit labels sit two per row', field('Days label').closest('div').parentElement === field('Hours label').closest('div').parentElement && getComputedStyle(field('Days label').closest('div').parentElement).display === 'grid');
+  addAndSelect('REVIEW_SUMMARY'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Rating Breakdown'));
+  click(buttonByText('Rating Breakdown')); await sleep(40);
+  check('REVIEW_SUMMARY: each breakdown card is titled with its stars', $$('span').some((x) => x.textContent === '5 stars'));
+  addAndSelect('TEAM'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add member'));
+  check('TEAM: each member card is titled with the name', $$('span').some((x) => x.textContent === content().members[0].name));
 
   addAndSelect('LOGOS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add empty slot'));
   click(buttonByText('+ Add empty slot')); await sleep(40);

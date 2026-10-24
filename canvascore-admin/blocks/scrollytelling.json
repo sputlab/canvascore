@@ -9,26 +9,68 @@
       "item": {
         "image": {
           "type": "image",
-          "default": ""
+          "default": "",
+          "label": "Image shown with this step",
+          "altKey": "alt"
         },
         "alt": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Image alt text",
+          "showIf": {
+            "image": {
+              "not": [
+                ""
+              ]
+            }
+          }
         },
         "title": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Title"
         },
         "text": {
           "type": "text",
           "default": "",
-          "transform": "br"
+          "transform": "br",
+          "label": "Text",
+          "control": "textarea",
+          "rows": 3
         }
+      },
+      "itemTitle": "Step {n}",
+      "itemTitleKey": "title",
+      "itemKeys": [
+        "title",
+        "text",
+        "image",
+        "alt"
+      ],
+      "maxItems": 12,
+      "addLabel": "+ Add step",
+      "newItem": {
+        "title": "New step",
+        "text": "",
+        "image": "",
+        "alt": ""
       }
     },
     "side": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Image side",
+      "control": "select",
+      "choices": [
+        [
+          "left",
+          "Left"
+        ],
+        [
+          "right",
+          "Right"
+        ]
+      ]
     },
     "ratio": {
       "type": "enum",
@@ -49,6 +91,30 @@
         {
           "value": "3 / 2"
         }
+      ],
+      "label": "Image shape",
+      "control": "select",
+      "choices": [
+        [
+          "4 / 3",
+          "4:3"
+        ],
+        [
+          "3 / 2",
+          "3:2"
+        ],
+        [
+          "1 / 1",
+          "1:1"
+        ],
+        [
+          "16 / 9",
+          "16:9"
+        ],
+        [
+          "3 / 4",
+          "3:4 (portrait)"
+        ]
       ]
     },
     "top": {
@@ -57,21 +123,24 @@
       "default": 80,
       "key": "stickyTop",
       "min": 0,
-      "max": 300
+      "max": 300,
+      "label": "Distance from the top while sticky px"
     },
     "stepHeight": {
       "type": "number",
       "parse": "int",
       "default": 70,
       "min": 40,
-      "max": 120
+      "max": 120,
+      "label": "Height of each step (% of the screen)"
     },
     "gap": {
       "type": "number",
       "parse": "int",
       "default": 48,
       "min": 0,
-      "max": 120
+      "max": 120,
+      "label": "Gap px"
     }
   },
   "template": [
@@ -88,5 +157,27 @@
     "{{^title=}}<h3 class=\"cc-story-title\" style=\"margin:0 0 10px 0; font-size:26px; line-height:1.25;\">{{title}}</h3>{{/title=}}",
     "{{^text=}}<p class=\"cc-story-text\" style=\"margin:0; font-size:16px; line-height:1.7; color:#475569;\">{{{text}}}</p>{{/text=}}</li>{{/steps}}</ol>",
     "</div>\n</div>\n{{#steps?}}{{{_script}}}{{/steps?}}"
+  ],
+  "panel": [
+    {
+      "title": "Story Steps",
+      "icon": "ScrollText",
+      "open": true,
+      "keys": [
+        "steps"
+      ],
+      "hint": "The image stays in view while the visitor scrolls, and changes with the step in the middle of the screen. Up to 12 steps. In the editor the first image is shown."
+    },
+    {
+      "title": "Story Layout",
+      "icon": "Sliders",
+      "keys": [
+        "side",
+        "ratio",
+        "top",
+        "stepHeight",
+        "gap"
+      ]
+    }
   ]
 }

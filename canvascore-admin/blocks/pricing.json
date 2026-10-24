@@ -11,36 +11,54 @@
       "item": {
         "name": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Plan name",
+          "placeholder": "Plan name"
         },
         "price": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Price",
+          "placeholder": "Price ($19)",
+          "half": true
         },
         "period": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Period",
+          "placeholder": "/month",
+          "half": true
         },
         "description": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Short description",
+          "placeholder": "Short description"
         },
         "badge": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Badge",
+          "placeholder": "Badge (e.g. Most popular) \u2014 empty = none"
         },
         "buttonText": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Button text",
+          "placeholder": "Button text"
         },
         "buttonUrl": {
           "type": "text",
           "default": "#",
-          "transform": "blockUrl"
+          "transform": "blockUrl",
+          "label": "Button link",
+          "control": "link",
+          "placeholder": "URL or mailto:"
         },
         "highlighted": {
           "type": "bool",
-          "default": false
+          "default": false,
+          "label": "Highlight this plan"
         },
         "features": {
           "type": "list",
@@ -49,8 +67,41 @@
             "default": "",
             "trim": true
           },
-          "skipEmpty": true
+          "skipEmpty": true,
+          "label": "Features \u2014 one per line",
+          "control": "lines",
+          "rows": 4
         }
+      },
+      "itemTitle": "Plan {n}",
+      "itemMark": {
+        "key": "highlighted",
+        "text": " \u2605"
+      },
+      "addLabel": "+ Add plan",
+      "itemKeys": [
+        "name",
+        "price",
+        "period",
+        "description",
+        "features",
+        "buttonText",
+        "buttonUrl",
+        "highlighted",
+        "badge"
+      ],
+      "newItem": {
+        "name": "New plan",
+        "price": "$0",
+        "period": "/month",
+        "description": "",
+        "features": [
+          "Feature one"
+        ],
+        "buttonText": "Choose",
+        "buttonUrl": "#",
+        "highlighted": false,
+        "badge": ""
       }
     },
     "columns": {
@@ -58,7 +109,31 @@
       "parse": "int",
       "default": 0,
       "min": 0,
-      "max": 4
+      "max": 4,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          0,
+          "Auto (one per plan)"
+        ],
+        [
+          1,
+          "1"
+        ],
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ]
+      ]
     }
   },
   "template": [
@@ -73,5 +148,23 @@
     "<ul class=\"cc-plan-features\" style=\"list-style:none; padding:0; margin:20px 0 24px 0;\">{{#features}}<li style=\"display:flex; gap:10px; align-items:flex-start; margin:0 0 10px 0; font-size:14px; color:#334155;\"><span aria-hidden=\"true\" style=\"color:var(--brand-color, #3b82f6); font-weight:700;\">&#10003;</span><span>{{.}}</span></li>{{/features}}</ul>",
     "{{^buttonText=}}<a href=\"{{buttonUrl}}\" class=\"cc-plan-btn\" style=\"display:block; text-align:center; text-decoration:none; font-weight:700; padding:12px 18px; border-radius:8px; margin-top:auto; box-sizing:border-box; {{#highlighted}}background:var(--brand-color, #3b82f6); color:#fff;{{/highlighted}}{{^highlighted}}background:#f1f5f9; color:#0f172a;{{/highlighted}}\">{{buttonText}}</a>{{/buttonText=}}",
     "</div>{{/plans}}</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Pricing Plans",
+      "icon": "CreditCard",
+      "open": true,
+      "keys": [
+        "plans"
+      ]
+    },
+    {
+      "title": "Pricing Layout",
+      "icon": "Sliders",
+      "keys": [
+        "columns"
+      ],
+      "hint": "The highlighted plan uses the brand color. On small screens plans stack in one column."
+    }
   ]
 }

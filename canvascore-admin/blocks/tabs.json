@@ -6,12 +6,28 @@
       "item": {
         "title": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Title",
+          "placeholder": "Title"
         },
         "content": {
           "type": "richtext",
-          "default": ""
+          "default": "",
+          "label": "Content",
+          "control": "code",
+          "rows": 4,
+          "placeholder": "Content: text or HTML (<p>, <strong>, <a>, <img>\u2026)"
         }
+      },
+      "itemTitle": "Tab {n}",
+      "itemKeys": [
+        "title",
+        "content"
+      ],
+      "addLabel": "+ Add tab",
+      "newItem": {
+        "title": "New tab",
+        "content": "<p>Content\u2026</p>"
       }
     },
     "variant": {
@@ -24,7 +40,8 @@
             "bar": " border-bottom:1px solid #e2e8f0;",
             "tab": "display:inline-block; padding:10px 16px; font-weight:600; font-size:14px; cursor:pointer; color:#64748b; border-bottom:2px solid transparent; margin-bottom:-1px;",
             "active": "{color:var(--brand-color, #3b82f6) !important; border-bottom-color:var(--brand-color, #3b82f6) !important;}"
-          }
+          },
+          "label": "Underline"
         },
         {
           "value": "pills",
@@ -32,9 +49,11 @@
             "bar": "",
             "tab": "display:inline-block; padding:8px 16px; border-radius:999px; font-weight:600; font-size:14px; cursor:pointer; color:#475569; background:#f1f5f9;",
             "active": "{background:var(--brand-color, #3b82f6) !important; color:#fff !important;}"
-          }
+          },
+          "label": "Pills"
         }
-      ]
+      ],
+      "label": "Style"
     },
     "tabAlign": {
       "type": "enum",
@@ -44,21 +63,25 @@
           "value": "left",
           "data": {
             "justify": "flex-start"
-          }
+          },
+          "label": "Left"
         },
         {
           "value": "center",
           "data": {
             "justify": "center"
-          }
+          },
+          "label": "Center"
         },
         {
           "value": "right",
           "data": {
             "justify": "flex-end"
-          }
+          },
+          "label": "Right"
         }
-      ]
+      ],
+      "label": "Tabs alignment"
     }
   },
   "template": [
@@ -70,5 +93,23 @@
     "{{#items}}<input type=\"radio\" class=\"cc-tab-input\" name=\"{{_id}}-tabs\" id=\"{{_id}}-t{{@number}}\"{{#@first}} checked{{/@first}}>{{/items}}\n",
     "<div class=\"cc-tab-bar\" style=\"display:flex; flex-wrap:wrap; gap:6px; justify-content:{{{opt.tabAlign.justify}}};{{{opt.variant.bar}}}\">{{#items}}<label class=\"cc-tab\" for=\"{{_id}}-t{{@number}}\" style=\"{{{opt.variant.tab}}}\">{{title}}</label>{{/items}}</div>\n",
     "<div class=\"cc-tab-panels\" style=\"padding-top:18px;\">{{#items}}<div class=\"cc-tab-panel\" style=\"font-size:15px; line-height:1.6; color:#475569;\">{{{content}}}</div>{{/items}}</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Tabs",
+      "icon": "PanelTop",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "title": "Tabs Settings",
+      "icon": "Sliders",
+      "keys": [
+        "variant",
+        "tabAlign"
+      ]
+    }
   ]
 }

@@ -8,12 +8,16 @@
     "url": {
       "type": "text",
       "default": "#",
-      "transform": "legacyUrl"
+      "transform": "legacyUrl",
+      "label": "Link",
+      "control": "link"
     },
     "text": {
       "type": "text",
       "default": "Click here",
-      "fallbackWhenEmpty": true
+      "fallbackWhenEmpty": true,
+      "label": "Text",
+      "placeholder": "Click here"
     },
     "align": {
       "type": "text",
@@ -29,32 +33,56 @@
     "useGlobal": {
       "type": "bool",
       "default": true,
-      "phpTruthy": true
+      "phpTruthy": true,
+      "label": "Use Global Style (Brand)"
     },
     "preset": {
       "type": "text",
       "default": "",
-      "transform": "buttonPreset"
+      "transform": "buttonPreset",
+      "label": "Button preset",
+      "control": "select",
+      "choicesFrom": "buttonPresets",
+      "hint": "The preset sets the colours and corners of the site's button style (Global Options \u203a Buttons & fields). Colours set in the Colors section win over it."
     },
     "btnHoverBg": {
       "type": "text",
       "default": "",
-      "stringsOnly": true
+      "stringsOnly": true,
+      "label": "Background on hover",
+      "control": "color",
+      "placeholder": "No change"
     },
     "btnHoverColor": {
       "type": "text",
       "default": "",
-      "stringsOnly": true
+      "stringsOnly": true,
+      "label": "Text color on hover",
+      "control": "color",
+      "placeholder": "No change",
+      "noTransparent": true
     },
     "btnHoverBorder": {
       "type": "text",
       "default": "",
-      "stringsOnly": true
+      "stringsOnly": true,
+      "label": "Border on hover",
+      "control": "color",
+      "placeholder": "No change",
+      "noTransparent": true,
+      "showIf": {
+        "styles.borderWidth": {
+          "gt": 0
+        }
+      }
     },
     "btnEffect": {
       "type": "text",
       "default": "",
-      "stringsOnly": true
+      "stringsOnly": true,
+      "label": "Hover effect",
+      "control": "select",
+      "choicesFrom": "buttonEffects"
     },
     "hv": {
       "type": "text",
@@ -67,6 +95,50 @@
         "border": "btnHoverBorder",
         "effect": "btnEffect"
       }
+    },
+    "size": {
+      "type": "text",
+      "default": "",
+      "control": "widget:buttonSize"
+    },
+    "bgStyle": {
+      "type": "color",
+      "default": "",
+      "from": "styles",
+      "key": "backgroundColor",
+      "label": "Background",
+      "placeholder": "Default",
+      "labelWhen": [
+        {
+          "when": {
+            "useGlobal": true
+          },
+          "label": "Background (empty = brand color)",
+          "placeholder": "Brand color"
+        }
+      ]
+    },
+    "colorStyle": {
+      "type": "color",
+      "default": "",
+      "from": "styles",
+      "key": "color",
+      "label": "Text color",
+      "placeholder": "Default",
+      "noTransparent": true,
+      "labelWhen": [
+        {
+          "when": {
+            "useGlobal": true
+          },
+          "placeholder": "#ffffff"
+        }
+      ]
+    },
+    "border": {
+      "type": "text",
+      "default": "",
+      "control": "widget:buttonBorder"
     }
   },
   "template": [
@@ -74,5 +146,40 @@
     "<a href=\"{{url}}\" class=\"cc-btn{{hv.cls}}\" style=\"display:inline-block; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; ",
     "{{#preset?}}{{{preset}}}padding: 12px 24px; {{/preset?}}{{^preset?}}{{#useGlobal}}background: var(--brand-color, #3b82f6); color: #fff; border-radius: 6px; padding: 12px 24px; {{/useGlobal}}{{/preset?}}",
     "{{{_style}}}{{hv.vars}}\">{{text}}</a>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Button Settings",
+      "icon": "SquareChartGantt",
+      "open": true,
+      "keys": [
+        "useGlobal",
+        "preset",
+        "size",
+        "text",
+        "url"
+      ]
+    },
+    {
+      "title": "Colors",
+      "icon": "Palette",
+      "keys": [
+        "bgStyle",
+        "colorStyle",
+        "border"
+      ],
+      "hint": "Outline button: Background Transparent + a Border and Text color."
+    },
+    {
+      "title": "Hover",
+      "icon": "MousePointerClick",
+      "keys": [
+        "btnHoverBg",
+        "btnHoverColor",
+        "btnHoverBorder",
+        "btnEffect"
+      ],
+      "hint": "Point at the button in the canvas to try it."
+    }
   ]
 }

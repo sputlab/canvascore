@@ -4,11 +4,13 @@
   "settings": {
     "title": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Title (empty = none)"
     },
     "message": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Message (empty = the page title)"
     },
     "networks": {
       "type": "choices",
@@ -22,7 +24,8 @@
             "brand": "#1877f2",
             "link": "1",
             "aria": "Share on Facebook"
-          }
+          },
+          "label": "Facebook"
         },
         {
           "value": "x",
@@ -33,7 +36,8 @@
             "brand": "#000000",
             "link": "1",
             "aria": "Share on X"
-          }
+          },
+          "label": "X"
         },
         {
           "value": "linkedin",
@@ -44,7 +48,8 @@
             "brand": "#0a66c2",
             "link": "1",
             "aria": "Share on LinkedIn"
-          }
+          },
+          "label": "LinkedIn"
         },
         {
           "value": "whatsapp",
@@ -55,7 +60,8 @@
             "brand": "#25d366",
             "link": "1",
             "aria": "Share on WhatsApp"
-          }
+          },
+          "label": "WhatsApp"
         },
         {
           "value": "telegram",
@@ -66,7 +72,8 @@
             "brand": "#229ed9",
             "link": "1",
             "aria": "Share on Telegram"
-          }
+          },
+          "label": "Telegram"
         },
         {
           "value": "email",
@@ -77,7 +84,8 @@
             "brand": "#475569",
             "link": "1",
             "aria": "Share by email"
-          }
+          },
+          "label": "Email"
         },
         {
           "value": "copy",
@@ -88,7 +96,8 @@
             "brand": "#475569",
             "link": "",
             "aria": "Copy link"
-          }
+          },
+          "label": "Copy link"
         },
         {
           "value": "print",
@@ -99,7 +108,8 @@
             "brand": "#475569",
             "link": "",
             "aria": "Print"
-          }
+          },
+          "label": "Print"
         },
         {
           "value": "share",
@@ -110,13 +120,26 @@
             "brand": "#475569",
             "link": "",
             "aria": "Share"
-          }
+          },
+          "label": "Share (phone share sheet)"
         }
       ]
     },
     "style": {
       "type": "text",
-      "default": ""
+      "default": "",
+      "label": "Buttons",
+      "control": "select",
+      "choices": [
+        [
+          "buttons",
+          "Icon and name"
+        ],
+        [
+          "icons",
+          "Icon only"
+        ]
+      ]
     },
     "shape": {
       "type": "enum",
@@ -140,6 +163,22 @@
             "radius": "8px"
           }
         }
+      ],
+      "label": "Shape",
+      "control": "select",
+      "choices": [
+        [
+          "pill",
+          "Pill"
+        ],
+        [
+          "rounded",
+          "Rounded"
+        ],
+        [
+          "square",
+          "Square"
+        ]
       ]
     },
     "colors": {
@@ -147,22 +186,27 @@
       "default": "brand",
       "options": [
         {
-          "value": "brand"
+          "value": "brand",
+          "label": "Network colors"
         },
         {
-          "value": "mono"
+          "value": "mono",
+          "label": "White with border"
         },
         {
-          "value": "dark"
+          "value": "dark",
+          "label": "Dark"
         }
-      ]
+      ],
+      "label": "Colors"
     },
     "size": {
       "type": "number",
       "parse": "int",
       "default": 40,
       "min": 28,
-      "max": 64
+      "max": 64,
+      "label": "Button height px"
     },
     "align": {
       "type": "enum",
@@ -173,23 +217,27 @@
           "data": {
             "flex": "flex-start",
             "text": "left"
-          }
+          },
+          "label": "Left"
         },
         {
           "value": "center",
           "data": {
             "flex": "center",
             "text": "center"
-          }
+          },
+          "label": "Center"
         },
         {
           "value": "right",
           "data": {
             "flex": "flex-end",
             "text": "right"
-          }
+          },
+          "label": "Right"
         }
-      ]
+      ],
+      "label": "Alignment"
     }
   },
   "template": [
@@ -200,5 +248,29 @@
     "{{#networks}}{{#link?}}<a class=\"cc-share-btn cc-share-{{value}}\" data-net=\"{{value}}\" href=\"#\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"{{{aria}}}\" style=\"display:inline-flex; align-items:center; justify-content:center; gap:8px; height:{{size}}px; min-width:{{size}}px; padding:0 {{#style=icons}}0{{/style=icons}}{{^style=icons}}16{{/style=icons}}px; box-sizing:border-box; border-radius:{{{opt.shape.radius}}}; font:600 14px/1 inherit; text-decoration:none; cursor:pointer; {{#colors=brand}}background:{{{brand}}}; color:#ffffff; border:1px solid {{{brand}}};{{/colors=brand}}{{#colors=dark}}background:#0f172a; color:#ffffff; border:1px solid #0f172a;{{/colors=dark}}{{#colors=mono}}background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;{{/colors=mono}}\">{{#svg?}}{{{svg}}}{{/svg?}}{{^svg?}}<span class=\"cc-share-badge\" aria-hidden=\"true\" style=\"font-weight:800; font-size:14px; line-height:1;\">{{{badge}}}</span>{{/svg?}}{{^style=icons}}<span class=\"cc-share-label\">{{{label}}}</span>{{/style=icons}}</a>{{/link?}}",
     "{{^link?}}<button type=\"button\" class=\"cc-share-btn cc-share-{{value}}\" data-act=\"{{value}}\" aria-label=\"{{{aria}}}\" style=\"display:inline-flex; align-items:center; justify-content:center; gap:8px; height:{{size}}px; min-width:{{size}}px; padding:0 {{#style=icons}}0{{/style=icons}}{{^style=icons}}16{{/style=icons}}px; box-sizing:border-box; border-radius:{{{opt.shape.radius}}}; font:600 14px/1 inherit; text-decoration:none; cursor:pointer; {{#colors=brand}}background:{{{brand}}}; color:#ffffff; border:1px solid {{{brand}}};{{/colors=brand}}{{#colors=dark}}background:#0f172a; color:#ffffff; border:1px solid #0f172a;{{/colors=dark}}{{#colors=mono}}background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;{{/colors=mono}}\">{{#svg?}}{{{svg}}}{{/svg?}}{{^svg?}}<span class=\"cc-share-badge\" aria-hidden=\"true\" style=\"font-weight:800; font-size:14px; line-height:1;\">{{{badge}}}</span>{{/svg?}}{{^style=icons}}<span class=\"cc-share-label\">{{{label}}}</span>{{/style=icons}}</button>{{/link?}}{{/networks}}",
     "</div>\n</div>\n{{{_script}}}"
+  ],
+  "panel": [
+    {
+      "title": "Share Bar",
+      "icon": "Share2",
+      "open": true,
+      "keys": [
+        "title",
+        "message",
+        "networks"
+      ],
+      "hint": "The links use the address of the page the visitor is on. Nothing is loaded from the networks until a visitor clicks. The bar appears once the page has loaded."
+    },
+    {
+      "title": "Share Style",
+      "icon": "Sliders",
+      "keys": [
+        "style",
+        "shape",
+        "colors",
+        "size",
+        "align"
+      ]
+    }
   ]
 }

@@ -43,7 +43,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   - **Templates** use a logic-light, Mustache-like language with escaping built in: `{{name}}` is always escaped;
     `{{{name}}}` prints raw only trusted HTML (sanitized rich text, the definition's own data). Sections cover lists,
     tests and equality.
-  - **The Content panel** is generated from the same schema (`SchemaPanel.jsx`).
+  - **The Content panel** is generated from the same schema (`SchemaPanel.jsx`) for all 45 blocks: sections, labels,
+    hints and defaults come from the definition. Its controls cover texts, numbers, switches, choices, colours, images
+    and audio or video files, the rich text editor, page links, one-per-line lists, date and time, cards for list
+    items (with "add from the media library"), objects, multiple choices, half-width pairs, fields shown only when
+    another setting calls for them, and fields that edit the block's style. The few controls that are more than a field
+    are named widgets (`widgets.jsx`): placing hotspot pins on the image, the Site Search filters, the opening hours,
+    the Grid and Cards columns, the button size and border, and the Hero button looks. 29 hand-written panels are gone.
   - Behaviour scripts stay site-side, named by the definition.
 
   Blocks moved to it: **Text, Image, Icon Box, Testimonial, Callout, Timeline, Steps, Progress Bars, Grid, Cards,

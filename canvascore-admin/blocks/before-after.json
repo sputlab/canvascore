@@ -7,34 +7,54 @@
       "item": {
         "src": {
           "type": "image",
-          "default": ""
+          "default": "",
+          "label": "Image",
+          "altKey": "alt"
         },
         "alt": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Alt text"
         },
         "label": {
           "type": "text",
-          "default": "Before"
+          "default": "Before",
+          "label": "Label"
         }
-      }
+      },
+      "boxTitle": "BEFORE (left)",
+      "itemKeys": [
+        "src",
+        "alt",
+        "label"
+      ]
     },
     "after": {
       "type": "object",
       "item": {
         "src": {
           "type": "image",
-          "default": ""
+          "default": "",
+          "label": "Image",
+          "altKey": "alt"
         },
         "alt": {
           "type": "text",
-          "default": ""
+          "default": "",
+          "label": "Alt text"
         },
         "label": {
           "type": "text",
-          "default": "After"
+          "default": "After",
+          "label": "Label"
         }
-      }
+      },
+      "boxTitle": "AFTER (right)",
+      "itemKeys": [
+        "src",
+        "alt",
+        "label"
+      ]
     },
     "start": {
       "type": "number",
@@ -42,16 +62,46 @@
       "default": 50,
       "min": 0,
       "max": 100,
-      "round": 0
+      "round": 0,
+      "label": "Starting position",
+      "control": "range",
+      "valueLabel": "Starting position ({v}%)",
+      "rangeMin": 0,
+      "rangeMax": 100
     },
     "aspectRatio": {
       "type": "text",
       "default": "16 / 9",
-      "pattern": "^(|auto|[0-9]{1,4}(\\.[0-9]{1,3})? ?/ ?[0-9]{1,4}(\\.[0-9]{1,3})?)$"
+      "pattern": "^(|auto|[0-9]{1,4}(\\.[0-9]{1,3})? ?/ ?[0-9]{1,4}(\\.[0-9]{1,3})?)$",
+      "label": "Aspect ratio",
+      "control": "select",
+      "choices": [
+        [
+          "16 / 9",
+          "16:9"
+        ],
+        [
+          "4 / 3",
+          "4:3"
+        ],
+        [
+          "3 / 2",
+          "3:2"
+        ],
+        [
+          "1 / 1",
+          "1:1"
+        ],
+        [
+          "21 / 9",
+          "21:9"
+        ]
+      ]
     },
     "showLabels": {
       "type": "bool",
-      "default": true
+      "default": true,
+      "label": "Show Before / After labels"
     }
   },
   "template": [
@@ -63,5 +113,26 @@
     "<div class=\"cc-ba-handle\" aria-hidden=\"true\" style=\"position:absolute; top:0; bottom:0; left:var(--pos); width:2px; margin-left:-1px; background:#fff; pointer-events:none;\"><span class=\"cc-ba-knob\" style=\"position:absolute; top:50%; left:50%; width:36px; height:36px; margin:-18px 0 0 -18px; border-radius:50%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; font-size:14px; color:#0f172a;\">&#8596;</span></div>",
     "<input type=\"range\" class=\"cc-ba-range\" min=\"0\" max=\"100\" step=\"0.1\" value=\"{{start}}\" aria-label=\"Comparison slider\" style=\"position:absolute; top:0; left:0; width:100%; height:100%; margin:0; opacity:0; cursor:ew-resize;\">\n",
     "{{{_script}}}</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Before / After",
+      "icon": "GitCompare",
+      "open": true,
+      "keys": [
+        "before",
+        "after"
+      ],
+      "hint": "Use two images with the same size and framing."
+    },
+    {
+      "title": "Compare Settings",
+      "icon": "Sliders",
+      "keys": [
+        "start",
+        "aspectRatio",
+        "showLabels"
+      ]
+    }
   ]
 }
