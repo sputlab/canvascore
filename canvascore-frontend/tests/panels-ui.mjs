@@ -503,6 +503,13 @@ try {
     const el = await waitFor(() => doc.querySelector('.' + CLS[t]));
     check(`${t}: drawn in the canvas (.${CLS[t]}), without "Unknown element"`, !!el && !/Unknown element/.test(doc.body.innerHTML));
   }
+  // the editor's own placeholder blocks (Collection List, Master…) show real text, never a raw \uXXXX escape
+  {
+    const b = addAndSelect('COLLECTION_LIST');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b.id] }, React.createElement(SortableBlock, { block: b }))));
+    await sleep(60);
+    check('COLLECTION_LIST: the canvas shows its label with the books emoji, not a raw \\uD83D escape', /Collection List/.test(doc.body.textContent) && !/\\u[0-9a-fA-F]{4}/.test(doc.body.textContent) && doc.body.textContent.includes('\uD83D\uDCDA'), doc.body.textContent.slice(0, 120));
+  }
   // before/after in the canvas: the slider must move the line even without the published <script>
   {
     const b = addAndSelect('BEFORE_AFTER');

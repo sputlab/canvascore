@@ -10,6 +10,12 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-10-24 — Collection List label on the canvas
+
+### Fixed
+- The **Collection List** block showed the raw text `\uD83D\uDCDA Collection List` on the editor's canvas instead of
+  the books emoji (the published page was not affected). A test now checks the canvas label.
+
 ## [0.21.0] - 2026-10-24 — One-click updates and shared block definitions
 
 ### Added
@@ -1186,7 +1192,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.21.1...HEAD
+[0.21.1]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/sputlab/CanvasCore/compare/v0.20.0...v0.21.0
 [0.16.0]: https://github.com/sputlab/CanvasCore/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sputlab/CanvasCore/compare/v0.14.1...v0.15.0

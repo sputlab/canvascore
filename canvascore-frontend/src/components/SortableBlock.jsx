@@ -231,7 +231,7 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
       return (
         <div style={{ padding: '14px', pointerEvents: isMasterPreview ? 'auto' : 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#64748b', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            <span>\uD83D\uDCDA Collection List</span>
+            <span>{'\uD83D\uDCDA'} Collection List</span>
             <span style={{ color: '#38bdf8' }}>{c.collectionName || c.collectionSlug || 'choose a collection \u2192'}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '16px' }}>
