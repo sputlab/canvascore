@@ -11,4 +11,8 @@ See the [main README](../README.md) for structure, development and deploy.
 | `npm test`       | All tests (needs the PHP CLI for the JS↔PHP parity test)         |
 
 The version and the block defaults are read from `../canvascore-admin/version.json` and
-`../canvascore-admin/blocks.json` (see `vite.config.js`).
+`../canvascore-admin/blocks.json` (see `vite.config.js`). The blocks that are described by a definition file
+(`../canvascore-admin/blocks/*.json`) are imported by `src/render/blockDef.mjs`.
+
+`scripts/release-keygen.php` and `scripts/release-package.php` make the signing key and the signed update package of a
+release (see the Developer Guide, section 13).

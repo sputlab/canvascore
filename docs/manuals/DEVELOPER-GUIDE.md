@@ -17,7 +17,7 @@ never in a public issue).
 4. [Data model](#4-data-model) (storage, tables, page states, revisions, redirects, migrations)
 5. [Rendering](#5-rendering)
 6. [Publishing pipeline](#6-publishing-pipeline-rebuild_allphp)
-7. [Server helpers](#7-server-helpers) (`config.php`, `compiler.php`, `media.php`, `backup.php`)
+7. [Server helpers](#7-server-helpers) (`config.php`, `compiler.php`, `media.php`, `update.php`, `backup.php`)
 8. [Adding a new block](#8-adding-a-new-block)
 9. [Editor state](#9-editor-state-srcstoreusestorejs)
 10. [Saving and sessions](#10-saving-and-sessions)
@@ -64,11 +64,15 @@ CanvasCore is a block-based CMS that **publishes static HTML**. It has two halve
   One rendering contract:
      src/render/renderBlock.mjs  ≡  compiler.php render_block()
      checked block by block by tests/parity.mjs (JS output vs PHP CLI output)
+     45 blocks are described ONCE (canvascore-admin/blocks/*.json) and rendered by two small
+     engines (src/render/blockDef.mjs, canvascore-admin/blockdef.php): section 5, "Shared block definitions"
 ```
 
 The key idea: the editor canvas shows each block with **the same HTML the site will get**. The JS renderer
 (`renderBlock.mjs`) and the PHP compiler (`compiler.php`) are two implementations of one contract, kept
-identical by an automated parity test rather than by sharing code across runtimes.
+identical by an automated parity test rather than by sharing code across runtimes. Since 0.21.0 most blocks
+need no hand-written pair: a block is a **definition** (a settings schema plus a template) that both engines
+read, and its Content panel is generated from the same file.
 
 ## 2. Repository layout
 
@@ -94,6 +98,11 @@ canvascore-frontend/         React editor
 | `config.php` | Data dir, security headers and the admin `.htaccess`, session boot and account check, CSRF and same-origin check, client IP and trusted proxies, login throttling, rate limits, code surfaces, content sanitizing on save (`cc_sanitize_blocks`), editor redaction, re-linking, revisions, redirects, reserved slugs, unpublishing deleted items/collections, public branding, SVG check, `cc_sanitize_html`, `cc_version`, slugs |
 | `media.php` | Image optimization (WebP copies in `uploads/_cc/`, `srcset` on publish), the media metadata (`media.json`), media library folders (`media-folders.json`) and where images are used |
 | `backup.php` | Whole-site backup as a ZIP, its checks and restore, saved copies and safety copies in `backups/` |
+| `publish.php` | `cc_publish_site()` (the whole publish, used by `rebuild_all.php`, the scheduler and `cron.php`) and the scheduled publishing (`cc_run_schedules()`) |
+| `update.php` | One-click updates: release check, signed package, backup, folder swap, health check, rollback (section 7) |
+| `update-keys.php` | The public keys (Ed25519) that releases are signed with; the private key is never in the repository |
+| `blockdef.php` | The PHP engine of the shared block definitions: setting cleaning, the template language, transforms, behaviour scripts (section 5) |
+| `blocks/*.json` | One definition per block: settings, template, panel (45 files). Read by the editor at build time and by PHP at publish time |
 | `migrations.php` | Versioned DB migrations and content migrations |
 | `submit_form.php` | Public endpoint for form submissions (rate-limited; recipient, fields and success message from `forms.json`) |
 | `install.php` | Setup wizard: setup key, requirements (including the HTTP check of the data folder), first account; locks itself once installed |
@@ -110,11 +119,13 @@ canvascore-frontend/         React editor
 | `vite.config.js` | Injects `__APP_VERSION__`, `__APP_BUILD__`, `__BLOCK_DEFS__`, `__EFFECTS_CSS__` from `../canvascore-admin/`; the `canvascore-editor-csp` plugin adds the editor's Content Security Policy (`script-src 'self'`) and `referrer` / `robots` metas to the **built** `index.html` (not in the dev server, which needs inline scripts) |
 | `public/menu-preview.html` | Menu Builder live preview: a page of its own, loaded in a sandboxed iframe (`allow-scripts`, no same origin) and fed the menu HTML by `postMessage`, so the menu's scripts run there and not under the editor's CSP |
 | `scripts/bump.mjs` | `prebuild` hook: increments `build` in `version.json`, syncs `package.json` version |
+| `scripts/release-keygen.php`, `scripts/release-package.php` | Release tooling: make the signing key pair; pack and sign the update package of a release (section 13) |
 | `.oxlintrc.json` | Lint config (react + oxc plugins) |
 | `src/main.jsx` | Entry: imports `apiClient.js` first (installs the fetch guard), then the CSS and `<App />`; refuses to render inside a frame (`window.top !== window.self`) |
 | `src/App.jsx` | Auth gate, view switch (`currentView`), overlays (session, drafts, toasts, dialogs) |
 | `src/store/useStore.js` | The Zustand store: auth, pages, block tree, history, masters, templates |
 | `src/render/renderBlock.mjs` | Canonical JS renderer (`renderBlock`, `blockRoot`, `buildInlineStyle`, `ccInt`, `escapeHtml`) |
+| `src/render/blockDef.mjs` | The JS engine of the shared block definitions: imports `blocks/*.json` (`BLOCK_DEFS`), cleans each value with its setting, fills the template (section 5) |
 | `src/render/effects.mjs` | Effect catalogs and `effectClasses()` / `buttonHover()` |
 | `src/render/blockRuntime.mjs` | Behaviour scripts shared by the canvas and published pages (ES5). Each script sits between `// cc-<name>:begin` and `// cc-<name>:end`; the canvas runs it through the `init*Block` wrappers in `SortableBlock.jsx` |
 | `src/render/logosMarquee.mjs` | Logo Cloud scrolling strip (repeats the logos to fill the line); the published page runs the same logic from `CC_LOGOS_SCRIPT` |
@@ -137,12 +148,14 @@ canvascore-frontend/         React editor
 | `src/components/Canvas.jsx`, `SortableBlock.jsx` | Canvas and the per-block frame (DnD, selection, in-place text) |
 | `src/components/PropertyPanel.jsx` | Content / Style / Advanced tabs for the selected block |
 | `src/components/panel/` | `StyleTab`, `AdvancedTab`, `PageSettings`, `fields.jsx`, `helpers.js`, `constants.js` |
-| `src/components/panel/blocks/` | One Content panel per block (e.g. `FlexRowPanel.jsx`, `SearchPanel.jsx`); `index.js` maps type → panel (`CONTENT_PANELS`) |
+| `src/components/panel/SchemaPanel.jsx`, `widgets.jsx`, `widgetRegistry.js` | The Content panel generated from a block definition, and the named widgets it can use (hotspot pins, search filters, opening hours, grid columns, button size and border, hero button looks) |
+| `src/components/panel/blocks/` | The hand-written Content panels of the blocks that are not (yet) definitions (`FlexRowPanel.jsx`, `FormPanel.jsx`…); `index.js` maps type → panel (`CONTENT_PANELS`) and adds a generated panel for every definition |
+| `src/components/Updates.jsx` | Administration › Updates: check, update, requirements, history |
 | `src/components/*.jsx` | Admin screens: PageManager, Collections, Templates, MediaManager, MediaPickerModal, MenuBuilder, GlobalSettings, UserManager, Submissions, Backup, AdminLayout… |
 | `src/session/` | Session manager, fetch guard, local draft backups and trackers |
 | `src/ui/` | UI kit (`kit.jsx`, `kit.css`), `global.css`, `notify.js` + `toast.jsx`, `dialog.js` + `dialogHost.jsx`, `branding.js` (`useBrandingHead()`, `brandIconUrl()`) + `BrandLogo.jsx` (site favicon as the admin logo) |
 | `src/menu/menuThemes.js` | Menu defaults, themes, effect groups (mirrored in `compiler.php`) |
-| `tests/` | The 12 test suites (10 Node, plus `server.php` and `security.php` in PHP) and the `render_php.php` / `render_menu.php` CLI helpers |
+| `tests/` | The 12 test suites (10 Node, plus `server.php` and `security.php` in PHP) and the `render_php.php` / `render_php_list.php` / `render_def.php` / `render_menu.php` CLI helpers |
 
 ## 3. Local development
 
@@ -219,12 +232,12 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 
 | Script | File | Covers |
 | --- | --- | --- |
-| `test:parity` | `tests/parity.mjs` | JS ↔ PHP parity of structure, classes and inline styles for fixtures of every block (plus defaults from `blocks.json`) |
+| `test:parity` | `tests/parity.mjs` | JS ↔ PHP parity of structure, classes and inline styles for fixtures of every block (plus defaults from `blocks.json`); for the shared definitions the two engines must give the **same HTML byte for byte** (hostile values included), and the template language, setting cleaning and every transform are checked on test definitions in both engines |
 | `test:blocks` | `tests/blocks.mjs` | Behaviour of the compiled Accordion, Tabs, Pricing, Gallery (lightbox script run in jsdom), sanitizing |
 | `test:content` | `tests/blocks-content.mjs` | Divider…Business blocks: safe and working PHP output (clock/rAF/IntersectionObserver controlled) |
 | `test:session` | `tests/session.mjs` | Drafts, trackers, session manager with a fake expiring server and simulated clock, fetch guard |
 | `test:session-ui` | `tests/session-ui.mjs` | Real `<App />` against a fake backend: expiry mid-save, login overlay, retry |
-| `test:panels` | `tests/panels-ui.mjs` | `addBlock` → `PropertyPanel` field edits → store, and canvas rendering per block |
+| `test:panels` | `tests/panels-ui.mjs` | `addBlock` → `PropertyPanel` field edits → store, and canvas rendering per block; every definition has a generated panel whose fields and widgets exist and that mounts |
 | `test:starters` | `tests/starters.mjs` | `starters.json`: known types, real content fields, unique ids, renders in JS and PHP |
 | `test:menu` | `tests/menu.mjs` | Menu effect catalog in sync with `compiler.php`, every theme/effect rendered by PHP, escaping |
 | `test:rich-text` | `tests/rich-text.mjs` | Paste cleanup, in-place editing keeps layout, toolbars, tidy on blur |
@@ -235,7 +248,9 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 How they work:
 
 - **PHP side**: the tests pipe a block (or menu) as JSON to `php tests/render_php.php` /
-  `tests/render_menu.php`, which `require` the real `compiler.php`. No web server is involved.
+  `tests/render_menu.php`, which `require` the real `compiler.php`. No web server is involved. `render_php_list.php`
+  renders a whole list of blocks in one process (the parity test uses it: seconds instead of minutes) and
+  `render_def.php` renders ad-hoc definitions (the template-language checks).
 - **`tests/server.php`** is plain PHP: it `require`s `compiler.php` (which loads `config.php`), calls the helpers
   directly and prints the same `✓` / `✗` checks. It never touches the real data dir: files go to temp dirs
   (`sys_get_temp_dir()`), databases are in-memory SQLite (`new PDO('sqlite::memory:')`, tables created by
@@ -249,6 +264,10 @@ How they work:
   and load the real modules with `vite.ssrLoadModule('/src/...')`, then mount them with `react-dom` and drive
   them with DOM events. `__BLOCK_DEFS__` etc. are passed via `define`. `fetch` is stubbed or replaced by a
   fake backend.
+- **`tests/security.php`** also covers the updates over real HTTP: a fake release feed (`update-source.php` and a test
+  `update-keys.php` in the temporary install) serves signed and tampered packages; an untrusted signature, a changed package,
+  a path outside the admin folder, a wrong version, a file PHP can't parse and a new version that fails its first check must
+  all be refused or rolled back with the old version intact, and a signed release must install.
 - Output is a list of `✓` / `✗` checks and a final `… OK` line.
 
 ### Building
@@ -282,6 +301,7 @@ the web root can be written. It contains:
 | `media.json` | Media metadata per uploaded file name: `alt`, `w`, `h`, `bytes`, `variants` (widths of the WebP copies), `optimized`, `folder` (media library folder path such as `Products/Shoes`, `''` = none; see `media.php`) |
 | `media-folders.json` | Array of media folder paths, so empty folders exist too (parents of listed folders are implied) |
 | `backups/` | Backup ZIPs: `backup-…zip` (kept by hand), `before-restore-…zip` (safety copies, newest 5), `download-…zip` and `upload-….part` (temporary, removed after an hour); deny-all `.htaccess` |
+| `updates/` | One-click updates (`update.php`): `db-<version>-…sqlite` and `code-<version>-…zip` copies taken before each update (newest 3 of each), `history.json`, `last-check.json`, `health.json` (the one-time token of the running check); deny-all `.htaccess` |
 | `published_files.json` | Manifest of files the last successful publish wrote (`…/index.html` and `…/feed.xml`, relative to the site root); used to delete pages and feeds no longer published |
 | `login_attempts.json`, `rate_*.json` | Login throttling (at most 5000 keys) and form rate limits |
 | `sessions/` | PHP session files (dedicated folder) |
@@ -438,6 +458,103 @@ Differences that are allowed (and ignored by the parity test):
   `STRICT_STYLE` in `tests/parity.mjs`, whose `<style>` text carries logic and is compared.
 - `MASTER` and `COLLECTION_LIST` render a placeholder comment in JS; the editor draws them itself.
 - Links to internal pages become `{{BASE_URL}}…`; the compiler substitutes the base path, the canvas `#`.
+
+### Shared block definitions (`canvascore-admin/blocks/`)
+
+Since 0.21.0 a block can be described **once**, in `canvascore-admin/blocks/<name>.json`, instead of as a
+`renderBlock.mjs` case, a `compiler.php` case and a hand-written panel. 45 blocks are definitions; the rest
+(containers, Master, Collection List, the item blocks, the form blocks, Announcement Bar, Price Calculator) are
+still code because they need the database, the form registry or the children of the block. Two small engines read
+the same files:
+
+| Engine | Where | Used by |
+| --- | --- | --- |
+| `src/render/blockDef.mjs` | imports every file (the `// <defs:begin>` region; `tests/parity.mjs` checks it against the folder) | the canvas and `renderBlock()` |
+| `canvascore-admin/blockdef.php` | `cc_block_defs()` loads `blocks/*.json` | `render_block()` through `cc_render_def_block()` |
+
+Both run first in the renderers (`renderBlock.mjs` and `cc_render_block_body()`): a block type with a definition never
+reaches the old `switch`. `customCss`, device rules and the block's id are added around the definition's HTML as for any block.
+
+**How a block is rendered.** (1) Every value of the block is **rebuilt from its setting**: the raw content is never
+given to the template, so a value of the wrong type (a list where a text belongs, an object, a hostile string) becomes the
+setting's default instead of breaking the page. (2) The template is filled with the clean values.
+
+A definition file:
+
+```json
+{
+  "type": "CALLOUT",
+  "settings": { "title": { "type": "text", "default": "", "label": "Title (optional)" }, "...": {} },
+  "template": ["<div id=\"{{_id}}\" class=\"cc-callout{{_classes}}\" ...>", "{{title}}", "</div>\n"],
+  "panel": [{ "title": "Callout", "icon": "Info", "open": true, "keys": ["title"] }],
+  "rootStyleOmit": ["textAlign"], "script": "progress", "renderIf": "embed"
+}
+```
+
+`template` is a string or a list of strings joined together. `rootStyleOmit` leaves styles out of `{{{_style}}}` (the
+block places them itself), `script` names a behaviour script and `renderIf` names a setting that must be true or the
+block renders nothing.
+
+**Setting types** (`cleanValue()` / `cc_tpl_clean_value()`):
+
+| Type | Value |
+| --- | --- |
+| `text` | A string, cast as PHP does (arrays and objects give `''`). Options: `default`, `trim`, `fallbackWhenEmpty`, `fallbackWhenBlank`, `pattern` (the whole value must match, else the default), `maxLength`, `stringsOnly` |
+| `richtext` | HTML, **trusted**: PHP sanitizes it (`cc_sanitize_html()`); the canvas runs the block through `safeHtml()`. A rich text setting must also be in `CC_RICH_FIELDS` (`config.php`) so it is cleaned when saved: a test checks it |
+| `code` | HTML printed as is, **not** sanitized: only for code that just admins can change (Custom HTML) |
+| `number` | `min`, `max`, `default`; `int`, `round` (decimals) or `parse: "int"` (the leading whole number of a text, like `cc_int()`) |
+| `bool` | Default `true`: anything but `false` is true. Default `false`: true when PHP finds the value non-empty. `strict` (only `true`), `phpTruthy` |
+| `enum` | One of `options` (`[{ value, label?, data? }]`), else the default. The chosen option's `data` (written in the definition, so trusted) is `opt.<setting>.<name>` |
+| `color` | A CSS colour (`cc_color()`), else the default |
+| `image` | An image address (`cc_img_url()`): other schemes give `''` |
+| `list` | `item` (settings of each item), or `of` (a list of plain values: `skipEmpty`, `unique`, `max`). Options: `max`, `count: { as, min, max }` (adds the item count), `skipNonObjects`, `keepIf`, `share`, `defaultsByIndex`, `presentAs` |
+| `object` | `item`: settings of one object |
+| `choices` | The `options` picked (a list of texts), as a list in the options' order |
+| `calc`, `flag` | Computed from the other clean values: `calc` (`of`, `fallback`, `div`, `mul`, `add`, `min`, `max`), `flag` (`when` conditions, `any`) |
+
+Common to all: `key` (the content key, when not the setting's name), `from: "styles"` (read a style of the block),
+and `transform` (one transform or a list, applied after every value is clean).
+
+**Template language** (logic-light, Mustache-like, escaping built in; the two parsers refuse the same templates):
+
+- `{{name}}` prints the value **escaped** (as `htmlspecialchars`). `{{{name}}}` prints it raw **only** when the value is
+  trusted HTML (rich text, option data, the engine's own values); anything else is still escaped.
+- `{{#name}}…{{/name}}`: once per item of a list, once for an object, once when a value is true. `{{^name}}…{{/name}}`:
+  when false or empty. `{{#name?}}` / `{{^name?}}`: true or false **without** entering a list. `{{#name=text}}` /
+  `{{^name=text}}`: the value is, or is not, that text (`{{^title=}}` = "not empty"). `{{! comment }}`.
+- Names can be dotted (`opt.variant.bg`, `t.rows`). Inside a list: the item's values, then `@index`, `@number`, `@first`,
+  `@last`, and `{{.}}` for a list of plain values.
+- Built in: `_id`, `_classes` (effects and custom class, starting with a space), `_style` (the block's inline style),
+  `_field.<setting>` (the in-place editing attributes, editor only, for a setting with `inline`), `_script`, `_lb` and
+  `_rb` (`{` and `}`: a literal `{` right before a tag is refused, write `{{{_lb}}}`), `_base` (the `{{BASE_URL}}`
+  placeholder) and `_editing` (true on the canvas while in-place editing is on).
+
+**Transforms** (twins in `TRANSFORMS` of `blockDef.mjs` and `CC_TPL_TRANSFORMS` of `blockdef.php`; the first group are
+links and addresses, the second text, the third numbers and data): `blockUrl`, `legacyUrl`, `extUrl`, `contactUrl`,
+`mailto`, `cssUrl`, `urlencode`, `mapsUrl`, `mediaSrc`, `mediaMime`, `videoEmbed`, `stripScheme`, `telDigits` · `lines2br`,
+`br`, `initials`, `replace`, `code`, `lineNumbers`, `json` · `fmtNum`, `plain`, `repeat`, `tableData`, `buttonPreset`,
+`buttonHover`. To add one, write it in both files (same result for every input, hostile ones included) and add a case to
+the template checks in `tests/parity.mjs`.
+
+**Behaviour scripts** stay on the site (the canvas runs its own copies, section 8.2, step 9): the definition's
+`script` names an entry of `CC_TPL_SCRIPTS` in `blockdef.php`, a function that receives the block's id and clean values and
+returns the whole `<script>` element (the Business block also builds its JSON-LD there). The engine puts the result in
+`{{{_script}}}`, and the JS engine leaves it empty, as the parity test expects.
+
+**The Content panel** comes from the same file: `panel` lists the sections (`title`, `icon`, `open`, `keys`, `hint` as text
+or a list, `hintIf`, `showIf`, `widget`), and each setting carries its `label`, `placeholder`, `control` (`textarea`, `code`,
+`select` with `choices` or `choicesFrom`, `range`, `editor`, `link`, `datetime`, `file`, `lines`, `widget:<name>`), `hint`,
+`half`, `showIf`, `subhead`, `labelWhen` and, for lists, `itemTitle`, `itemKeys`, `newItem`, `addLabel`, `addFromMedia`. The
+full list is the comment at the top of `src/components/panel/SchemaPanel.jsx`. Controls that are more than a field are
+**widgets** in `widgets.jsx`, registered in `widgetRegistry.js` and named by the definition. `src/components/panel/blocks/index.js`
+adds a generated panel to `CONTENT_PANELS` for every definition that has no hand-written one.
+
+**Checks.** `tests/parity.mjs` renders every fixture of every definition in both engines and requires identical HTML,
+checks that each file in `blocks/` is imported in `blockDef.mjs`, and runs the template language, the setting cleaning and
+the transforms on test definitions in both engines. `tests/server.php` checks that every definition loads and that every
+rich text setting is in `CC_RICH_FIELDS`; `tests/panels-ui.mjs` that every panel is generated from existing settings and
+widgets. When moving a block from code to a definition, take its output on a set of real and hostile fixtures **before** and
+**after**: published HTML must stay identical for real content (what changes should only be wrong-typed or hostile values).
 
 ### `opts.fields` and in-place editing
 
@@ -721,6 +838,38 @@ memory limit can't handle the image). The original is never changed.
 | `cc_media_move($names, $folder)` | Sets `folder` for the given files (creating the folder). **Folders are labels**: files never move on disk, so image URLs never change |
 | `cc_media_usage($pdo, $names)` | Where each file is used: searches the stored content of pages, draft copies (`Page draft`), items (incl. `cover_image`), `site_parts`, `master_components`, and `settings.json` / `menu.json`, by bare file name; returns `name => ["Page: Home", …]` |
 
+### `update.php` (one-click updates)
+
+Loaded by `api.php` (admins only: `update_info`, `update_check`, `update_install`). It installs a release from GitHub; the
+admin-facing description is section 5.1 of the [Administrator Guide](ADMIN-GUIDE.md#5-updating-to-a-new-version).
+
+A release carries two extra assets: `canvascore-<version>.zip` (every file under `canvascore-admin/`, the built editor included)
+and `canvascore-<version>.zip.sig` (base64 Ed25519 signature of `"canvascore-update-v1\n" . sha256(zip)`). A release without
+them is shown as "no signed package".
+
+| Function | What it does |
+| --- | --- |
+| `cc_update_source()` | The feed: `latest` (the GitHub API address), `hosts` (the only hosts a download may use) and `https`. Overridden by `update-source.php` (an array; not shipped, kept across updates) for a mirror or the tests |
+| `cc_update_keys()` | The trusted public keys from `update-keys.php` (base64, 32 bytes each) |
+| `cc_update_get()` / `cc_update_fetch()` | A download: HTTPS and an allowed host on **every** redirect hop, a size limit (the stream stops past it), cURL or `file_get_contents` |
+| `cc_update_latest()` / `cc_update_check()` | The release (`tag_name` as a version, notes, size, the two assets); `available` only when `version_compare` says newer. The check is remembered in `updates/last-check.json`; the download addresses never go to the browser |
+| `cc_update_requirements()` | What this server needs (sodium, zip, a downloader, keys, write access, 300 MB free) |
+| `cc_update_verify()` | `sodium_crypto_sign_verify_detached` against every trusted key |
+| `cc_update_inspect()` | Every entry is a plain file under `canvascore-admin/`: no `..`, `\`, NUL or `//`, no link, nothing under `data/` or among `CC_UPDATE_KEEP_FILES`; size and count limits; `CC_UPDATE_REQUIRED` files present; `version.json` equals the release |
+| `cc_update_unpack()` / `cc_update_syntax_error()` | Unpack into a new folder; `token_get_all(…, TOKEN_PARSE)` on every PHP file |
+| `cc_update_copy_db()` / `cc_update_copy_code()` | `VACUUM INTO` copy of the database and a ZIP of the current code (without `data/`) in `updates/`, newest 3 kept |
+| `cc_update_swap()` / `cc_update_unswap()` | Rename the admin folder aside, the new one in, the legacy `data/` folder and `CC_UPDATE_KEEP_FILES` (`.htaccess`, `update-source.php`) across; the undo puts everything back |
+| `cc_update_health_check()` | Calls `api.php?action=update_health` with a one-time token (a hash stored in `updates/health.json`, valid 2 minutes): the new `api.php` has opened the database and migrated it. `ok`, `failed` (rolls back) or `skipped` (the server can't call itself) |
+| `cc_update_install($pdo, $version, $user, $health)` | The whole flow under a lock; the steps and the rollback; records `updates/history.json`. `$health` replaces the health call (tests) |
+
+Design rules: **nothing is trusted before the signature**; the package is unpacked into a folder next to the admin folder and
+parsed before the swap; a failure after the swap restores the code **and** the database copy (a new version may have migrated it);
+a version that is not newer is never installed. Library files are listed in the admin `.htaccess` deny rule
+(`config.php`, `CC_HT_ADMIN`) and answer 404 when opened directly.
+
+`tests/server.php` covers the pieces (signatures, package checks, swap and undo); `tests/security.php` runs the whole flow over
+HTTP against a fake feed, including every refusal and a rollback.
+
 ### `backup.php`
 
 Loaded by `api.php`. A backup is a ZIP with `manifest.json` (`format: "canvascore-backup"`, `format_version`
@@ -745,9 +894,38 @@ When adding a content table or a data file that belongs to the site, add it to `
 
 ## 8. Adding a new block
 
-Example: a `QUOTE` block. Use a nearby block (e.g. `CALLOUT`) as a template at each step. The most recent
-complete example is `SEARCH` (Site Search): catalog entry, `blocks.json` defaults, `SearchPanel.jsx`, both
-renderers (with the script only in PHP) and the `s1`/`s2` parity fixtures.
+There are two ways. Prefer a **shared definition** (8.1): one JSON file, no renderer code and no panel to write.
+Write the block in **code** (8.2) only when it can't be described that way: it needs the database or the form registry,
+or it holds other blocks.
+
+### 8.1 With a shared definition
+
+Example: a `QUOTE` block (section 5, "Shared block definitions", describes every setting type, the template language and the panel keys).
+
+1. **Catalog**: add `{ type: 'QUOTE', label: 'Quote', icon: …, category: 'sections', color, keywords }` to `BLOCKS` in
+   `src/editor/blockCatalog.js` (`admin: true` hides it from editors in the Add panel; enforce on the server if it matters).
+2. **Defaults**: add `"QUOTE": { "content": {…}, "styles": {…} }` to `types` in `canvascore-admin/blocks.json`: this is what a
+   new block starts with. The `default` of a setting is only the fallback for a value that is missing or wrong.
+3. **Definition**: `canvascore-admin/blocks/quote.json` with `type`, `settings`, `template` and `panel`. Start from a block of
+   the same shape (`callout.json` for a text block, `faq.json` for a list). Use `{{x}}` for every value and `{{{x}}}` only for
+   rich text and option data. Rich text settings must also be listed in `CC_RICH_FIELDS` (`config.php`).
+4. **Register it in the editor**: add the import line and the name to `BLOCK_DEFS` in `src/render/blockDef.mjs` (between
+   the `// <defs:begin>` and `// <defs:end>` lines). PHP picks the file up on its own; `npm run test:parity` fails if the
+   two lists differ.
+5. **Panel**: the `panel` of the file is all there is to write. A control that is more than a field (a map, a picker…)
+   is a widget in `src/components/panel/widgets.jsx`, registered in `widgetRegistry.js`.
+6. **Behaviour** (optional): a script that runs on the page goes in `CC_TPL_SCRIPTS` of `blockdef.php` (the canvas
+   runs its own copy through an `init*Block` wrapper, as in 8.2, steps 8 and 9).
+7. **Fixtures**: add real and hostile fixtures to `fixtures` in `tests/parity.mjs` (empty values, out-of-range numbers,
+   wrong types, strings with quotes and `<`): both engines must give the same HTML.
+8. **Tests and docs**: `npm test` and lint, the block's entry in [BLOCK-REFERENCE.md](BLOCK-REFERENCE.md), a CHANGELOG
+   line under `[Unreleased]`, optionally use it in `starters.json`.
+
+### 8.2 With code
+
+Example: a `QUOTE` block. Use a nearby code block (e.g. `ITEM_TERMS` or `WIZARD`) as a template at each step: catalog
+entry, `blocks.json` defaults, a panel in `panel/blocks/` (`WizardPanel.jsx`), both renderers (with the script only in PHP)
+and the parity fixtures.
 
 1. **Catalog**: add `{ type: 'QUOTE', label: 'Quote', icon: …, category: 'sections', color, keywords }` to
    `BLOCKS` in `src/editor/blockCatalog.js`. Add `admin: true` to hide it from editors in the Add panel
@@ -1007,6 +1185,10 @@ Recently added actions:
 | `backup_download` | GET `?name=` | Streams a saved backup (or a `download-…` one, deleted after sending, named after the site) |
 | `backup_delete` | POST `{ name }` | Deletes a saved backup or safety copy |
 | `backup_upload_chunk` | POST multipart `{ id, index, chunk }` | Appends a piece to `backups/upload-<id>.part` (`id`: 16 hex characters; index 0 starts the file) |
+| `update_info` | GET | Admins: `{ current, requirements, last_check, history, demo }` |
+| `update_check` | GET | Admins: asks GitHub and returns `{ release }` (version, notes, size, whether it is newer and has a signed package) or an error message |
+| `update_install` | POST `{ version }` | Admins, not in the demo. `version` must be the latest release; runs `cc_update_install()` and returns `{ success, message, steps, from, to, rolled_back, history }`. The session is closed first (`session_write_close()`): the update takes a while |
+| `update_health` | GET | Public but useless without the one-time `X-CC-Update-Token` header: 404 otherwise. Answers the update's own check (`{ app, db_schema, db_schema_applied }`) |
 | `backup_restore` / `backup_restore_saved` | POST `{ upload, size }` / `{ name }` | One at a time (`.restore.lock`): inspect, safety copy, `cc_backup_restore()`. Returns `{ success, message, counts, skipped, safety, backups }`; the client then republishes |
 
 `upload_media` also returns `meta` (from `cc_media_process()`) and accepts an optional `folder` field;
@@ -1060,12 +1242,30 @@ current version.
 Cutting a release:
 
 1. Set `app` in `version.json` (SemVer; while `0.x`, MINOR = new features or format changes, PATCH = fixes only;
-   1.0.0 once the API and formats are stable).
-2. Move `[Unreleased]` in `docs/CHANGELOG.md` (Keep a Changelog format) to a dated `## [x.y.z] - YYYY-MM-DD` section.
+   1.0.0 once the API and formats are stable), and the same version in `package.json` and `package-lock.json`.
+2. Move `[Unreleased]` in `docs/CHANGELOG.md` (Keep a Changelog format) to a dated `## [x.y.z] - YYYY-MM-DD` section,
+   and update the manuals and the README.
 3. `npm test` and `npm run lint` (zero warnings).
-4. `npm run build`, and commit the bumped `version.json` on its own.
-5. Tag the release `vX.Y.Z` and publish a GitHub release whose notes are that CHANGELOG section (plus update steps
-   when needed). There are no release-notes files in the repository.
+4. Commit the release, merge it into `main` (`--no-ff`) and push `main`.
+5. **Make the signed update package** (sites update themselves from it, section 7, `update.php`), from a clean checkout of the
+   released commit so that `git ls-files` lists exactly what is released:
+   ```bash
+   cd canvascore-frontend
+   npx vite build --outDir /tmp/cc-dist --emptyOutDir          # the editor, without bumping the build number
+   php scripts/release-package.php --key=$HOME/.canvascore/release-signing.key --dist=/tmp/cc-dist --out=/tmp/cc-release
+   ```
+   It packs the tracked files of `canvascore-admin/` and the built editor into `canvascore-<version>.zip`, runs the checks a
+   site makes before installing (paths, required files, version), signs it and verifies the signature
+   (`canvascore-<version>.zip.sig`). It refuses a key that is not in `update-keys.php`.
+6. Tag the release `vX.Y.Z` and publish a GitHub release whose notes are that CHANGELOG section (plus update steps
+   when needed), with **both files attached as assets**, and mark it as the **latest** release (the Updates page reads
+   `releases/latest`). There are no release-notes files in the repository.
+
+**The signing key.** `php scripts/release-keygen.php <file>` makes an Ed25519 pair: the secret key is written to `<file>`
+(mode 600; it refuses a path inside the repository) and the public key is printed for `canvascore-admin/update-keys.php`.
+Keep the secret key outside the repository and back it up: whoever has it can sign updates that every site installs.
+To **rotate** the key, release a version that lists **both** public keys, signed with the old key; once sites have
+updated, sign later releases with the new one (a site accepts a package signed by any key it lists).
 
 Contributions from outside follow [CONTRIBUTING.md](../../CONTRIBUTING.md) (focused pull requests, tests and a
 CHANGELOG line, `Signed-off-by` per the DCO, contributions licensed AGPL-3.0-or-later). Vulnerabilities are reported
@@ -1078,7 +1278,7 @@ Git workflow used in this repository:
   descriptive commits that also update `[Unreleased]` in the CHANGELOG.
 - Merge into `main` with `git merge --no-ff <branch>` so each feature stays a visible unit.
 - Run `npm run build` on `main` and commit the bumped `canvascore-admin/version.json` **on its own**
-  ("Bump build number to N").
+  ("Bump build number to N"); a release commit carries `app` itself.
 - Never commit generated output: `dist/`, the editor build copied into `canvascore-admin/`, the data dir and
   the published site at the repo root are all git-ignored. A new root-level file must be whitelisted in
   `.gitignore`.

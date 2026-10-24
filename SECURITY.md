@@ -10,6 +10,14 @@ before reporting.
 | Latest 0.x release | ✅ |
 | Older releases | ❌ |
 
+## Releases and updates
+
+From 0.21.0, a site can update itself from the Updates page. Every update package is signed (Ed25519) with the CanvasCore
+release key, and a site installs a package only when the signature matches a public key listed in
+`canvascore-admin/update-keys.php`. The private key is kept off the repository and off every site. If you ever see a
+release, a package or an update that is **not** signed with that key, or a way around the signature or the package checks,
+treat it as a vulnerability and report it as described below.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue, pull request or Discord message for security problems.**

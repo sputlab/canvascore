@@ -12,6 +12,8 @@ The same actions have keyboard shortcuts on the selected block: **Alt+↑ / Alt+
 
 When you pick an image from the media library and the block's alt text field is still empty, it is filled with the description saved for that image in the library. New image, slide and logo blocks start with a built-in grey placeholder that shows its size, so they work without any outside service.
 
+Most blocks are described in one definition file that both the editor and the published site read, so what you see on the canvas is what the site gets. A value that does not fit its setting (a text where a number is expected, an address with a scheme the block does not allow) is replaced by the setting's default on the page, so a wrong value never breaks the site.
+
 This manual covers each block's Content tab. For the editor in general, and for the Style and Advanced tabs, see the [User Guide](USER-GUIDE.md).
 
 ---

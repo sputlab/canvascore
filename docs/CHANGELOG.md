@@ -10,6 +10,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-24 — One-click updates and shared block definitions
+
 ### Added
 - **One-click updates** (Administration › **Updates**, admins): **Check for updates** asks GitHub for the latest
   CanvasCore release and shows its version, size and release notes; **Update to …** installs it:
@@ -34,7 +36,6 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - **Release tooling**: `scripts/release-keygen.php` makes the signing key pair (the secret key must be kept outside the
   repository). `scripts/release-package.php` builds the editor, packs `canvascore-admin/` with it, runs the same checks
   a site makes, and signs the package. Both files are uploaded as assets of the GitHub release.
-
 - **Shared block definitions**: a block can now be described once, in `canvascore-admin/blocks/<name>.json`, as a
   settings schema plus a template. The editor (`src/render/blockDef.mjs`) and the published site (`blockdef.php`)
   read the same file, so the block has one rendering by construction instead of two renderers kept in step by hand.
@@ -70,8 +71,14 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   included, and on the template language itself.
 
 ### Changed
-- The admin folder's `.htaccess` also blocks direct access to `publish.php`, `update.php` and `update-keys.php`.
+- The admin folder's `.htaccess` also blocks direct access to `publish.php`, `blockdef.php`, `update.php`, `update-keys.php`
+  and `update-source.php`; on Nginx add them to the library-files rule and let the JSON rule cover `blocks/` (Administrator
+  Guide, section 4.2).
 - Update packages must contain `blockdef.php` and the `blocks/` definitions.
+
+### Security
+- Every update package is checked against the CanvasCore release key before anything is unpacked, and every file name in
+  it is checked (nothing outside `canvascore-admin/`, no links, nothing for the data folder).
 
 ### Fixed
 - Publishing no longer stops on content of the wrong type in the blocks above (for example a list where a text was
@@ -1179,7 +1186,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/sputlab/CanvasCore/compare/v0.20.0...v0.21.0
 [0.16.0]: https://github.com/sputlab/CanvasCore/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sputlab/CanvasCore/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/sputlab/CanvasCore/compare/v0.14.0...v0.14.1
