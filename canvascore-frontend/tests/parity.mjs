@@ -386,7 +386,18 @@ console.log('\nSHARED BLOCK DEFINITIONS');
     T('{{s}}|{{x}}|{{_s}}|{{{_style}}}|{{_classes}}|{{_id}}', { s: { type: 'text', from: 'styles', key: 'textAlign', default: 'left' }, x: { type: 'text', from: 'styles', key: 'nope', default: 'dflt' } }, { customClass: 'a<b' }, { textAlign: 'center', color: '#f00' }),
     T('{{! a comment }}{{a.b.c}}{{#o}}{{k}}{{/o}}{{.}}', { o: { type: 'list', item: { k: { type: 'text' } } } }, { o: [{ k: 1 }] }),
     T('{{#a}}unclosed', {}), T('{{/a}}', {}), T('{{#a}}{{/b}}', {}), T('{{}}', {}),
+    // 0.21: lists of values, code, calc, transforms, renderIf, leading whole numbers
+    T('{{#l}}[{{{.}}}|{{.}}]{{/l}}{{#f}}<{{.}}>{{/f}}', { l: { type: 'list', of: { type: 'richtext' } }, f: { type: 'list', of: { type: 'text' }, skipEmpty: true } }, { l: ['<b>x</b>', 7, null], f: ['a', '  ', '', ['x'], 'b'] }),
+    T('{{{c}}}|{{c}}', { c: { type: 'code' } }, { c: '<script>admin()</script>' }),
+    T('{{d}} {{e}}', { t: { type: 'number', int: true, default: 2 }, d: { type: 'calc', of: 't', mul: 2, add: 8 }, e: { type: 'calc', of: 'missing', add: 1 } }, { t: '5' }),
+    T('{{u}}|{{c}}|{{e}}|{{{b}}}|{{v}}|{{w}}|{{n}}', { u: { type: 'text', transform: 'blockUrl' }, c: { type: 'text', transform: 'cssUrl' }, e: { type: 'text', transform: 'urlencode' }, b: { type: 'text', transform: 'lines2br' },
+      v: { type: 'text', transform: 'videoEmbed' }, w: { type: 'text', key: 'v2', transform: 'videoEmbed' }, n: { type: 'number', transform: 'fmtNum', decimalsFrom: 'dec' }, dec: { type: 'number', int: true } },
+      { u: 'chi-siamo/index.html', c: "a'(b).jpg", e: "a b&c/é~!*'()", b: 'one\ntwo\r\n<3', v: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1', v2: 'https://vimeo.com/123456', n: 1234567.875, dec: 2 }),
+    T('x', { v: { type: 'text' } }, { v: '' }),
+    T('{{a}} {{b}} {{c}} {{d}} {{e}}', { a: { type: 'number', parse: 'int', default: 15, min: 1, max: 21 }, b: { type: 'number', parse: 'int', default: 15 }, c: { type: 'number', parse: 'int', default: 15 }, d: { type: 'number', parse: 'int', default: 15 }, e: { type: 'number', parse: 'int', default: 15, min: 1, max: 21 } },
+      { a: '7px', b: 'abc', c: true, d: 7.9, e: '-3' }),
   ];
+  cases[cases.length - 2].def.renderIf = 'v';
   const phpOut = JSON.parse(execFileSync('php', [fileURLToPath(new URL('./render_def.php', import.meta.url))], { input: JSON.stringify(cases) }).toString());
   let ok = 0;
   cases.forEach((c, i) => {
@@ -408,6 +419,12 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   expect(8, 'center|dflt||text-align: center; color: #f00; | a&lt;b|b1');
   expect(9, '1');
   for (const i of [10, 11, 12, 13]) expect(i, 'ERROR');
+  expect(14, '[<b>x</b>|&lt;b&gt;x&lt;/b&gt;][7|7][|]<a><b>');
+  expect(15, '<script>admin()</script>|&lt;script&gt;admin()&lt;/script&gt;');
+  expect(16, '18 1');
+  expect(17, '{{BASE_URL}}chi-siamo/|a%27%28b%29.jpg|a+b%26c%2F%C3%A9%7E%21%2A%27%28%29|one<br />\ntwo<br />\r\n&lt;3|https://www.youtube.com/embed/dQw4w9WgXcQ|https://player.vimeo.com/video/123456|1,234,567.88');
+  expect(18, null);   // renderIf: nothing at all
+  expect(19, '7 15 15 7 1');
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

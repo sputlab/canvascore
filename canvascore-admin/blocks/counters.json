@@ -1,0 +1,141 @@
+{
+  "type": "COUNTERS",
+  "script": "counters",
+  "settings": {
+    "items": {
+      "type": "list",
+      "count": {
+        "as": "autoColumns",
+        "min": 1,
+        "max": 4
+      },
+      "itemTitle": "Counter {n}",
+      "addLabel": "+ Add counter",
+      "newItem": {
+        "value": 100,
+        "prefix": "",
+        "suffix": "",
+        "decimals": 0,
+        "label": "New counter"
+      },
+      "item": {
+        "value": {
+          "type": "number",
+          "default": 0,
+          "label": "Value"
+        },
+        "decimals": {
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "max": 2,
+          "int": true,
+          "label": "Decimals"
+        },
+        "prefix": {
+          "type": "text",
+          "default": "",
+          "label": "Prefix",
+          "placeholder": "$"
+        },
+        "suffix": {
+          "type": "text",
+          "default": "",
+          "label": "Suffix",
+          "placeholder": "+ / %"
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "label": "Label"
+        },
+        "shown": {
+          "type": "number",
+          "key": "value",
+          "default": 0,
+          "transform": "fmtNum",
+          "decimalsFrom": "decimals",
+          "hidden": true
+        }
+      }
+    },
+    "columns": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 4,
+      "int": true,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          0,
+          "Auto (one per counter)"
+        ],
+        [
+          1,
+          "1"
+        ],
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ]
+      ]
+    },
+    "animate": {
+      "type": "bool",
+      "default": true,
+      "label": "Count up when scrolled into view"
+    },
+    "duration": {
+      "type": "number",
+      "default": 1800,
+      "min": 500,
+      "max": 5000,
+      "int": true,
+      "step": 100,
+      "label": "Duration ms (500\u20135000)",
+      "showIf": {
+        "animate": [
+          true
+        ]
+      }
+    }
+  },
+  "panel": [
+    {
+      "title": "Counters",
+      "icon": "Hash",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "title": "Counters Settings",
+      "icon": "Sliders",
+      "keys": [
+        "columns",
+        "animate",
+        "duration"
+      ],
+      "hint": "The final number is always in the page (also without JavaScript). Animation is skipped for visitors who prefer reduced motion."
+    }
+  ],
+  "template": [
+    "<style>@media(max-width:768px){#{{_id}} .cc-counters-grid{grid-template-columns:repeat(2, 1fr) !important}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-counters{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-counters-grid\" style=\"display:grid; grid-template-columns:repeat({{#columns?}}{{columns}}{{/columns?}}{{^columns?}}{{autoColumns}}{{/columns?}}, 1fr); gap:16px;\">",
+    "{{#items}}<div class=\"cc-counter\" style=\"text-align:center; padding:8px;\"><div class=\"cc-counter-value\" data-target=\"{{value}}\" data-decimals=\"{{decimals}}\" data-prefix=\"{{prefix}}\" data-suffix=\"{{suffix}}\" style=\"font-size:44px; font-weight:800; color:var(--brand-color, #3b82f6); line-height:1.1; font-variant-numeric:tabular-nums;\">{{prefix}}{{shown}}{{suffix}}</div>",
+    "{{^label=}}<div class=\"cc-counter-label\" style=\"margin-top:6px; color:#64748b; font-size:15px;\">{{label}}</div>{{/label=}}</div>{{/items}}</div>\n",
+    "{{#animate}}{{#items?}}{{{_script}}}{{/items?}}{{/animate}}</div>\n"
+  ]
+}

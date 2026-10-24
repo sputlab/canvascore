@@ -1,0 +1,36 @@
+{
+  "type": "VIDEO",
+  "renderIf": "embed",
+  "settings": {
+    "url": {
+      "type": "text",
+      "default": "",
+      "label": "YouTube / Vimeo Link",
+      "placeholder": "https://www.youtube.com/watch?v=\u2026",
+      "check": "videoEmbed",
+      "checkMessage": "This doesn't look like a YouTube or Vimeo video link, so nothing will be shown. Paste the address of the video page."
+    },
+    "embed": {
+      "type": "text",
+      "key": "url",
+      "default": "",
+      "transform": "videoEmbed",
+      "hidden": true
+    }
+  },
+  "panel": [
+    {
+      "title": "Video Settings",
+      "icon": "MonitorPlay",
+      "open": true,
+      "keys": [
+        "url"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-video{{_classes}}\"{{#_style?}} style=\"{{{_style}}}\"{{/_style?}}>\n",
+    "<div style=\"position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:inherit;\">\n",
+    "<iframe src=\"{{embed}}\" style=\"position:absolute; top:0; left:0; width:100%; height:100%; border:0;\" allowfullscreen loading=\"lazy\"></iframe>\n</div>\n</div>\n"
+  ]
+}

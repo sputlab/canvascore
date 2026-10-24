@@ -66,6 +66,7 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
             return new CcTrusted(cc_sanitize_html($missing ? cc_tpl_str($def ?? '') : cc_tpl_str($raw)));
         case 'number':
             $d = $def ?? 0;
+            if (($s['parse'] ?? '') === 'int') return $missing ? $d : cc_int($raw, $d, $s['min'] ?? PHP_INT_MIN, $s['max'] ?? PHP_INT_MAX);
             $n = (!$missing && is_numeric($raw)) ? max($s['min'] ?? -INF, min($s['max'] ?? INF, (float)$raw)) : $d;
             if (!empty($s['int'])) $n = (int)$n;
             elseif (isset($s['round'])) $n = cc_tpl_round((float)$n, (int)$s['round']);
@@ -80,12 +81,23 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
             return cc_color(cc_tpl_str($raw), $def ?? '');
         case 'image':
             return cc_img_url($missing ? ($def ?? '') : cc_tpl_str($raw));
+        case 'code':
+            return new CcTrusted($missing ? cc_tpl_str($def ?? '') : cc_tpl_str($raw));
         case 'list':
             $items = (is_array($raw) && array_is_list($raw)) ? $raw : [];
             if (!empty($s['max'])) $items = array_slice($items, 0, (int)$s['max']);
             $out = [];
+            if (isset($s['of'])) {
+                foreach ($items as $it) {
+                    $v = cc_tpl_clean_value($s['of'], $it, $it === null);
+                    if (empty($s['skipEmpty']) || trim(cc_tpl_text($v)) !== '') $out[] = $v;
+                }
+                return $out;
+            }
             foreach ($items as $it) $out[] = cc_tpl_clean_settings($s['item'] ?? [], cc_tpl_is_obj($it) ? $it : [], []);
             return $out;
+        case 'calc':
+            return 0;
     }
     return '';
 }
@@ -103,9 +115,30 @@ function cc_tpl_clean_settings(array $settings, array $content, array $styles) {
         }
         if (($s['type'] ?? '') === 'list' && !empty($s['count'])) $out[$s['count']['as']] = max($s['count']['min'] ?? 0, min($s['count']['max'] ?? PHP_INT_MAX, count($out[$key])));
     }
+    // second pass: values computed from the clean ones
+    foreach ($settings as $key => $s) {
+        if (($s['type'] ?? '') === 'calc') { $b = $out[$s['of']] ?? 0; $out[$key] = ((is_int($b) || is_float($b)) ? $b : 0) * ($s['mul'] ?? 1) + ($s['add'] ?? 0); }
+        if (!empty($s['transform']) && isset(CC_TPL_TRANSFORMS[$s['transform']])) $out[$key] = (CC_TPL_TRANSFORMS[$s['transform']])($out[$key], $s, $out);
+    }
     if ($opt) $out['opt'] = $opt;
     return $out;
 }
+
+// Value transforms: twins of TRANSFORMS in blockDef.mjs
+const CC_TPL_TRANSFORMS = [
+    'blockUrl' => 'cc_tpl_tf_block_url', 'cssUrl' => 'cc_tpl_tf_css_url', 'urlencode' => 'cc_tpl_tf_urlencode',
+    'lines2br' => 'cc_tpl_tf_lines2br', 'videoEmbed' => 'cc_tpl_tf_video', 'fmtNum' => 'cc_tpl_tf_fmt_num',
+];
+function cc_tpl_tf_block_url($v) { return cc_block_url(cc_tpl_text($v)); }
+function cc_tpl_tf_css_url($v) { return cc_css_url(cc_tpl_text($v)); }
+function cc_tpl_tf_urlencode($v) { return urlencode(cc_tpl_text($v)); }
+function cc_tpl_tf_lines2br($v) { return new CcTrusted(nl2br(htmlspecialchars(cc_tpl_text($v)))); }
+function cc_tpl_tf_video($v) {
+    $u = cc_tpl_text($v);
+    if (preg_match('%(?:youtube(?:-nocookie)?\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/\s]{11})%i', $u, $m)) return 'https://www.youtube.com/embed/' . $m[1];
+    return preg_match('/vimeo\.com\/(?:video\/)?([0-9]+)/i', $u, $m) ? 'https://player.vimeo.com/video/' . $m[1] : '';
+}
+function cc_tpl_tf_fmt_num($v, $s, $sib) { return cc_fmt_num((is_int($v) || is_float($v)) ? $v : 0, isset($s['decimalsFrom']) ? ($sib[$s['decimalsFrom']] ?? 0) : ($s['decimals'] ?? 0)); }
 
 // ---------------------------------------------------------------------------------------------- templates
 function cc_tpl_parse($src) {
@@ -173,13 +206,17 @@ function cc_tpl_render(array $nodes, array $scopes) {
 }
 
 // Behaviour scripts of the blocks (site only): the definition's "script" names one
-const CC_TPL_SCRIPTS = ['progress' => 'cc_script_progress'];
+// (each gets the block's id and its clean values)
+const CC_TPL_SCRIPTS = ['progress' => 'cc_tpl_script_progress', 'counters' => 'cc_tpl_script_counters'];
+function cc_tpl_script_progress($id, $v) { return cc_script_progress($id); }
+function cc_tpl_script_counters($id, $v) { return cc_script_counters($id, $v['duration'] ?? 1800); }
 
 // The HTML of a block that has a definition (cc_render_block_body adds the custom CSS, render_block the device rules)
 function cc_render_def_block(array $def, array $block, $innerId) {
     $styles = is_array($block['styles'] ?? null) ? $block['styles'] : [];
     $content = is_array($block['content'] ?? null) ? $block['content'] : [];
     $values = cc_tpl_clean_settings($def['settings'] ?? [], $content, $styles);
+    if (!empty($def['renderIf']) && !cc_tpl_truthy($values[$def['renderIf']] ?? null)) return null;   // nothing at all, not even the custom CSS
     $rootStyles = $styles;
     foreach ($def['rootStyleOmit'] ?? [] as $k) unset($rootStyles[$k]);
     $field = [];
@@ -187,7 +224,7 @@ function cc_render_def_block(array $def, array $block, $innerId) {
     $custom = !empty($content['customClass']) ? cc_tpl_str($content['customClass']) : '';
     $script = '';
     $fn = CC_TPL_SCRIPTS[$def['script'] ?? ''] ?? null;
-    if ($fn) $script = "<script>\n" . $fn($innerId) . "\n</script>\n";
+    if ($fn) $script = "<script>\n" . $fn($innerId, $values) . "\n</script>\n";
     $builtIn = ['_id' => $innerId, '_classes' => cc_effect_classes($styles, $content) . ($custom !== '' ? ' ' . $custom : ''),
         '_style' => new CcTrusted(build_inline_style($rootStyles)), '_field' => $field, '_script' => new CcTrusted($script)];
     return cc_tpl_render($def['_ast'], [$builtIn, $values]);

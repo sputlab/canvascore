@@ -1,0 +1,44 @@
+{
+  "type": "IMAGE_TEXT",
+  "settings": {
+    "layout": {
+      "type": "enum",
+      "default": "img-left",
+      "options": [
+        {
+          "value": "img-left",
+          "label": "Image Left",
+          "data": {
+            "direction": "row"
+          }
+        },
+        {
+          "value": "img-right",
+          "label": "Image Right",
+          "data": {
+            "direction": "row-reverse"
+          }
+        }
+      ]
+    },
+    "src": {
+      "type": "image",
+      "default": ""
+    },
+    "alt": {
+      "type": "text",
+      "default": ""
+    },
+    "text": {
+      "type": "richtext",
+      "default": "",
+      "inline": "full",
+      "placeholder": "Type your text\u2026"
+    }
+  },
+  "template": [
+    "<section id=\"{{_id}}\" class=\"cc-img-text{{_classes}}\" style=\"{{{_style}}}; display:flex; gap:40px; align-items:center; flex-direction:{{{opt.layout.direction}}}; flex-wrap:wrap;\">\n",
+    "<div style=\"flex:1 1 300px; width:100%;\"><img src=\"{{src}}\" alt=\"{{alt}}\" style=\"width:100%; border-radius:8px; display:block;\"></div>\n",
+    "<div style=\"flex:1 1 300px; width:100%;\"{{{_field.text}}}>{{{text}}}</div>\n</section>\n"
+  ]
+}

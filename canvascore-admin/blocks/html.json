@@ -1,0 +1,27 @@
+{
+  "type": "HTML",
+  "settings": {
+    "code": {
+      "type": "code",
+      "default": "",
+      "label": "HTML Code",
+      "control": "code",
+      "rows": 6,
+      "adminOnly": true,
+      "adminOnlyMessage": "Only admins can change custom code. You can still move this block or delete it."
+    }
+  },
+  "panel": [
+    {
+      "title": "Custom HTML",
+      "icon": "Code",
+      "open": true,
+      "keys": [
+        "code"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-html-block{{_classes}}\"{{#_style?}} style=\"{{{_style}}}\"{{/_style?}}>\n{{{code}}}\n</div>\n"
+  ]
+}

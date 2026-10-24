@@ -1,0 +1,156 @@
+{
+  "type": "DIVIDER",
+  "settings": {
+    "style": {
+      "type": "enum",
+      "default": "line",
+      "label": "Style",
+      "options": [
+        {
+          "value": "line",
+          "label": "Line"
+        },
+        {
+          "value": "gradient",
+          "label": "Gradient line"
+        },
+        {
+          "value": "dots",
+          "label": "Dots"
+        },
+        {
+          "value": "wave",
+          "label": "Wave",
+          "data": {
+            "path": "M0,60 C150,100 350,20 600,60 C850,100 1050,20 1200,60 L1200,120 L0,120 Z"
+          }
+        },
+        {
+          "value": "curve",
+          "label": "Curve",
+          "data": {
+            "path": "M0,0 C300,120 900,120 1200,0 L1200,120 L0,120 Z"
+          }
+        },
+        {
+          "value": "diagonal",
+          "label": "Diagonal",
+          "data": {
+            "path": "M0,120 L1200,0 L1200,120 Z"
+          }
+        },
+        {
+          "value": "spacer",
+          "label": "Spacer (empty space)"
+        }
+      ]
+    },
+    "color": {
+      "type": "color",
+      "default": "#cbd5e1",
+      "label": "Color",
+      "showIf": {
+        "style": {
+          "not": [
+            "spacer"
+          ]
+        }
+      }
+    },
+    "thickness": {
+      "type": "number",
+      "default": 2,
+      "min": 1,
+      "max": 20,
+      "int": true,
+      "label": "Thickness / size (1\u201320)",
+      "showIf": {
+        "style": [
+          "line",
+          "gradient",
+          "dots"
+        ]
+      }
+    },
+    "width": {
+      "type": "number",
+      "default": 100,
+      "min": 10,
+      "max": 100,
+      "int": true,
+      "label": "Width % (10\u2013100)",
+      "showIf": {
+        "style": [
+          "line",
+          "gradient"
+        ]
+      }
+    },
+    "height": {
+      "type": "number",
+      "default": 80,
+      "min": 10,
+      "max": 400,
+      "int": true,
+      "label": "Height px (10\u2013400)",
+      "showIf": {
+        "style": [
+          "wave",
+          "curve",
+          "diagonal",
+          "spacer"
+        ]
+      }
+    },
+    "flip": {
+      "type": "bool",
+      "default": false,
+      "label": "Flip vertically (use at the bottom of a section)",
+      "showIf": {
+        "style": [
+          "wave",
+          "curve",
+          "diagonal"
+        ]
+      }
+    },
+    "dotSize": {
+      "type": "calc",
+      "of": "thickness",
+      "mul": 2,
+      "add": 8
+    }
+  },
+  "panel": [
+    {
+      "title": "Divider",
+      "icon": "SeparatorHorizontal",
+      "open": true,
+      "keys": [
+        "style",
+        "color",
+        "thickness",
+        "width",
+        "height",
+        "flip"
+      ],
+      "hint": "Tip: set the section above/below to the shape's color for a seamless transition.",
+      "hintIf": {
+        "style": [
+          "wave",
+          "curve",
+          "diagonal"
+        ]
+      }
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-divider cc-divider-{{style}}{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "{{#style=line}}<hr class=\"cc-divider-line\" style=\"border:0; border-top:{{thickness}}px solid {{color}}; width:{{width}}%; margin:0 auto;\">{{/style=line}}",
+    "{{#style=gradient}}<div class=\"cc-divider-line\" aria-hidden=\"true\" style=\"height:{{thickness}}px; width:{{width}}%; margin:0 auto; background:linear-gradient(90deg, transparent, {{color}}, transparent);\"></div>{{/style=gradient}}",
+    "{{#style=dots}}<div class=\"cc-divider-dots\" aria-hidden=\"true\" style=\"text-align:center; color:{{color}}; font-size:{{dotSize}}px; letter-spacing:10px; line-height:1;\">&bull;&bull;&bull;</div>{{/style=dots}}",
+    "{{#style=spacer}}<div class=\"cc-divider-spacer\" aria-hidden=\"true\" style=\"height:{{height}}px;\"></div>{{/style=spacer}}",
+    "{{#opt.style.path?}}<svg class=\"cc-divider-shape\" viewBox=\"0 0 1200 120\" preserveAspectRatio=\"none\" aria-hidden=\"true\" focusable=\"false\" style=\"display:block; width:100%; height:{{height}}px;{{#flip}} transform:scaleY(-1);{{/flip}}\"><path d=\"{{{opt.style.path}}}\" fill=\"{{color}}\"></path></svg>{{/opt.style.path?}}",
+    "\n</div>\n"
+  ]
+}

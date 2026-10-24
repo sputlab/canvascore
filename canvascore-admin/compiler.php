@@ -1799,7 +1799,7 @@ function cc_render_block_body($block) {
     }
 
     // A block with a shared definition (blocks/) is rendered from it, here and in the editor
-    if ($def = cc_block_def($block['type'])) return $customCss . cc_render_def_block($def, $block, $innerId);
+    if ($def = cc_block_def($block['type'])) { $h = cc_render_def_block($def, $block, $innerId); return $h === null ? '' : $customCss . $h; }
 
     $childrenHtml = '';
     if (isset($block['children']) && is_array($block['children'])) {
@@ -1859,14 +1859,6 @@ function cc_render_block_body($block) {
             $html = "<div id=\"$innerId\" class=\"cc-btn-wrap$animClass$innerClass\" style=\"text-align:$align; margin:$margin;\">\n<a href=\"$url\" class=\"cc-btn{$hv['cls']}\" style=\"$btnStyle\">$text</a>\n</div>\n";
             return $customCss . $html;
 
-        case 'GRID':
-            $columns = cc_int($block['content']['columns'] ?? null, 2, 1, 24);
-            $html = "<style>@media(max-width: 768px){ #$innerId { grid-template-columns: 1fr !important; } }</style>";
-            $html .= "<div id=\"$innerId\" class=\"cc-grid $animClass$innerClass\" style=\"$styleAttr; display:grid; grid-template-columns:repeat($columns, 1fr); gap:20px; overflow:hidden;\">\n";
-            if (isset($block['content']['items']) && is_array($block['content']['items'])) { foreach ($block['content']['items'] as $item) $html .= "  <div style=\"min-width:0;\">\n" . cc_sanitize_html($item) . "\n  </div>\n"; }
-            $html .= "</div>\n";
-            return $customCss . $html;
-
         case 'HERO':
             $bgUrl = cc_css_url($block['content']['bgImage'] ?? '');
             $bg = $bgUrl !== '' ? "background-image: url('".htmlspecialchars($bgUrl)."'); background-size: cover; background-position: center;" : "";
@@ -1899,37 +1891,6 @@ function cc_render_block_body($block) {
             $buttonsHtml .= "</div>";
             $html = "<section id=\"$innerId\" class=\"cc-hero$animClass$innerClass\" style=\"$styleAttr; $bg; min-height:$minHeight; display:flex; flex-direction:column; justify-content:center;\">\n<div>\n$title\n<div style=\"margin:20px 0;\">$subtitle</div>\n$buttonsHtml\n</div>\n</section>\n";
             return $customCss . $html;
-
-        case 'IMAGE_TEXT':
-            $layout = ($block['content']['layout'] ?? 'img-left') === 'img-right' ? 'row-reverse' : 'row';
-            $src = htmlspecialchars($block['content']['src'] ?? '');
-            $alt = htmlspecialchars((string)($block['content']['alt'] ?? ''));
-            $text = cc_sanitize_html($block['content']['text'] ?? '');
-            $html = "<section id=\"$innerId\" class=\"cc-img-text$animClass$innerClass\" style=\"$styleAttr; display:flex; gap:40px; align-items:center; flex-direction:$layout; flex-wrap:wrap;\">\n<div style=\"flex:1 1 300px; width:100%;\"><img src=\"$src\" alt=\"$alt\" style=\"width:100%; border-radius:8px; display:block;\"></div>\n<div style=\"flex:1 1 300px; width:100%;\">$text</div>\n</section>\n";
-            return $customCss . $html;
-
-        case 'CARDS':
-            $html = "<section id=\"$innerId\" class=\"cc-cards$animClass$innerClass\" style=\"$styleAttr\">\n<div style=\"display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:20px;\">\n";
-            if (!empty($block['content']['items']) && is_array($block['content']['items'])) {
-                foreach ($block['content']['items'] as $item) { $item = cc_sanitize_html($item); $html .= "<div style=\"background:#fff; padding:30px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05); border:1px solid #e2e8f0; min-width:0;\">$item</div>\n"; }
-            }
-            $html .= "</div>\n</section>\n";
-            return $customCss . $html;
-
-        case 'VIDEO':
-            $url = $block['content']['url'] ?? '';
-            $embed_url = '';
-            if (strpos($url, 'youtube.com') !== false || strpos($url, 'youtu.be') !== false) {
-                preg_match('%(?:youtube(?:-nocookie)?\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/\s]{11})%i', $url, $match);
-                if (isset($match[1])) $embed_url = 'https://www.youtube.com/embed/' . $match[1];
-            } elseif (strpos($url, 'vimeo.com') !== false) {
-                if (preg_match('/vimeo\.com\/(?:video\/)?([0-9]+)/i', $url, $match)) $embed_url = 'https://player.vimeo.com/video/' . $match[1];
-            }
-            if ($embed_url) {
-                $html = "<div id=\"$innerId\" class=\"cc-video$animClass$innerClass\"$styleString>\n<div style=\"position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:inherit;\">\n<iframe src=\"$embed_url\" style=\"position:absolute; top:0; left:0; width:100%; height:100%; border:0;\" allowfullscreen loading=\"lazy\"></iframe>\n</div>\n</div>\n";
-                return $customCss . $html;
-            }
-            return '';
 
         case 'FORM':
             $raw_email = trim($block['content']['email'] ?? '');
@@ -2135,57 +2096,6 @@ function cc_render_block_body($block) {
             return $customCss . $html;
         }
 
-        case 'DIVIDER': {
-            $c = $block['content'] ?? [];
-            $style = $c['style'] ?? 'line';
-            if (!in_array($style, ['line', 'gradient', 'dots', 'wave', 'curve', 'diagonal', 'spacer'], true)) $style = 'line';
-            $color = cc_color($c['color'] ?? '', '#cbd5e1');
-            $thick = (int)cc_num($c['thickness'] ?? 2, 1, 20, 2);
-            $width = (int)cc_num($c['width'] ?? 100, 10, 100, 100);
-            $height = (int)cc_num($c['height'] ?? 80, 10, 400, 80);
-            $flip = !empty($c['flip']);
-            if ($style === 'line') {
-                $inner = '<hr class="cc-divider-line" style="border:0; border-top:' . $thick . 'px solid ' . $color . '; width:' . $width . '%; margin:0 auto;">';
-            } elseif ($style === 'gradient') {
-                $inner = '<div class="cc-divider-line" aria-hidden="true" style="height:' . $thick . 'px; width:' . $width . '%; margin:0 auto; background:linear-gradient(90deg, transparent, ' . $color . ', transparent);"></div>';
-            } elseif ($style === 'dots') {
-                $inner = '<div class="cc-divider-dots" aria-hidden="true" style="text-align:center; color:' . $color . '; font-size:' . (8 + $thick * 2) . 'px; letter-spacing:10px; line-height:1;">&bull;&bull;&bull;</div>';
-            } elseif ($style === 'spacer') {
-                $inner = '<div class="cc-divider-spacer" aria-hidden="true" style="height:' . $height . 'px;"></div>';
-            } else {
-                $paths = [
-                    'wave' => 'M0,60 C150,100 350,20 600,60 C850,100 1050,20 1200,60 L1200,120 L0,120 Z',
-                    'curve' => 'M0,0 C300,120 900,120 1200,0 L1200,120 L0,120 Z',
-                    'diagonal' => 'M0,120 L1200,0 L1200,120 Z',
-                ];
-                $inner = '<svg class="cc-divider-shape" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true" focusable="false" style="display:block; width:100%; height:' . $height . 'px;' . ($flip ? ' transform:scaleY(-1);' : '') . '"><path d="' . $paths[$style] . '" fill="' . $color . '"></path></svg>';
-            }
-            return $customCss . '<div id="' . $innerId . '" class="cc-divider cc-divider-' . $style . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n" . $inner . "\n</div>\n";
-        }
-        case 'COUNTERS': {
-            $c = $block['content'] ?? [];
-            $items = array_values((isset($c['items']) && is_array($c['items'])) ? $c['items'] : []);
-            $cols = (int)cc_num($c['columns'] ?? 0, 0, 4, 0);
-            if ($cols < 1) $cols = max(1, min(4, count($items)));
-            $animate = ($c['animate'] ?? true) !== false;
-            $dur = (int)cc_num($c['duration'] ?? 1800, 500, 5000, 1800);
-            $cells = '';
-            foreach ($items as $it) {
-                $val = is_numeric($it['value'] ?? null) ? (float)$it['value'] : 0.0;
-                $dec = (int)cc_num($it['decimals'] ?? 0, 0, 2, 0);
-                $pre = htmlspecialchars($it['prefix'] ?? '');
-                $suf = htmlspecialchars($it['suffix'] ?? '');
-                $label = htmlspecialchars($it['label'] ?? '');
-                $cells .= '<div class="cc-counter" style="text-align:center; padding:8px;"><div class="cc-counter-value" data-target="' . $val . '" data-decimals="' . $dec . '" data-prefix="' . $pre . '" data-suffix="' . $suf . '" style="font-size:44px; font-weight:800; color:var(--brand-color, #3b82f6); line-height:1.1; font-variant-numeric:tabular-nums;">' . $pre . cc_fmt_num($val, $dec) . $suf . '</div>'
-                    . ($label !== '' ? '<div class="cc-counter-label" style="margin-top:6px; color:#64748b; font-size:15px;">' . $label . '</div>' : '') . '</div>';
-            }
-            $html = '<style>@media(max-width:768px){#' . $innerId . ' .cc-counters-grid{grid-template-columns:repeat(2, 1fr) !important}}</style>';
-            $html .= '<div id="' . $innerId . '" class="cc-counters' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n";
-            $html .= '<div class="cc-counters-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:16px;">' . $cells . '</div>' . "\n";
-            if ($animate && $items) $html .= "<script>\n" . cc_script_counters($innerId, $dur) . "\n</script>\n";
-            $html .= '</div>' . "\n";
-            return $customCss . $html;
-        }
         case 'TABLE': {
             $c = $block['content'] ?? [];
             $lines = cc_lines($c['data'] ?? '');
@@ -2481,24 +2391,6 @@ function cc_render_block_body($block) {
             // the categories and tags of the item being published; nothing on other pages
             return $customCss . cc_render_item_terms($block);
 
-        case 'HTML':
-            $html = "<div id=\"$innerId\" class=\"cc-html-block$animClass$innerClass\"$styleString>\n" . ($block['content']['code'] ?? '') . "\n</div>\n";
-            return $customCss . $html;
-        case 'FAQ':
-            $html = "<div id=\"$innerId\" class=\"cc-faq$animClass$innerClass\" style=\"$styleAttr\">\n";
-            if (isset($block['content']['items']) && is_array($block['content']['items'])) {
-                foreach($block['content']['items'] as $item) {
-                    $q = htmlspecialchars($item['q'] ?? '');
-                    $a = nl2br(htmlspecialchars($item['a'] ?? ''));
-                    $html .= "  <details style=\"margin-bottom:10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;\">\n";
-                    $html .= "    <summary style=\"padding:15px 20px; font-weight:600; cursor:pointer; background:#f8fafc; outline:none; list-style:none;\"><span style=\"display:inline-block; width:15px; font-weight:bold; color:var(--brand-color, #3b82f6);\">+</span> $q</summary>\n";
-                    $html .= "    <div style=\"padding:15px 20px; border-top:1px solid #e2e8f0; font-size:15px; color:#475569; line-height:1.6;\">$a</div>\n";
-                    $html .= "  </details>\n";
-                }
-            }
-            $html .= "</div>\n";
-            return $customCss . $html;
-
         case 'SLIDER':
             $effect = $block['content']['effect'] ?? 'slide';
             $autoplay = $block['content']['autoplay'] ?? true;
@@ -2550,16 +2442,6 @@ function cc_render_block_body($block) {
                        . "var p=s.querySelector('.cc-slider-prev'),x=s.querySelector('.cc-slider-next');if(p)p.addEventListener('click',function(){go(cur-1);restart();});if(x)x.addEventListener('click',function(){go(cur+1);restart();});"
                        . "s.addEventListener('mouseenter',function(){clearInterval(t);});s.addEventListener('mouseleave',restart);restart();});</script>\n";
             }
-            $html .= "</div>\n";
-            return $customCss . $html;
-
-        case 'MAPS':
-            $address = urlencode($block['content']['address'] ?? '');
-            $zoom = intval($block['content']['zoom'] ?? 15);
-            $html = "<div id=\"$innerId\" class=\"cc-maps$animClass$innerClass\" style=\"$styleAttr\">\n";
-            $html .= "  <div style=\"position:relative; overflow:hidden; padding-bottom:56.25%; height:0; border-radius:inherit;\">\n";
-            $html .= "    <iframe src=\"https://maps.google.com/maps?q=$address&t=&z=$zoom&ie=UTF8&iwloc=&output=embed\" style=\"position:absolute; top:0; left:0; width:100%; height:100%; border:0;\" allowfullscreen loading=\"lazy\"></iframe>\n";
-            $html .= "  </div>\n";
             $html .= "</div>\n";
             return $customCss . $html;
 

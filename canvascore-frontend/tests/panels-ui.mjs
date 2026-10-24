@@ -201,6 +201,27 @@ try {
   check('STEPS: a closed section opens; its choice and its hint are there', content().layout === 'vertical' && doc.body.textContent.includes('becomes vertical on small screens'));
   check('STEPS: each item card is titled from the definition', $$('span').some((x) => x.textContent === 'Step 1'));
 
+  addAndSelect('VIDEO'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('YouTube / Vimeo Link'));
+  setValue(field('YouTube / Vimeo Link'), 'https://example.com/clip'); await sleep(40);
+  check('VIDEO: a link that is not YouTube or Vimeo shows a warning', !!$$('[role="alert"]').find((x) => /doesn't look like a YouTube or Vimeo/.test(x.textContent)));
+  setValue(field('YouTube / Vimeo Link'), 'https://youtu.be/dQw4w9WgXcQ'); await sleep(40);
+  check('VIDEO: …and none for a video link', !$$('[role="alert"]').find((x) => /doesn't look like/.test(x.textContent)) && content().url === 'https://youtu.be/dQw4w9WgXcQ');
+  addAndSelect('MAPS'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Zoom Level'));
+  setValue(field('Zoom Level'), '12'); await sleep(40);
+  check('MAPS: the zoom slider stores a number and its label shows it', content().zoom === 12 && $$('label').some((l) => l.textContent === 'Zoom Level: 12'));
+  addAndSelect('HTML'); useStore.setState({ userRole: 'editor' }); mount(React.createElement(PropertyPanel)); await waitFor(() => field('HTML Code'));
+  check('HTML: for an editor the code is read-only, with the reason', field('HTML Code').readOnly === true && doc.body.textContent.includes('Only admins can change custom code'));
+  useStore.setState({ userRole: 'admin' }); mount(React.createElement(PropertyPanel)); await waitFor(() => field('HTML Code'));
+  check('HTML: …and editable for an admin', field('HTML Code').readOnly === false && !doc.body.textContent.includes('Only admins can change custom code'));
+  addAndSelect('COUNTERS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Counters Settings'));
+  click(buttonByText('Counters Settings')); await waitFor(() => field('Columns'));
+  setValue(field('Columns'), '3'); await sleep(40);
+  check('COUNTERS: a list of numbers stores a number', content().columns === 3);
+  check('COUNTERS: the duration shows while counting up is on', !!field('Duration ms'));
+  click(checkbox('Count up when scrolled into view')); await sleep(40);
+  check('COUNTERS: …and hides when it is off', content().animate === false && !field('Duration ms'));
+  check('COUNTERS: values computed for the page are never shown in the panel', !field('shown') && !$$('label').some((l) => /^shown/.test(l.textContent)));
+
   addAndSelect('LOGOS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add empty slot'));
   click(buttonByText('+ Add empty slot')); await sleep(40);
   check('LOGOS: adding an empty slot', content().logos.length === 6 && content().logos[5].src === '');

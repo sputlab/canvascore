@@ -11,15 +11,25 @@
 //     text      a string (numbers and booleans as PHP casts them; arrays and objects → ''); fallbackWhenEmpty,
 //               pattern (a regex the whole value must match, else the default), maxLength
 //     richtext  HTML: sanitized by the server (cc_sanitize_html), as is in the editor; may be printed raw
-//     number    min, max, default; int (whole number) or round (decimals)
+//     number    min, max, default; int (whole number) or round (decimals); parse: "int" reads the leading whole
+//               number of a text ("7px" → 7), as cc_int()
 //     bool      default true: anything but false is true; default false: true when PHP finds it non-empty
 //     enum      options [{ value, label, data? }]: one of the values, else the default. The chosen option's data
 //               (strings written in the definition, so trusted HTML) is opt.<key>.<name>
 //     color     a CSS colour (cc_color), else the default
 //     image     an image address (cc_img_url): any other scheme → ''
-//     list      item: { key: setting } per item; a non-object item gets the defaults; max; count: { as, min, max }
-//               adds a top-level number: the item count, clamped
+//     code      HTML printed as is, NOT sanitized: only for code surfaces that only admins can change (HTML.code)
+//     list      item: { key: setting } per item (a non-object item gets the defaults), or of: setting (a list of
+//               plain values, {{.}} in the loop); max; skipEmpty (drops the values that are empty once trimmed);
+//               count: { as, min, max } adds a top-level number: the item count, clamped
+//     calc      a number from another one: of, mul, add (e.g. a size that follows a thickness)
 //     from: "styles" reads the value from the block's styles (after its text style) instead of its content.
+//     transform: once every value is clean, one of TRANSFORMS below (twins of the PHP ones): blockUrl (an internal
+//               link → {{BASE_URL}}…), cssUrl (for url('…')), urlencode, lines2br (escaped, a <br /> per line break:
+//               trusted), videoEmbed (a YouTube or Vimeo address → its player address, '' otherwise), fmtNum
+//               (thousands separators, decimals from the sibling named by decimalsFrom)
+//   renderIf   a value that must be true, or the block (and its custom CSS) renders nothing
+//   script     the name of the block's behaviour script (site only; CC_TPL_SCRIPTS in blockdef.php)
 //
 //   template   a string (or an array of strings, joined): logic-light, Mustache-like, escaping built in
 //     {{name}}           the value, HTML-escaped (& " ' < >, as PHP's htmlspecialchars)
@@ -37,21 +47,30 @@
 //     the block's behaviour script, named by "script").
 //
 // The engine knows no block: a new block needs a definition file, its line in BLOCK_DEFS below, and nothing else.
-import { ccImgUrl, ccColorValue, buildInlineStyle } from './renderBlock.mjs';
+import { ccImgUrl, ccCssUrl, ccColorValue, buildInlineStyle, resolveBlockUrl, ccFmtNum } from './renderBlock.mjs';
 import { effectClasses } from './effects.mjs';
 import { withTextPreset } from './typography.mjs';
 
+// <defs:begin> one import per file in canvascore-admin/blocks/ (tests/parity.mjs checks the two lists agree)
+import CALLOUT from '../../../canvascore-admin/blocks/callout.json' with { type: 'json' };
+import CARDS from '../../../canvascore-admin/blocks/cards.json' with { type: 'json' };
+import COUNTERS from '../../../canvascore-admin/blocks/counters.json' with { type: 'json' };
+import DIVIDER from '../../../canvascore-admin/blocks/divider.json' with { type: 'json' };
+import FAQ from '../../../canvascore-admin/blocks/faq.json' with { type: 'json' };
+import GRID from '../../../canvascore-admin/blocks/grid.json' with { type: 'json' };
+import HTML from '../../../canvascore-admin/blocks/html.json' with { type: 'json' };
 import ICON_BOX from '../../../canvascore-admin/blocks/icon-box.json' with { type: 'json' };
+import IMAGE_TEXT from '../../../canvascore-admin/blocks/image-text.json' with { type: 'json' };
 import IMAGE from '../../../canvascore-admin/blocks/image.json' with { type: 'json' };
+import MAPS from '../../../canvascore-admin/blocks/maps.json' with { type: 'json' };
 import PROGRESS from '../../../canvascore-admin/blocks/progress.json' with { type: 'json' };
 import STEPS from '../../../canvascore-admin/blocks/steps.json' with { type: 'json' };
 import TESTIMONIAL from '../../../canvascore-admin/blocks/testimonial.json' with { type: 'json' };
 import TEXT from '../../../canvascore-admin/blocks/text.json' with { type: 'json' };
 import TIMELINE from '../../../canvascore-admin/blocks/timeline.json' with { type: 'json' };
-import CALLOUT from '../../../canvascore-admin/blocks/callout.json' with { type: 'json' };
-
-// The core definitions (one per file in canvascore-admin/blocks/; tests/parity.mjs checks the two lists agree)
-export const BLOCK_DEFS = [CALLOUT, ICON_BOX, IMAGE, PROGRESS, STEPS, TESTIMONIAL, TEXT, TIMELINE];
+import VIDEO from '../../../canvascore-admin/blocks/video.json' with { type: 'json' };
+export const BLOCK_DEFS = [CALLOUT, CARDS, COUNTERS, DIVIDER, FAQ, GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, MAPS, PROGRESS, STEPS, TESTIMONIAL, TEXT, TIMELINE, VIDEO];
+// <defs:end>
 const BY_TYPE = new Map(BLOCK_DEFS.map((d) => [d.type, d]));
 export const blockDef = (type) => BY_TYPE.get(type) || null;
 
@@ -93,6 +112,10 @@ function cleanValue(s, raw, ctx) {
     case 'richtext': return trusted(missing ? str(s.default ?? '') : str(raw));   // the server sanitizes; the canvas runs safeHtml() over the block
     case 'number': {
       const d = s.default ?? 0;
+      if (s.parse === 'int') {   // the leading whole number, as cc_int(): "7px" → 7, "abc" → the default
+        const m = (typeof raw === 'string' || typeof raw === 'number') ? String(raw).match(/^\s*([+-]?\d+)/) : null;
+        return m ? Math.max(s.min ?? -Infinity, Math.min(s.max ?? Infinity, parseInt(m[1], 10))) : d;
+      }
       let n = isNumeric(raw) ? Math.max(s.min ?? -Infinity, Math.min(s.max ?? Infinity, Number(raw))) : d;
       if (s.int) n = Math.trunc(n);
       else if (s.round !== undefined) n = roundTo(n, s.round);
@@ -105,10 +128,17 @@ function cleanValue(s, raw, ctx) {
     }
     case 'color': return ccColorValue(str(raw), s.default ?? '');
     case 'image': return ccImgUrl(missing ? (s.default ?? '') : str(raw));
+    case 'code': return trusted(missing ? str(s.default ?? '') : str(raw));
     case 'list': {
-      const items = Array.isArray(raw) ? raw : [];
-      return (s.max ? items.slice(0, s.max) : items).map((it) => cleanSettings(s.item || {}, isObj(it) ? it : {}, {}, ctx));
+      let items = Array.isArray(raw) ? raw : [];
+      if (s.max) items = items.slice(0, s.max);
+      if (s.of) {
+        const vals = items.map((it) => cleanValue(s.of, it, ctx));
+        return s.skipEmpty ? vals.filter((v) => asText(v).trim() !== '') : vals;
+      }
+      return items.map((it) => cleanSettings(s.item || {}, isObj(it) ? it : {}, {}, ctx));
     }
+    case 'calc': return 0;   // computed once the other values are clean
     default: return '';
   }
 }
@@ -127,9 +157,33 @@ function cleanSettings(settings, content, styles, ctx) {
     }
     if (s.type === 'list' && s.count) out[s.count.as] = Math.max(s.count.min ?? 0, Math.min(s.count.max ?? Infinity, out[key].length));
   }
+  // second pass: values computed from the clean ones
+  for (const [key, s] of Object.entries(settings)) {
+    if (s.type === 'calc') { const b = out[s.of]; out[key] = (typeof b === 'number' ? b : 0) * (s.mul ?? 1) + (s.add ?? 0); }
+    if (s.transform && TRANSFORMS[s.transform]) out[key] = TRANSFORMS[s.transform](out[key], s, out);
+  }
   if (Object.keys(opt).length) out.opt = opt;
   return out;
 }
+
+// Value transforms: twins of CC_TPL_TRANSFORMS in blockdef.php
+const VIDEO_YT = /(?:youtube(?:-nocookie)?\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i;
+const VIDEO_VM = /vimeo\.com\/(?:video\/)?([0-9]+)/i;
+const TRANSFORMS = {
+  blockUrl: (v) => resolveBlockUrl(asText(v)),
+  cssUrl: (v) => ccCssUrl(asText(v)),
+  // PHP's urlencode(): everything but letters, digits and - _ . is %-encoded, a space is +
+  urlencode: (v) => encodeURIComponent(asText(v)).replace(/[!'()*~]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase()).replace(/%20/g, '+'),
+  // PHP's nl2br(htmlspecialchars()): the line break is kept, <br /> before it
+  lines2br: (v) => trusted(esc(asText(v)).replace(/(\r\n|\n\r|\n|\r)/g, '<br />$1')),
+  videoEmbed: (v) => {
+    const u = asText(v); let m = u.match(VIDEO_YT);
+    if (m) return 'https://www.youtube.com/embed/' + m[1];
+    m = u.match(VIDEO_VM);
+    return m ? 'https://player.vimeo.com/video/' + m[1] : '';
+  },
+  fmtNum: (v, s, sib) => ccFmtNum(typeof v === 'number' ? v : 0, s.decimalsFrom ? sib[s.decimalsFrom] : (s.decimals ?? 0)),
+};
 
 // ---------------------------------------------------------------------------------------------- templates
 const TAG = /\{\{\{\s*([^}]+?)\s*\}\}\}|\{\{([#^/!]?)\s*([^}]*?)\s*\}\}/g;
@@ -196,6 +250,9 @@ function renderNodes(nodes, scopes) {
   return out;
 }
 
+// A transform applied to one value (the panel uses it to check what an editor typed, e.g. a video link)
+export const transformValue = (name, v) => (TRANSFORMS[name] ? asText(TRANSFORMS[name](v, {}, {})) : asText(v));
+
 const PARSED = new Map();
 const parsed = (def) => { if (!PARSED.has(def)) PARSED.set(def, parseTemplate(def.template)); return PARSED.get(def); };
 
@@ -213,6 +270,7 @@ export function renderDefBlock(def, block, host) {
   for (const [key, s] of Object.entries(def.settings || {})) {
     if (s.inline) field[key] = trusted(host.fields ? ` data-cc-field="${key}" contenteditable="true" data-cc-placeholder="${esc(s.placeholder || '')}"` : '');
   }
+  if (def.renderIf && !truthy(values[def.renderIf])) return null;   // nothing at all, not even the custom CSS
   const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted('') };
   return renderNodes(parsed(def), [builtIn, values]);
 }

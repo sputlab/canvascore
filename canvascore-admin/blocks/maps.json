@@ -1,0 +1,41 @@
+{
+  "type": "MAPS",
+  "settings": {
+    "address": {
+      "type": "text",
+      "default": "",
+      "transform": "urlencode",
+      "label": "Location / Address",
+      "placeholder": "e.g. Colosseum, Rome, Italy"
+    },
+    "zoom": {
+      "type": "number",
+      "parse": "int",
+      "default": 15,
+      "min": 1,
+      "max": 21,
+      "label": "Zoom Level",
+      "control": "range",
+      "rangeMin": 1,
+      "rangeMax": 20,
+      "showValue": true
+    }
+  },
+  "panel": [
+    {
+      "title": "Map Settings",
+      "icon": "MapPin",
+      "open": true,
+      "keys": [
+        "address",
+        "zoom"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-maps{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "  <div style=\"position:relative; overflow:hidden; padding-bottom:56.25%; height:0; border-radius:inherit;\">\n",
+    "    <iframe src=\"https://maps.google.com/maps?q={{address}}&t=&z={{zoom}}&ie=UTF8&iwloc=&output=embed\" style=\"position:absolute; top:0; left:0; width:100%; height:100%; border:0;\" allowfullscreen loading=\"lazy\"></iframe>\n",
+    "  </div>\n</div>\n"
+  ]
+}

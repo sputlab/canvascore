@@ -92,7 +92,7 @@ export function blockRoot(block) {
 }
 
 // URL for block links (mirror of the compiler's cc_block_url; mailto:/tel: left intact)
-function resolveBlockUrl(url) {
+export function resolveBlockUrl(url) {
   url = String(url ?? '').trim();
   if (url === '') return '#';
   if (url === '#' || /^(?:f|ht)tps?:\/\//i.test(url) || /^(?:mailto|tel):/i.test(url)) return url;
@@ -112,7 +112,7 @@ function ccColor(v, d) { v = String(v ?? '').trim(); if (v === '') return d; ret
 export { ccColor as ccColorValue };
 const ccIsNum = (v) => (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)));
 function ccNum(v, min, max, d) { return ccIsNum(v) ? Math.max(min, Math.min(max, Number(v))) : d; }
-function ccFmtNum(v, dec) {
+export function ccFmtNum(v, dec) {
   // Same explicit rounding as the PHP compiler (cc_fmt_num).
   v = Number(v);
   const m = 10 ** dec;
@@ -319,7 +319,7 @@ function renderBlockBody(block, opts = {}) {
 
   // A block with a shared definition (canvascore-admin/blocks/) is rendered from it, here and on the site
   const def = blockDef(t);
-  if (def) return customCss + renderDefBlock(def, block, { innerId, fields: !!opts.fields });
+  if (def) { const h = renderDefBlock(def, block, { innerId, fields: !!opts.fields }); return h === null ? '' : customCss + h; }
 
   switch (t) {
     case 'SECTION': {
@@ -359,15 +359,6 @@ function renderBlockBody(block, opts = {}) {
       return customCss + `<div id="${innerId}" class="cc-btn-wrap${animClass}${innerClass}" style="text-align:${align}; margin:${margin};">\n<a href="${url}" class="cc-btn${hv.cls}" style="${btnStyle}">${text}</a>\n</div>\n`;
     }
 
-    case 'GRID': {
-      const columns = ccInt(content.columns, 2, 1, 24);
-      html = `<style>@media(max-width: 768px){ #${innerId} { grid-template-columns: 1fr !important; } }</style>`;
-      html += `<div id="${innerId}" class="cc-grid ${animClass}${innerClass}" style="${styleAttr} display:grid; grid-template-columns:repeat(${columns}, 1fr); gap:20px; overflow:hidden;">\n`;
-      if (Array.isArray(content.items)) for (const item of content.items) html += `  <div style="min-width:0;">\n${item}\n  </div>\n`;
-      html += `</div>\n`;
-      return customCss + html;
-    }
-
     case 'HERO': {
       const bgUrl = ccCssUrl(content.bgImage);
       const bg = bgUrl ? `background-image: url('${escapeHtml(bgUrl)}'); background-size: cover; background-position: center;` : '';
@@ -390,30 +381,6 @@ function renderBlockBody(block, opts = {}) {
       return customCss + `<section id="${innerId}" class="cc-hero${animClass}${innerClass}" style="${styleAttr} ${bg} min-height:${minHeight}; display:flex; flex-direction:column; justify-content:center;">\n<div>\n${opts.fields ? `<div${field('title', 'Title')}>${title}</div>` : title}\n<div style="margin:20px 0;"${field('subtitle', 'Subtitle')}>${subtitle}</div>\n${buttonsHtml}\n</div>\n</section>\n`;
     }
 
-    case 'IMAGE_TEXT': {
-      const layout = (content.layout ?? 'img-left') === 'img-right' ? 'row-reverse' : 'row';
-      const src = escapeHtml(content.src ?? '');
-      const alt = escapeHtml(content.alt ?? '');
-      const text = content.text ?? '';
-      return customCss + `<section id="${innerId}" class="cc-img-text${animClass}${innerClass}" style="${styleAttr} display:flex; gap:40px; align-items:center; flex-direction:${layout}; flex-wrap:wrap;">\n<div style="flex:1 1 300px; width:100%;"><img src="${src}" alt="${alt}" style="width:100%; border-radius:8px; display:block;"></div>\n<div style="flex:1 1 300px; width:100%;"${field('text', 'Type your text…')}>${text}</div>\n</section>\n`;
-    }
-
-    case 'CARDS': {
-      html = `<section id="${innerId}" class="cc-cards${animClass}${innerClass}" style="${styleAttr}">\n<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:20px;">\n`;
-      if (Array.isArray(content.items)) for (const item of content.items) html += `<div style="background:#fff; padding:30px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05); border:1px solid #e2e8f0; min-width:0;">${item}</div>\n`;
-      html += `</div>\n</section>\n`;
-      return customCss + html;
-    }
-
-    case 'VIDEO': {
-      const url = content.url ?? '';
-      let embed = '';
-      const yt = url.match(/(?:youtube(?:-nocookie)?\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/i);
-      if (yt) embed = 'https://www.youtube.com/embed/' + yt[1];
-      else { const vm = url.match(/vimeo\.com\/(?:video\/)?([0-9]+)/i); if (vm) embed = 'https://player.vimeo.com/video/' + vm[1]; }
-      if (!embed) return '';
-      return customCss + `<div id="${innerId}" class="cc-video${animClass}${innerClass}"${styleString}>\n<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:inherit;">\n<iframe src="${embed}" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allowfullscreen loading="lazy"></iframe>\n</div>\n</div>\n`;
-    }
     case 'SLIDER': {
       const effect = content.effect ?? 'slide';
       const isFade = effect === 'fade';
@@ -446,24 +413,6 @@ function renderBlockBody(block, opts = {}) {
       html += `</div>\n`;
       // note: the compiler's <style>/<script> (arrows, autoplay) does not affect structure/styles
       return customCss + html;
-    }
-
-    case 'MAPS': {
-      const address = encodeURIComponent(content.address ?? '');
-      const zoom = parseInt(content.zoom ?? 15, 10) || 15;
-      return customCss + `<div id="${innerId}" class="cc-maps${animClass}${innerClass}" style="${styleAttr}">\n  <div style="position:relative; overflow:hidden; padding-bottom:56.25%; height:0; border-radius:inherit;">\n    <iframe src="https://maps.google.com/maps?q=${address}&t=&z=${zoom}&ie=UTF8&iwloc=&output=embed" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allowfullscreen loading="lazy"></iframe>\n  </div>\n</div>\n`;
-    }
-
-    case 'FAQ': {
-      let items = '';
-      if (Array.isArray(content.items)) {
-        for (const it of content.items) {
-          const q = escapeHtml(it.q ?? '');
-          const a = escapeHtml(it.a ?? '').replace(/\r\n|\r|\n/g, '<br />');
-          items += `  <details style="margin-bottom:10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">\n    <summary style="padding:15px 20px; font-weight:600; cursor:pointer; background:#f8fafc; outline:none; list-style:none;"><span style="display:inline-block; width:15px; font-weight:bold; color:var(--brand-color, #3b82f6);">+</span> ${q}</summary>\n    <div style="padding:15px 20px; border-top:1px solid #e2e8f0; font-size:15px; color:#475569; line-height:1.6;">${a}</div>\n  </details>\n`;
-        }
-      }
-      return customCss + `<div id="${innerId}" class="cc-faq${animClass}${innerClass}" style="${styleAttr}">\n${items}</div>\n`;
     }
 
     case 'FORM': {
@@ -636,51 +585,6 @@ function renderBlockBody(block, opts = {}) {
       return customCss + h;
     }
 
-    case 'DIVIDER': {
-      const c = content;
-      let style = c.style ?? 'line';
-      if (!['line', 'gradient', 'dots', 'wave', 'curve', 'diagonal', 'spacer'].includes(style)) style = 'line';
-      const color = ccColor(c.color, '#cbd5e1');
-      const thick = Math.trunc(ccNum(c.thickness ?? 2, 1, 20, 2));
-      const width = Math.trunc(ccNum(c.width ?? 100, 10, 100, 100));
-      const height = Math.trunc(ccNum(c.height ?? 80, 10, 400, 80));
-      const flip = !!c.flip;
-      let inner;
-      if (style === 'line') inner = `<hr class="cc-divider-line" style="border:0; border-top:${thick}px solid ${color}; width:${width}%; margin:0 auto;">`;
-      else if (style === 'gradient') inner = `<div class="cc-divider-line" aria-hidden="true" style="height:${thick}px; width:${width}%; margin:0 auto; background:linear-gradient(90deg, transparent, ${color}, transparent);"></div>`;
-      else if (style === 'dots') inner = `<div class="cc-divider-dots" aria-hidden="true" style="text-align:center; color:${color}; font-size:${8 + thick * 2}px; letter-spacing:10px; line-height:1;">&bull;&bull;&bull;</div>`;
-      else if (style === 'spacer') inner = `<div class="cc-divider-spacer" aria-hidden="true" style="height:${height}px;"></div>`;
-      else {
-        const paths = {
-          wave: 'M0,60 C150,100 350,20 600,60 C850,100 1050,20 1200,60 L1200,120 L0,120 Z',
-          curve: 'M0,0 C300,120 900,120 1200,0 L1200,120 L0,120 Z',
-          diagonal: 'M0,120 L1200,0 L1200,120 Z',
-        };
-        inner = `<svg class="cc-divider-shape" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true" focusable="false" style="display:block; width:100%; height:${height}px;${flip ? ' transform:scaleY(-1);' : ''}"><path d="${paths[style]}" fill="${color}"></path></svg>`;
-      }
-      return customCss + `<div id="${innerId}" class="cc-divider cc-divider-${style}${animClass}${innerClass}" style="${styleAttr}">\n${inner}\n</div>\n`;
-    }
-    case 'COUNTERS': {
-      const c = content;
-      const items = Array.isArray(c.items) ? c.items : [];
-      let cols = Math.trunc(ccNum(c.columns ?? 0, 0, 4, 0));
-      if (cols < 1) cols = Math.max(1, Math.min(4, items.length));
-      let cells = '';
-      for (const it of items) {
-        const val = ccIsNum(it.value) ? Number(it.value) : 0;
-        const dec = Math.trunc(ccNum(it.decimals ?? 0, 0, 2, 0));
-        const pre = escapeHtml(it.prefix ?? '');
-        const suf = escapeHtml(it.suffix ?? '');
-        const label = escapeHtml(it.label ?? '');
-        cells += `<div class="cc-counter" style="text-align:center; padding:8px;"><div class="cc-counter-value" data-target="${val}" data-decimals="${dec}" data-prefix="${pre}" data-suffix="${suf}" style="font-size:44px; font-weight:800; color:var(--brand-color, #3b82f6); line-height:1.1; font-variant-numeric:tabular-nums;">${pre}${ccFmtNum(val, dec)}${suf}</div>`
-          + (label !== '' ? `<div class="cc-counter-label" style="margin-top:6px; color:#64748b; font-size:15px;">${label}</div>` : '') + `</div>`;
-      }
-      let h = `<style>@media(max-width:768px){#${innerId} .cc-counters-grid{grid-template-columns:repeat(2, 1fr) !important}}</style>`;
-      h += `<div id="${innerId}" class="cc-counters${animClass}${innerClass}" style="${styleAttr}">\n`;
-      h += `<div class="cc-counters-grid" style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:16px;">${cells}</div>\n`;
-      h += `</div>\n`;
-      return customCss + h;
-    }
     case 'TABLE': {
       const c = content;
       const rows = ccLines(c.data ?? '').map((l) => l.split(/\s*\|\s*|\t/));
@@ -906,9 +810,6 @@ function renderBlockBody(block, opts = {}) {
 
     case 'COLLECTION_LIST':
       return `<!-- CollectionList: ${escapeHtml(content.collectionSlug || content.collectionId || '')} -->\n`;
-
-    case 'HTML':
-      return customCss + `<div id="${innerId}" class="cc-html-block${animClass}${innerClass}"${styleString}>\n${content.code ?? ''}\n</div>\n`;
 
     case 'SEARCH': {
       // Site search: the published page's script searches search-index.json (written at publish)

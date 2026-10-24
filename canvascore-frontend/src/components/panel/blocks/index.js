@@ -9,25 +9,19 @@ import BusinessPanel from './BusinessPanel';
 import ButtonPanel from './ButtonPanel';
 import CollectionListPanel from './CollectionListPanel';
 import CountdownPanel from './CountdownPanel';
-import CountersPanel from './CountersPanel';
 import CssGridPanel from './CssGridPanel';
-import DividerPanel from './DividerPanel';
-import FaqPanel from './FaqPanel';
 import FormPanel from './FormPanel';
 import GalleryPanel from './GalleryPanel';
 import GridCardsPanel from './GridCardsPanel';
 import FlexRowPanel from './FlexRowPanel';
 import SearchPanel from './SearchPanel';
 import HeroPanel from './HeroPanel';
-import HtmlPanel from './HtmlPanel';
 import LogosPanel from './LogosPanel';
-import MapsPanel from './MapsPanel';
 import PricingPanel from './PricingPanel';
 import SliderPanel from './SliderPanel';
 import TablePanel from './TablePanel';
 import TeamPanel from './TeamPanel';
 import TextPanel from './TextPanel';
-import VideoPanel from './VideoPanel';
 import BentoPanel from './BentoPanel';
 import SplitCtaPanel from './SplitCtaPanel';
 import CaseStudyPanel from './CaseStudyPanel';
@@ -63,25 +57,19 @@ export const CONTENT_PANELS = {
   ITEM_TERMS: ItemTermsPanel,
   COLLECTION_LIST: CollectionListPanel,
   COUNTDOWN: CountdownPanel,
-  COUNTERS: CountersPanel,
   CSS_GRID: CssGridPanel,
-  DIVIDER: DividerPanel,
-  FAQ: FaqPanel,
   FORM: FormPanel,
   GALLERY: GalleryPanel,
   GRID: GridCardsPanel,
   HERO: HeroPanel,
-  HTML: HtmlPanel,
   IMAGE_TEXT: TextPanel,
   LOGOS: LogosPanel,
-  MAPS: MapsPanel,
   PRICING: PricingPanel,
   SLIDER: SliderPanel,
   TABLE: TablePanel,
   TABS: AccordionTabsPanel,
   TEAM: TeamPanel,
   TEXT: TextPanel,
-  VIDEO: VideoPanel,
   BENTO: BentoPanel,
   SPLIT_CTA: SplitCtaPanel,
   CASE_STUDY: CaseStudyPanel,

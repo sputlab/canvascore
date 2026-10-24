@@ -1,0 +1,48 @@
+{
+  "type": "FAQ",
+  "settings": {
+    "items": {
+      "type": "list",
+      "itemTitle": "Question {n}",
+      "addLabel": "+ Add Question",
+      "newItem": {
+        "q": "New Question",
+        "a": "Answer text..."
+      },
+      "item": {
+        "q": {
+          "type": "text",
+          "default": "",
+          "label": "Question",
+          "placeholder": "Question"
+        },
+        "a": {
+          "type": "text",
+          "default": "",
+          "transform": "lines2br",
+          "label": "Answer",
+          "placeholder": "Answer",
+          "control": "textarea",
+          "rows": 3
+        }
+      }
+    }
+  },
+  "panel": [
+    {
+      "title": "FAQ Items",
+      "icon": "HelpCircle",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-faq{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "{{#items}}  <details style=\"margin-bottom:10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;\">\n",
+    "    <summary style=\"padding:15px 20px; font-weight:600; cursor:pointer; background:#f8fafc; outline:none; list-style:none;\"><span style=\"display:inline-block; width:15px; font-weight:bold; color:var(--brand-color, #3b82f6);\">+</span> {{q}}</summary>\n",
+    "    <div style=\"padding:15px 20px; border-top:1px solid #e2e8f0; font-size:15px; color:#475569; line-height:1.6;\">{{{a}}}</div>\n",
+    "  </details>\n{{/items}}</div>\n"
+  ]
+}
