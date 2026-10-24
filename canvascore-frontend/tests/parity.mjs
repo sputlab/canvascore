@@ -406,6 +406,13 @@ console.log('\nSHARED BLOCK DEFINITIONS');
       l: { type: 'list', of: { type: 'text' } },
       all: { type: 'flag', when: { t: { not: [''] }, l: true, cols: ['0'] } }, any: { type: 'flag', any: true, when: { s: true, n: true } }, none: { type: 'flag', when: { l: false } } },
       { t: ' \t hi \n', s: true, n: 1, cols: 0, l: ['x'] }),
+    T('{{#o}}<{{a}}|{{b}}>{{/o}}{{#p}}P{{/p}}|{{#l}}[{{k}}:{{pct}}:{{p0}}]{{/l}}|{{d}}|{{{r}}}|{{{br}}}|{{u}}|{{v}}', {
+      o: { type: 'object', item: { a: { type: 'text', default: 'A' }, b: { type: 'color', default: '#000' } } }, p: { type: 'object', item: { q: { type: 'text' } } },
+      l: { type: 'list', skipNonObjects: true, keepIf: { k: { not: [''] } }, share: { of: 'n', as: 'pct', format: { p0: 0 } }, item: { k: { type: 'text' }, n: { type: 'number', min: 0 } } },
+      x: { type: 'number', default: 4.3 }, d: { type: 'calc', of: 'x', div: 5, mul: 100, transform: 'fmtNum', decimals: 1 },
+      r: { type: 'number', parse: 'int', key: 'rr', default: 3, transform: 'repeat', text: '&#9733;' },
+      br: { type: 'text', transform: 'br' }, u: { type: 'text', transform: 'contactUrl' }, v: { type: 'text', key: 'vv', transform: 'contactUrl' } },
+      { o: { b: 'red;}' }, p: 'junk', l: ['junk', 7, null, ['list'], { k: 'a', n: 1 }, { k: '', n: 50 }, { k: 'b', n: 2 }], rr: '2', br: ' one \n\n  two<3 \r\n', u: 'me@site.com', vv: 'site.com/x' }),
     T('{{i}}|{{m}}|{{x}}|{{e}}', { i: { type: 'text', transform: 'initials' }, m: { type: 'text', transform: 'mailto' }, x: { type: 'text', key: 'm', transform: 'mailto' }, e: { type: 'text', transform: 'extUrl' } },
       { i: '  émile   zola  rossi', m: 'bad@address', e: '//linkedin.com/in/x' }),
   );
@@ -439,7 +446,8 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   expect(20, 'ERROR'); expect(21, 'ERROR');   // a literal { right before a tag is refused
   expect(22, '.x{y}');
   expect(23, '[hi]S|3 2|AY');
-  expect(24, 'éz|||https://linkedin.com/in/x');
+  expect(24, '<A|#000>P|[a:33.3333333333:33][b:66.6666666667:67]|86.0|&#9733;&#9733;|one<br>two&lt;3|mailto:me@site.com|https://site.com/x');
+  expect(25, 'éz|||https://linkedin.com/in/x');
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

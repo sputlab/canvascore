@@ -22,8 +22,11 @@
 //     code      HTML printed as is, NOT sanitized: only for code surfaces that only admins can change (HTML.code)
 //     list      item: { key: setting } per item (a non-object item gets the defaults), or of: setting (a list of
 //               plain values, {{.}} in the loop); max; skipEmpty (drops the values that are empty once trimmed);
-//               count: { as, min, max } adds a top-level number: the item count, clamped
-//     calc      a number from another one: of (or fallback when that one is 0), mul, add, then min / max
+//               count: { as, min, max } adds a top-level number: the item count, clamped; skipNonObjects (drops
+//               items that are not objects, as PHP's is_array()); keepIf (a flag's conditions each item must meet);
+//               share: { of, as, format: { key: decimals } } gives each item its share of the total of "of", in %
+//     object    item: { key: setting }: one object (a non-object gets the defaults); {{#key}}…{{/key}} enters it
+//     calc      a number from another one: of (or fallback when that one is 0), / div, * mul, + add, then min / max
 //     flag      true when its conditions on the other clean values hold ("when", all of them, or one with "any"):
 //               { key: true | false } (as a section sees it), { key: [texts] }, { key: { not: [texts] } }
 //     from: "styles" reads the value from the block's styles (after its text style) instead of its content.
@@ -31,7 +34,9 @@
 //               link → {{BASE_URL}}…), cssUrl (for url('…')), urlencode, lines2br (escaped, a <br /> per line break:
 //               trusted), videoEmbed (a YouTube or Vimeo address → its player address, '' otherwise), fmtNum
 //               (thousands separators, decimals from the sibling named by decimalsFrom), extUrl (https:// added when
-//               missing), initials (of a name), mailto (a valid address → mailto:…, else '')
+//               missing), initials (of a name), mailto (a valid address → mailto:…, else ''), contactUrl (an email
+//               address → mailto:…, else extUrl), br (lines → escaped, joined by <br>), repeat (the setting's text,
+//               value times)
 //   renderIf   a value that must be true, or the block (and its custom CSS) renders nothing
 //   script     the name of the block's behaviour script (site only; CC_TPL_SCRIPTS in blockdef.php)
 //
@@ -58,13 +63,17 @@ import { withTextPreset } from './typography.mjs';
 
 // <defs:begin> one import per file in canvascore-admin/blocks/ (tests/parity.mjs checks the two lists agree)
 import ACCORDION from '../../../canvascore-admin/blocks/accordion.json' with { type: 'json' };
+import AUTHOR_BIO from '../../../canvascore-admin/blocks/author-bio.json' with { type: 'json' };
+import BENTO from '../../../canvascore-admin/blocks/bento.json' with { type: 'json' };
 import CALLOUT from '../../../canvascore-admin/blocks/callout.json' with { type: 'json' };
 import CARDS from '../../../canvascore-admin/blocks/cards.json' with { type: 'json' };
+import CASE_STUDY from '../../../canvascore-admin/blocks/case-study.json' with { type: 'json' };
 import COUNTERS from '../../../canvascore-admin/blocks/counters.json' with { type: 'json' };
 import DIVIDER from '../../../canvascore-admin/blocks/divider.json' with { type: 'json' };
 import FAQ from '../../../canvascore-admin/blocks/faq.json' with { type: 'json' };
 import GALLERY from '../../../canvascore-admin/blocks/gallery.json' with { type: 'json' };
 import GRID from '../../../canvascore-admin/blocks/grid.json' with { type: 'json' };
+import HOVER_GRID from '../../../canvascore-admin/blocks/hover-grid.json' with { type: 'json' };
 import HTML from '../../../canvascore-admin/blocks/html.json' with { type: 'json' };
 import ICON_BOX from '../../../canvascore-admin/blocks/icon-box.json' with { type: 'json' };
 import IMAGE_TEXT from '../../../canvascore-admin/blocks/image-text.json' with { type: 'json' };
@@ -73,14 +82,17 @@ import LOGOS from '../../../canvascore-admin/blocks/logos.json' with { type: 'js
 import MAPS from '../../../canvascore-admin/blocks/maps.json' with { type: 'json' };
 import PRICING from '../../../canvascore-admin/blocks/pricing.json' with { type: 'json' };
 import PROGRESS from '../../../canvascore-admin/blocks/progress.json' with { type: 'json' };
+import REVIEW_SUMMARY from '../../../canvascore-admin/blocks/review-summary.json' with { type: 'json' };
+import SPLIT_CTA from '../../../canvascore-admin/blocks/split-cta.json' with { type: 'json' };
 import STEPS from '../../../canvascore-admin/blocks/steps.json' with { type: 'json' };
 import TABS from '../../../canvascore-admin/blocks/tabs.json' with { type: 'json' };
 import TEAM from '../../../canvascore-admin/blocks/team.json' with { type: 'json' };
+import TESTIMONIAL_WALL from '../../../canvascore-admin/blocks/testimonial-wall.json' with { type: 'json' };
 import TESTIMONIAL from '../../../canvascore-admin/blocks/testimonial.json' with { type: 'json' };
 import TEXT from '../../../canvascore-admin/blocks/text.json' with { type: 'json' };
 import TIMELINE from '../../../canvascore-admin/blocks/timeline.json' with { type: 'json' };
 import VIDEO from '../../../canvascore-admin/blocks/video.json' with { type: 'json' };
-export const BLOCK_DEFS = [ACCORDION, CALLOUT, CARDS, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PRICING, PROGRESS, STEPS, TABS, TEAM, TESTIMONIAL, TEXT, TIMELINE, VIDEO];
+export const BLOCK_DEFS = [ACCORDION, AUTHOR_BIO, BENTO, CALLOUT, CARDS, CASE_STUDY, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HOVER_GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PRICING, PROGRESS, REVIEW_SUMMARY, SPLIT_CTA, STEPS, TABS, TEAM, TESTIMONIAL_WALL, TESTIMONIAL, TEXT, TIMELINE, VIDEO];
 // <defs:end>
 const BY_TYPE = new Map(BLOCK_DEFS.map((d) => [d.type, d]));
 export const blockDef = (type) => BY_TYPE.get(type) || null;
@@ -106,6 +118,9 @@ export const numText = (n, dec) => {
   if (Number.isInteger(n)) return String(n);
   return n.toFixed(Math.max(0, Math.min(10, dec ?? 10))).replace(/\.?0+$/, '') || '0';
 };
+// PHP's trim(): only spaces, tabs, line breaks, NUL and vertical tabs (not the other Unicode spaces)
+// eslint-disable-next-line no-control-regex -- the characters PHP's trim() removes
+const phpTrim = (t) => t.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');
 const truthy = (v) => (v instanceof Trusted ? v.h !== '' : !phpEmpty(v));   // an empty list or object is false, as PHP's empty array
 const asText = (v) => (v instanceof Trusted ? v.h : typeof v === 'number' ? numText(v) : str(v));
 
@@ -115,8 +130,7 @@ function cleanValue(s, raw, ctx) {
   switch (s.type) {
     case 'text': {
       let v = missing ? str(s.default ?? '') : str(raw);
-      // eslint-disable-next-line no-control-regex -- the characters PHP's trim() removes
-      if (s.trim) v = v.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');   // PHP's trim()
+      if (s.trim) v = phpTrim(v);
       if (s.fallbackWhenEmpty && v === '') v = str(s.default ?? '');
       if (s.pattern && !new RegExp(s.pattern, 'u').test(v)) v = str(s.default ?? '');
       if (s.maxLength) v = [...v].slice(0, s.maxLength).join('');
@@ -149,8 +163,20 @@ function cleanValue(s, raw, ctx) {
         const vals = items.map((it) => cleanValue(s.of, it, ctx));
         return s.skipEmpty ? vals.filter((v) => asText(v).trim() !== '') : vals;
       }
-      return items.map((it) => cleanSettings(s.item || {}, isObj(it) ? it : {}, {}, ctx));
+      if (s.skipNonObjects) items = items.filter((it) => it !== null && typeof it === 'object');   // PHP's is_array()
+      let out = items.map((it) => cleanSettings(s.item || {}, isObj(it) ? it : {}, {}, ctx));
+      if (s.keepIf) out = out.filter((it) => condHolds(s.keepIf, it, false));
+      if (s.share) {   // each item's share of the list's total, in % (0 when the total is 0)
+        const sum = out.reduce((a, it) => a + (typeof it[s.share.of] === 'number' ? it[s.share.of] : 0), 0);
+        for (const it of out) {
+          const pct = sum > 0 ? (typeof it[s.share.of] === 'number' ? it[s.share.of] : 0) / sum * 100 : 0;
+          it[s.share.as] = pct;
+          for (const [k, dec] of Object.entries(s.share.format || {})) it[k] = ccFmtNum(pct, dec);
+        }
+      }
+      return out;
     }
+    case 'object': return cleanSettings(s.item || {}, isObj(raw) ? raw : {}, {}, ctx);
     case 'calc': case 'flag': return 0;   // computed once the other values are clean
     default: return '';
   }
@@ -172,7 +198,7 @@ function cleanSettings(settings, content, styles, ctx) {
   }
   // second pass: values computed from the clean ones
   for (const [key, s] of Object.entries(settings)) {
-    if (s.type === 'calc') { const b = s.fallback && !truthy(out[s.of]) ? out[s.fallback] : out[s.of]; out[key] = Math.max(s.min ?? -Infinity, Math.min(s.max ?? Infinity, (typeof b === 'number' ? b : 0) * (s.mul ?? 1) + (s.add ?? 0))); }
+    if (s.type === 'calc') { const b = s.fallback && !truthy(out[s.of]) ? out[s.fallback] : out[s.of]; out[key] = Math.max(s.min ?? -Infinity, Math.min(s.max ?? Infinity, (typeof b === 'number' ? b : 0) / (s.div ?? 1) * (s.mul ?? 1) + (s.add ?? 0))); }
     if (s.type === 'flag') out[key] = condHolds(s.when || {}, out, !!s.any);
     if (s.transform && TRANSFORMS[s.transform]) out[key] = TRANSFORMS[s.transform](out[key], s, out);
   }
@@ -210,6 +236,12 @@ const TRANSFORMS = {
     return m ? 'https://player.vimeo.com/video/' + m[1] : '';
   },
   extUrl: (v) => ccExtUrlValue(asText(v)),
+  // a valid email address → mailto:…, anything else → an https:// address
+  contactUrl: (v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(asText(v)) ? 'mailto:' + asText(v) : ccExtUrlValue(asText(v))),
+  // the lines of a text, trimmed, empty ones dropped, escaped and joined by <br> (cc_br()): trusted
+  br: (v) => trusted(asText(v).split(/\r\n|\r|\n/).map(phpTrim).filter((l) => l !== '').map(esc).join('<br>')),
+  // the definition's text, as many times as the value (trusted: the text is the definition's own)
+  repeat: (v, s) => trusted(String(s.text ?? '').repeat(Math.max(0, Math.trunc(typeof v === 'number' ? v : 0)))),
   initials: (v) => ccInitialsValue(asText(v)),
   // a valid email address → mailto:…, anything else → ''
   mailto: (v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(asText(v)) ? 'mailto:' + asText(v) : ''),

@@ -47,11 +47,12 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   - Behaviour scripts stay site-side, named by the definition.
 
   Blocks moved to it: **Text, Image, Icon Box, Testimonial, Callout, Timeline, Steps, Progress Bars, Grid, Cards,
-  Image + Text, FAQ, Map, Video, Custom HTML, Divider, Counters, Accordion, Tabs, Pricing, Gallery, Logos and Team**. Their published HTML is unchanged for real content
+  Image + Text, FAQ, Map, Video, Custom HTML, Divider, Counters, Accordion, Tabs, Pricing, Gallery, Logos, Team, Bento,
+  Split CTA, Case Study, Author Bio, Review Summary, Testimonial Wall and Hover Grid**. Their published HTML is unchanged for real content
   (checked byte for byte against the previous renderer, with every field also fuzzed with wrong types and hostile
   values), and the editor and the site now give exactly the same HTML for them. The engine also has lists of plain
   values, value transforms (internal links, CSS addresses, URL encoding, line breaks, video players, number format),
-  computed sizes and flags, admin-only code, blocks that render only when a value is set, and behaviour scripts that receive
+  computed sizes and flags, objects, filtered lists and shares of a total, admin-only code, blocks that render only when a value is set, and behaviour scripts that receive
   the block's values. The generated panel shows a field only when another setting calls for it, warns about a link
   it can't use, and keeps code read-only for editors. `npm run test:parity` checks both engines on every definition, hostile values
   included, and on the template language itself.

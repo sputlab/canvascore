@@ -1,0 +1,110 @@
+{
+  "type": "SPLIT_CTA",
+  "settings": {
+    "left": {
+      "type": "object",
+      "item": {
+        "icon": {
+          "type": "text",
+          "default": ""
+        },
+        "title": {
+          "type": "text",
+          "default": ""
+        },
+        "text": {
+          "type": "text",
+          "default": ""
+        },
+        "buttonText": {
+          "type": "text",
+          "default": ""
+        },
+        "buttonUrl": {
+          "type": "text",
+          "default": "",
+          "transform": "blockUrl"
+        },
+        "bg": {
+          "type": "color",
+          "default": "#0f172a"
+        },
+        "color": {
+          "type": "color",
+          "default": "#ffffff"
+        },
+        "buttonBg": {
+          "type": "color",
+          "default": "#3b82f6"
+        },
+        "buttonColor": {
+          "type": "color",
+          "default": "#ffffff"
+        }
+      }
+    },
+    "right": {
+      "type": "object",
+      "item": {
+        "icon": {
+          "type": "text",
+          "default": ""
+        },
+        "title": {
+          "type": "text",
+          "default": ""
+        },
+        "text": {
+          "type": "text",
+          "default": ""
+        },
+        "buttonText": {
+          "type": "text",
+          "default": ""
+        },
+        "buttonUrl": {
+          "type": "text",
+          "default": "",
+          "transform": "blockUrl"
+        },
+        "bg": {
+          "type": "color",
+          "default": "#eff6ff"
+        },
+        "color": {
+          "type": "color",
+          "default": "#0f172a"
+        },
+        "buttonBg": {
+          "type": "color",
+          "default": "#0f172a"
+        },
+        "buttonColor": {
+          "type": "color",
+          "default": "#ffffff"
+        }
+      }
+    },
+    "gap": {
+      "type": "number",
+      "parse": "int",
+      "default": 16,
+      "min": 0,
+      "max": 48
+    },
+    "radius": {
+      "type": "number",
+      "parse": "int",
+      "default": 16,
+      "min": 0,
+      "max": 40
+    }
+  },
+  "template": [
+    "<style>@media(max-width:768px){#{{_id}} .cc-split-cta-row{flex-direction:column !important}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-split-cta{{_classes}}\" style=\"{{{_style}}}\">\n<div class=\"cc-split-cta-row\" style=\"display:flex; gap:{{gap}}px;\">",
+    "{{#left}}<div class=\"cc-split-cta-side cc-split-cta-left\" style=\"flex:1; min-width:0; background:{{bg}}; color:{{color}}; padding:40px 32px; border-radius:{{radius}}px; display:flex; flex-direction:column; align-items:flex-start; gap:12px;\">{{^icon=}}<div class=\"cc-split-cta-icon\" aria-hidden=\"true\" style=\"font-size:32px; line-height:1;\">{{icon}}</div>{{/icon=}}{{^title=}}<h3 class=\"cc-split-cta-title\" style=\"margin:0; font-size:24px; line-height:1.25; color:inherit;\">{{title}}</h3>{{/title=}}{{^text=}}<p class=\"cc-split-cta-text\" style=\"margin:0; font-size:15px; line-height:1.6; opacity:0.9;\">{{text}}</p>{{/text=}}{{^buttonText=}}<a class=\"cc-split-cta-btn\" href=\"{{buttonUrl}}\" style=\"display:inline-block; margin-top:8px; padding:12px 22px; border-radius:8px; background:{{buttonBg}}; color:{{buttonColor}}; font-weight:700; text-decoration:none;\">{{buttonText}}</a>{{/buttonText=}}</div>{{/left}}",
+    "{{#right}}<div class=\"cc-split-cta-side cc-split-cta-right\" style=\"flex:1; min-width:0; background:{{bg}}; color:{{color}}; padding:40px 32px; border-radius:{{radius}}px; display:flex; flex-direction:column; align-items:flex-start; gap:12px;\">{{^icon=}}<div class=\"cc-split-cta-icon\" aria-hidden=\"true\" style=\"font-size:32px; line-height:1;\">{{icon}}</div>{{/icon=}}{{^title=}}<h3 class=\"cc-split-cta-title\" style=\"margin:0; font-size:24px; line-height:1.25; color:inherit;\">{{title}}</h3>{{/title=}}{{^text=}}<p class=\"cc-split-cta-text\" style=\"margin:0; font-size:15px; line-height:1.6; opacity:0.9;\">{{text}}</p>{{/text=}}{{^buttonText=}}<a class=\"cc-split-cta-btn\" href=\"{{buttonUrl}}\" style=\"display:inline-block; margin-top:8px; padding:12px 22px; border-radius:8px; background:{{buttonBg}}; color:{{buttonColor}}; font-weight:700; text-decoration:none;\">{{buttonText}}</a>{{/buttonText=}}</div>{{/right}}",
+    "</div>\n</div>\n"
+  ]
+}

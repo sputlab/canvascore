@@ -96,8 +96,21 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
                 }
                 return $out;
             }
+            if (!empty($s['skipNonObjects'])) $items = array_values(array_filter($items, 'is_array'));
             foreach ($items as $it) $out[] = cc_tpl_clean_settings($s['item'] ?? [], cc_tpl_is_obj($it) ? $it : [], []);
+            if (!empty($s['keepIf'])) $out = array_values(array_filter($out, function ($it) use ($s) { return cc_tpl_cond($s['keepIf'], $it, false); }));
+            if (!empty($s['share'])) {   // each item's share of the list's total, in % (0 when the total is 0)
+                $of = $s['share']['of']; $num = function ($v) { return (is_int($v) || is_float($v)) ? $v : 0; };
+                $sum = 0; foreach ($out as $it) $sum += $num($it[$of] ?? 0);
+                foreach ($out as $i => $it) {
+                    $pct = $sum > 0 ? $num($it[$of] ?? 0) / $sum * 100 : 0;
+                    $out[$i][$s['share']['as']] = $pct;
+                    foreach (($s['share']['format'] ?? []) as $k => $dec) $out[$i][$k] = cc_fmt_num($pct, $dec);
+                }
+            }
             return $out;
+        case 'object':
+            return cc_tpl_clean_settings($s['item'] ?? [], cc_tpl_is_obj($raw) ? $raw : [], []);
         case 'calc':
         case 'flag':
             return 0;
@@ -120,7 +133,7 @@ function cc_tpl_clean_settings(array $settings, array $content, array $styles) {
     }
     // second pass: values computed from the clean ones
     foreach ($settings as $key => $s) {
-        if (($s['type'] ?? '') === 'calc') { $b = (!empty($s['fallback']) && !cc_tpl_truthy($out[$s['of']] ?? null)) ? ($out[$s['fallback']] ?? 0) : ($out[$s['of']] ?? 0); $out[$key] = max($s['min'] ?? -INF, min($s['max'] ?? INF, ((is_int($b) || is_float($b)) ? $b : 0) * ($s['mul'] ?? 1) + ($s['add'] ?? 0))); }
+        if (($s['type'] ?? '') === 'calc') { $b = (!empty($s['fallback']) && !cc_tpl_truthy($out[$s['of']] ?? null)) ? ($out[$s['fallback']] ?? 0) : ($out[$s['of']] ?? 0); $out[$key] = max($s['min'] ?? -INF, min($s['max'] ?? INF, ((is_int($b) || is_float($b)) ? $b : 0) / ($s['div'] ?? 1) * ($s['mul'] ?? 1) + ($s['add'] ?? 0))); }
         if (($s['type'] ?? '') === 'flag') $out[$key] = cc_tpl_cond($s['when'] ?? [], $out, !empty($s['any']));
         if (!empty($s['transform']) && isset(CC_TPL_TRANSFORMS[$s['transform']])) $out[$key] = (CC_TPL_TRANSFORMS[$s['transform']])($out[$key], $s, $out);
     }
@@ -148,7 +161,11 @@ const CC_TPL_TRANSFORMS = [
     'blockUrl' => 'cc_tpl_tf_block_url', 'cssUrl' => 'cc_tpl_tf_css_url', 'urlencode' => 'cc_tpl_tf_urlencode',
     'lines2br' => 'cc_tpl_tf_lines2br', 'videoEmbed' => 'cc_tpl_tf_video', 'fmtNum' => 'cc_tpl_tf_fmt_num',
     'extUrl' => 'cc_tpl_tf_ext_url', 'initials' => 'cc_tpl_tf_initials', 'mailto' => 'cc_tpl_tf_mailto',
+    'contactUrl' => 'cc_tpl_tf_contact_url', 'br' => 'cc_tpl_tf_br', 'repeat' => 'cc_tpl_tf_repeat',
 ];
+function cc_tpl_tf_contact_url($v) { $t = cc_tpl_text($v); return preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $t) ? 'mailto:' . $t : cc_ext_url($t); }
+function cc_tpl_tf_br($v) { return new CcTrusted(cc_br(cc_tpl_text($v))); }
+function cc_tpl_tf_repeat($v, $s) { return new CcTrusted(str_repeat((string)($s['text'] ?? ''), max(0, (int)((is_int($v) || is_float($v)) ? $v : 0)))); }
 function cc_tpl_tf_ext_url($v) { return cc_ext_url(cc_tpl_text($v)); }
 function cc_tpl_tf_initials($v) { return cc_initials(cc_tpl_text($v)); }
 function cc_tpl_tf_mailto($v) { $t = cc_tpl_text($v); return preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $t) ? 'mailto:' . $t : ''; }
