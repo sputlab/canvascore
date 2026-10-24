@@ -480,7 +480,7 @@ $pkg = function ($entries, $name = 'p.zip') use ($ut) {
     $z->close(); return $f;
 };
 $good = ['canvascore-admin/version.json' => '{"app":"9.0.0"}', 'canvascore-admin/assets/app.js' => 'x'];
-foreach (CC_UPDATE_REQUIRED as $f) if ($f !== 'version.json') $good["canvascore-admin/$f"] = "<?php // $f\n";
+foreach (CC_UPDATE_REQUIRED as $f) if ($f !== 'version.json') $good["canvascore-admin/$f"] = substr($f, -5) === '.json' ? '{}' : "<?php // $f\n";
 $f = $pkg($good);
 $sig = base64_encode(sodium_crypto_sign_detached(cc_update_signed_message($f), $sk));
 check('a package signed with a trusted key verifies', cc_update_verify($f, $sig, [$pk]));
@@ -513,6 +513,22 @@ check('swap: the new version takes the admin folder\'s place', strpos(file_get_c
 check('…the data folder inside it moves along, and the site\'s .htaccess is kept', file_get_contents("$adm/data/canvascore.sqlite") === 'db' && file_get_contents("$adm/.htaccess") === 'mine' && !is_dir("$ut/site/.old/data"));
 check('rollback: the old version and its data folder are back', cc_update_unswap($adm, "$ut/site/.old", "$ut/site/.failed") && file_get_contents("$adm/api.php") === 'old' && file_get_contents("$adm/data/canvascore.sqlite") === 'db' && !is_dir("$ut/site/.old") && !is_dir("$ut/site/.failed"));
 cc_backup_rrmdir($ut);
+
+echo "\nSHARED BLOCK DEFINITIONS\n";
+$defs = cc_block_defs();
+check('every definition in blocks/ loads', count($defs) === count(glob(__DIR__ . '/../../canvascore-admin/blocks/*.json')) && isset($defs['TEXT'], $defs['CALLOUT']));
+$unsafe = [];
+foreach ($defs as $t => $d) foreach ($d['settings'] ?? [] as $k => $s) {
+    if (($s['type'] ?? '') === 'richtext' && !in_array($k, CC_RICH_FIELDS[$t] ?? [], true)) $unsafe[] = "$t.$k";
+    foreach (($s['type'] ?? '') === 'list' ? ($s['item'] ?? []) : [] as $ik => $is) if (($is['type'] ?? '') === 'richtext' && !in_array("{$k}[].$ik", CC_RICH_FIELDS[$t] ?? [], true)) $unsafe[] = "$t.{$k}[].$ik";
+}
+check('every rich-text setting is also cleaned when it is saved (CC_RICH_FIELDS)', !$unsafe, implode(', ', $unsafe));
+$h = render_block(['id' => 'x1', 'type' => 'CALLOUT', 'content' => ['text' => '<p>ok</p><img src=x onerror=alert(1)><script>bad()</script>', 'title' => '<b>t</b>']]);
+check('rich text from a definition is sanitized on the site, plain text escaped', strpos($h, '<p>ok</p>') !== false && strpos($h, 'onerror') === false && strpos($h, 'bad()') === false && strpos($h, '&lt;b&gt;t&lt;/b&gt;') !== false);
+$p = function ($c) { return render_block(['id' => 'pg', 'type' => 'PROGRESS', 'content' => $c]); };
+check('a behaviour script comes from the definition, only when it is needed', strpos($p(['items' => [['value' => 5]]]), "getElementById('pg')") !== false && strpos($p(['items' => [['value' => 5]], 'animate' => false]), '<script>') === false && strpos($p(['items' => []]), '<script>') === false);
+check('content of the wrong type never stops a publish (it gets the defaults)', strpos(render_block(['id' => 'w', 'type' => 'TIMELINE', 'content' => ['items' => [['title' => ['x'], 'date' => ['y']]], 'layout' => ['z']]]), 'cc-timeline-left') !== false);
+check('a definition with a broken template is refused', (function () { try { cc_tpl_parse('{{#a}}x'); return false; } catch (Throwable $e) { return true; } })());
 
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

@@ -13,6 +13,8 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { renderBlock } from '../src/render/renderBlock.mjs';
+import { BLOCK_DEFS, blockDef, renderDefBlock } from '../src/render/blockDef.mjs';
+import { readdirSync } from 'node:fs';
 
 const phpScript = fileURLToPath(new URL('./render_php.php', import.meta.url));
 
@@ -330,6 +332,82 @@ for (const fx of deviceFixtures) {
   const hostile = /script|expression|body\{|nonsense|animation/i.test(js.join(''));
   if (JSON.stringify(js) !== JSON.stringify(php) || hostile) { failures++; console.error(`\n✗ DEVICE STYLES — ${fx.type} (${fx.id})\n   JS=${JSON.stringify(js)}\n   PHP=${JSON.stringify(php)}`); }
   else console.log(`✓ device styles: ${fx.type} (${fx.id})${js.length ? '' : ' — no rules'}`);
+}
+
+// --- Shared block definitions (canvascore-admin/blocks/): both engines must give the SAME HTML, byte for byte ---
+console.log('\nSHARED BLOCK DEFINITIONS');
+{
+  const files = readdirSync(fileURLToPath(new URL('../../canvascore-admin/blocks/', import.meta.url))).filter((f) => f.endsWith('.json')).sort();
+  const listed = BLOCK_DEFS.map((d) => d.type).sort();
+  const onDisk = files.map((f) => JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks/' + f, import.meta.url)), 'utf-8')).type).sort();
+  if (JSON.stringify(listed) !== JSON.stringify(onDisk)) { failures++; console.error(`✗ BLOCK_DEFS (blockDef.mjs) and the files in blocks/ differ: ${listed} / ${onDisk}`); }
+  else console.log(`✓ every definition file is listed in blockDef.mjs (${files.length})`);
+  const noScript = (h) => h.replace(/<script>[\s\S]*?<\/script>\n/g, '');
+  const H = `a'b"c<d>&e`;
+  const extra = { customId: 'my id!', customClass: `x"y z`, customCss: '__THIS__{color:red}', animDelay: 300, hoverEffect: 'lift' };
+  const st = { padding: '10px', textAlign: 'right', animation: 'fade-up', textPreset: 'h2', color: 'red;}x{' };
+  const hostile = [
+    { type: 'TEXT', content: { text: ['arr'], ...extra }, styles: st }, { type: 'TEXT', content: { text: 42 } },
+    { type: 'IMAGE', content: { src: 'javascript:alert(1)', alt: H, aspectRatio: '4 / 5', scale: '"x', objectFit: `a"b`, objectPosition: 'x;y', ...extra }, styles: st },
+    { type: 'IMAGE', content: { src: { o: 1 }, alt: ['x'], aspectRatio: '', scale: null } },
+    { type: 'ICON_BOX', content: { icon: ['x'], title: 7, description: null, ...extra }, styles: st },
+    { type: 'TESTIMONIAL', content: { quote: { o: 1 }, author: true, role: false, ...extra }, styles: st },
+    { type: 'CALLOUT', content: { variant: 'evil', title: '0', showIcon: false, ...extra }, styles: st }, { type: 'CALLOUT', content: { variant: ['info'], showIcon: 'no', title: ['t'] } },
+    { type: 'TIMELINE', content: { layout: 'alternate', items: ['junk', 7, null, { title: ['t'], date: { a: 1 }, text: H }], ...extra }, styles: st },
+    { type: 'STEPS', content: { items: Array.from({ length: 6 }, (_, i) => ({ title: 'S' + i, text: i % 2 ? H : '' })), ...extra }, styles: st },
+    { type: 'STEPS', content: { layout: 'vertical', items: { a: { title: 'object, not a list' } } } },
+    { type: 'PROGRESS', content: { height: '7px', items: ['junk', 9, { value: true, color: ['x'] }, { value: 33.333 }, { value: '66.66' }, { value: 12.25 }, { value: 0.05 }, { value: 150, color: 'url(x)' }, { value: -5 }] } },
+    { type: 'PROGRESS', content: { height: 999, showValue: false, animate: false, items: [{ value: 50, label: H }], ...extra }, styles: st },
+  ].map((b, i) => ({ id: 'h' + i, ...b }));
+  const defFixtures = [...fixtures.filter((f) => blockDef(f.type)), ...hostile];
+  const phpHtml = defFixtures.map((fx) => execFileSync('php', [phpScript], { input: JSON.stringify(fx) }).toString());
+  let same = 0;
+  defFixtures.forEach((fx, i) => {
+    if (noScript(phpHtml[i]) === renderBlock(fx)) { same++; return; }
+    failures++; console.error(`✗ ${fx.type} (${fx.id}): the two engines differ\n   JS =${JSON.stringify(renderBlock(fx)).slice(0, 300)}\n   PHP=${JSON.stringify(noScript(phpHtml[i])).slice(0, 300)}`);
+  });
+  console.log(`✓ the same HTML from both engines: ${same} of ${defFixtures.length} blocks (hostile values included)`);
+  const typeMix = new Set(defFixtures.map((f) => f.type));
+  for (const d of BLOCK_DEFS) if (!typeMix.has(d.type)) { failures++; console.error(`✗ no fixture for ${d.type}`); }
+
+  // The template language and the value cleaning, on definitions made for the test
+  const T = (template, settings, content, styles) => ({ def: { type: 'T', settings: settings || {}, template }, block: { id: 'b1', type: 'T', content: content || {}, styles: styles || {} } });
+  const cases = [
+    T('{{a}}|{{{a}}}|{{{r}}}|{{r}}', { a: { type: 'text' }, r: { type: 'richtext' } }, { a: `<b>'&"`, r: '<i>x</i>' }),
+    T('{{#l}}[{{@index}}{{@number}}{{@first}}{{@last}}:{{x}}/{{top}}]{{/l}}{{^l}}none{{/l}}', { l: { type: 'list', item: { x: { type: 'text', default: 'd' } } }, top: { type: 'text', default: 'T' } }, { l: [{ x: 'a' }, 'junk', { x: 'c' }] }),
+    T('{{#l}}x{{/l}}{{^l}}none{{/l}}{{#l?}}yes{{/l?}}{{^l?}}no{{/l?}}', { l: { type: 'list', item: {} } }, { l: [] }),
+    T('{{#e=b}}B{{/e=b}}{{^e=b}}notB{{/e=b}}:{{e}}:{{{opt.e.html}}}:{{opt.e.html}}', { e: { type: 'enum', default: 'a', options: [{ value: 'a', data: { html: '<u>a</u>' } }, { value: 'b', data: { html: '<u>b</u>' } }] } }, { e: 'b' }),
+    T('{{e}}', { e: { type: 'enum', default: 'a', options: [{ value: 'a' }, { value: '1' }] } }, { e: 1 }),
+    T('{{n}} {{i}} {{r}} {{big}} {{neg}} {{bad}}', { n: { type: 'number', min: 0, max: 10 }, i: { type: 'number', int: true, default: 3 }, r: { type: 'number', round: 2 }, big: { type: 'number' }, neg: { type: 'number', int: true }, bad: { type: 'number', default: 7 } },
+      { n: '12', i: '4.9', r: 1.005, big: 1e15, neg: -0.5, bad: '0x1A' }),
+    T('{{#t}}T{{/t}}{{#f}}F{{/f}}{{#d}}D{{/d}}{{#z}}Z{{/z}}{{#o}}O{{/o}}', { t: { type: 'bool', default: true }, f: { type: 'bool' }, d: { type: 'bool', default: true }, z: { type: 'bool' }, o: { type: 'bool' } }, { t: 0, f: '0', d: false, z: [], o: { k: 1 } }),
+    T('{{c}}|{{d}}|{{img}}|{{p}}|{{m}}|{{w}}', { c: { type: 'color', default: '#000' }, d: { type: 'color', default: '#111' }, img: { type: 'image' }, p: { type: 'text', pattern: '^[a-z]+$', default: 'def' }, m: { type: 'text', maxLength: 3 }, w: { type: 'text', default: 'x', fallbackWhenEmpty: true } },
+      { c: 'var(--cc-color-a, #fff)', d: 'red;}', img: ' JaVa\tscript:alert(1)', p: 'A1', m: 'àèìòù', w: '' }),
+    T('{{s}}|{{x}}|{{_s}}|{{{_style}}}|{{_classes}}|{{_id}}', { s: { type: 'text', from: 'styles', key: 'textAlign', default: 'left' }, x: { type: 'text', from: 'styles', key: 'nope', default: 'dflt' } }, { customClass: 'a<b' }, { textAlign: 'center', color: '#f00' }),
+    T('{{! a comment }}{{a.b.c}}{{#o}}{{k}}{{/o}}{{.}}', { o: { type: 'list', item: { k: { type: 'text' } } } }, { o: [{ k: 1 }] }),
+    T('{{#a}}unclosed', {}), T('{{/a}}', {}), T('{{#a}}{{/b}}', {}), T('{{}}', {}),
+  ];
+  const phpOut = JSON.parse(execFileSync('php', [fileURLToPath(new URL('./render_def.php', import.meta.url))], { input: JSON.stringify(cases) }).toString());
+  let ok = 0;
+  cases.forEach((c, i) => {
+    let js;
+    try { js = renderDefBlock(c.def, c.block, { innerId: 'b1', fields: false }); } catch { js = 'ERROR'; }
+    if (js === phpOut[i]) ok++;
+    else { failures++; console.error(`✗ template case ${i}: JS=${JSON.stringify(js)}  PHP=${JSON.stringify(phpOut[i])}`); }
+  });
+  console.log(`✓ template language and value cleaning: ${ok} of ${cases.length} cases the same in both engines`);
+  const expect = (i, want) => { const js = (() => { try { return renderDefBlock(cases[i].def, cases[i].block, { innerId: 'b1' }); } catch { return 'ERROR'; } })(); if (js !== want) { failures++; console.error(`✗ case ${i} gives ${JSON.stringify(js)}, expected ${JSON.stringify(want)}`); } };
+  expect(0, '&lt;b&gt;&#039;&amp;&quot;|&lt;b&gt;&#039;&amp;&quot;|<i>x</i>|&lt;i&gt;x&lt;/i&gt;');   // {{{ }}} prints raw only trusted HTML
+  expect(1, '[011:a/T][12:d/T][231:c/T]');   // @first / @last print 1 or nothing
+  expect(2, 'noneno');
+  expect(3, 'B:b:<u>b</u>:&lt;u&gt;b&lt;/u&gt;');
+  expect(4, '1');
+  expect(5, '10 4 1.01 1000000000000000 0 7');
+  expect(6, 'TO');
+  expect(7, 'var(--cc-color-a, #fff)|#111||def|àèì|x');
+  expect(8, 'center|dflt||text-align: center; color: #f00; | a&lt;b|b1');
+  expect(9, '1');
+  for (const i of [10, 11, 12, 13]) expect(i, 'ERROR');
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

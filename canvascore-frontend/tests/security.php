@@ -11,6 +11,7 @@ $web = $T . '/web'; $admin = $web . '/canvascore-admin'; $data = $T . '/canvasco
 @mkdir($admin, 0755, true);
 $src = realpath(__DIR__ . '/../../canvascore-admin');
 foreach (scandir($src) as $f) { if (is_file("$src/$f") && $f[0] !== '.') copy("$src/$f", "$admin/$f"); }
+@mkdir($admin . '/blocks'); foreach (glob($src . '/blocks/*.json') as $f) copy($f, $admin . '/blocks/' . basename($f));   // the shared block definitions
 file_put_contents($admin . '/index.html', '<!doctype html><title>editor</title>');
 // an SVG uploaded by an older version that the new check refuses (it must be moved away on the first request)
 @mkdir($web . '/uploads', 0755, true);
@@ -605,6 +606,7 @@ $release = function ($ver, array $edit = [], $key = null, array $extra = []) use
         $z->addFromString("canvascore-admin/$f", $c);
     }
     $z->addFromString('canvascore-admin/index.html', "<!doctype html><title>editor $ver</title>");
+    foreach (glob($src . '/blocks/*.json') as $f) $z->addFromString('canvascore-admin/blocks/' . basename($f), file_get_contents($f));
     foreach ($extra as $n => $c) $z->addFromString($n, $c);
     $z->close();
     file_put_contents("$zf.sig", base64_encode(sodium_crypto_sign_detached("canvascore-update-v1\n" . hash_file('sha256', $zf, true), $key ?: $tsk)));

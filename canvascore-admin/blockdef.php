@@ -1,0 +1,194 @@
+<?php
+// canvascore-admin/blockdef.php
+// Shared block definitions, server side: the twin of canvascore-frontend/src/render/blockDef.mjs (the format and the
+// template language are described there). A block with a file in blocks/ is rendered from it by both engines.
+// Library file: included by compiler.php.
+if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
+
+// PHP 8.0 (array_is_list() came in 8.1)
+if (!function_exists('array_is_list')) {
+    function array_is_list(array $a) { $i = 0; foreach ($a as $k => $_) { if ($k !== $i++) return false; } return true; }
+}
+
+// Trusted HTML: printed raw by {{{name}}} (sanitized rich text, definition data, the engine's own values)
+final class CcTrusted { public $h; function __construct($h) { $this->h = (string)$h; } }
+
+// Every definition in blocks/, by type. A file that can't be read or parsed is left out (and logged).
+function cc_block_defs() {
+    static $defs = null;
+    if ($defs !== null) return $defs;
+    $defs = [];
+    foreach (glob(__DIR__ . '/blocks/*.json') ?: [] as $f) {
+        $d = json_decode((string)file_get_contents($f), true);
+        if (!is_array($d) || !is_string($d['type'] ?? null)) { error_log('CanvasCore: block definition not readable: ' . basename($f)); continue; }
+        try { $d['_ast'] = cc_tpl_parse($d['template'] ?? ''); }
+        catch (Throwable $e) { error_log('CanvasCore: block definition ' . basename($f) . ': ' . $e->getMessage()); continue; }
+        $defs[$d['type']] = $d;
+    }
+    return $defs;
+}
+function cc_block_def($type) { $d = cc_block_defs(); return is_string($type) && isset($d[$type]) ? $d[$type] : null; }
+
+// ---------------------------------------------------------------------------------------------- values
+function cc_tpl_is_obj($v) { return is_array($v) && ($v === [] || !array_is_list($v)); }
+function cc_tpl_str($v) { return is_scalar($v) ? (string)$v : ''; }
+function cc_tpl_round($n, $dec) { $m = 10 ** $dec; $r = floor(abs($n) * $m + 0.5 + 1e-9) / $m; return $n < 0 ? -$r : $r; }
+// A number as text: no exponent, no trailing zeros (the same as numText() in blockDef.mjs)
+function cc_tpl_num_text($n) {
+    if (is_int($n)) return (string)$n;
+    if (floor($n) == $n && abs($n) < 9.0e15) return (string)(int)$n;
+    $s = rtrim(rtrim(number_format($n, 10, '.', ''), '0'), '.');
+    return $s === '' || $s === '-0' ? '0' : $s;
+}
+function cc_tpl_truthy($v) {
+    if ($v instanceof CcTrusted) return $v->h !== '';
+    if (is_array($v)) return $v !== [] || false;
+    return !empty($v);
+}
+function cc_tpl_text($v) {
+    if ($v instanceof CcTrusted) return $v->h;
+    if (is_int($v) || is_float($v)) return cc_tpl_num_text($v);
+    return cc_tpl_str($v);
+}
+
+// ---------------------------------------------------------------------------------------------- cleaning
+function cc_tpl_clean_value(array $s, $raw, $missing) {
+    $type = $s['type'] ?? '';
+    $def = $s['default'] ?? null;
+    switch ($type) {
+        case 'text':
+            $v = $missing ? cc_tpl_str($def ?? '') : cc_tpl_str($raw);
+            if (!empty($s['fallbackWhenEmpty']) && $v === '') $v = cc_tpl_str($def ?? '');
+            if (!empty($s['pattern']) && !preg_match('~' . str_replace('~', '\\~', $s['pattern']) . '~u', $v)) $v = cc_tpl_str($def ?? '');
+            if (!empty($s['maxLength'])) $v = mb_substr($v, 0, (int)$s['maxLength']);
+            return $v;
+        case 'richtext':
+            return new CcTrusted(cc_sanitize_html($missing ? cc_tpl_str($def ?? '') : cc_tpl_str($raw)));
+        case 'number':
+            $d = $def ?? 0;
+            $n = (!$missing && is_numeric($raw)) ? max($s['min'] ?? -INF, min($s['max'] ?? INF, (float)$raw)) : $d;
+            if (!empty($s['int'])) $n = (int)$n;
+            elseif (isset($s['round'])) $n = cc_tpl_round((float)$n, (int)$s['round']);
+            return $n;
+        case 'bool':
+            return ($def === true) ? ($missing || $raw !== false) : !$missing && !empty($raw);
+        case 'enum':
+            $v = cc_tpl_str($raw);
+            foreach ($s['options'] ?? [] as $o) if (!$missing && ($o['value'] ?? null) === $v) return $v;
+            return cc_tpl_str($def ?? '');
+        case 'color':
+            return cc_color(cc_tpl_str($raw), $def ?? '');
+        case 'image':
+            return cc_img_url($missing ? ($def ?? '') : cc_tpl_str($raw));
+        case 'list':
+            $items = (is_array($raw) && array_is_list($raw)) ? $raw : [];
+            if (!empty($s['max'])) $items = array_slice($items, 0, (int)$s['max']);
+            $out = [];
+            foreach ($items as $it) $out[] = cc_tpl_clean_settings($s['item'] ?? [], cc_tpl_is_obj($it) ? $it : [], []);
+            return $out;
+    }
+    return '';
+}
+function cc_tpl_clean_settings(array $settings, array $content, array $styles) {
+    $out = []; $opt = [];
+    foreach ($settings as $key => $s) {
+        $src = (($s['from'] ?? '') === 'styles') ? $styles : $content;
+        $k = $s['key'] ?? $key;
+        $missing = !array_key_exists($k, $src) || $src[$k] === null;
+        $out[$key] = cc_tpl_clean_value($s, $missing ? null : $src[$k], $missing);
+        if (($s['type'] ?? '') === 'enum') {
+            $data = [];
+            foreach ($s['options'] ?? [] as $o) if (($o['value'] ?? null) === $out[$key]) foreach (($o['data'] ?? []) as $dk => $dv) $data[$dk] = new CcTrusted($dv);
+            $opt[$key] = $data;
+        }
+        if (($s['type'] ?? '') === 'list' && !empty($s['count'])) $out[$s['count']['as']] = max($s['count']['min'] ?? 0, min($s['count']['max'] ?? PHP_INT_MAX, count($out[$key])));
+    }
+    if ($opt) $out['opt'] = $opt;
+    return $out;
+}
+
+// ---------------------------------------------------------------------------------------------- templates
+function cc_tpl_parse($src) {
+    $text = is_array($src) ? implode('', $src) : (string)$src;
+    $root = []; $stack = [['body' => &$root, 'name' => null]];
+    $last = 0;
+    preg_match_all('/\{\{\{\s*([^}]+?)\s*\}\}\}|\{\{([#^\/!]?)\s*([^}]*?)\s*\}\}/', $text, $ms, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+    foreach ($ms as $m) {
+        $top = count($stack) - 1;
+        if ($m[0][1] > $last) $stack[$top]['body'][] = substr($text, $last, $m[0][1] - $last);
+        $last = $m[0][1] + strlen($m[0][0]);
+        if (isset($m[1]) && $m[1][1] >= 0 && $m[1][0] !== '') { $stack[$top]['body'][] = ['v' => $m[1][0], 'raw' => true]; continue; }
+        $sigil = $m[2][0]; $name = $m[3][0];
+        if ($sigil === '!') continue;
+        if ($sigil === '#' || $sigil === '^') {
+            $node = ['s' => $name, 'inv' => $sigil === '^', 'body' => []];
+            if (substr($name, -1) === '?') { $node['kind'] = 'test'; $node['path'] = substr($name, 0, -1); }
+            elseif (strpos($name, '=') !== false) { $node['kind'] = 'eq'; $node['path'] = substr($name, 0, strpos($name, '=')); $node['eq'] = substr($name, strpos($name, '=') + 1); }
+            else { $node['kind'] = 'each'; $node['path'] = $name; }
+            $stack[$top]['body'][] = $node;
+            $i = count($stack[$top]['body']) - 1;
+            $stack[] = ['body' => &$stack[$top]['body'][$i]['body'], 'name' => $name];
+            continue;
+        }
+        if ($sigil === '/') {
+            if ($top < 1 || $stack[$top]['name'] !== $name) throw new RuntimeException('Template: {{/' . $name . '}} closes ' . ($stack[$top]['name'] !== null ? '{{#' . $stack[$top]['name'] . '}}' : 'nothing'));
+            array_pop($stack);
+            continue;
+        }
+        if ($name === '') throw new RuntimeException('Template: empty tag');
+        $stack[$top]['body'][] = ['v' => $name, 'raw' => false];
+    }
+    if (count($stack) > 1) throw new RuntimeException('Template: {{#' . $stack[count($stack) - 1]['name'] . '}} is not closed');
+    if ($last < strlen($text)) $root[] = substr($text, $last);
+    return $root;
+}
+
+function cc_tpl_lookup(array $scopes, $path) {
+    if ($path === '.') return end($scopes);
+    $parts = explode('.', $path);
+    $v = null;
+    for ($i = count($scopes) - 1; $i >= 0; $i--) if (is_array($scopes[$i]) && array_key_exists($parts[0], $scopes[$i])) { $v = $scopes[$i][$parts[0]]; break; }
+    for ($j = 1; $j < count($parts); $j++) $v = (is_array($v) && array_key_exists($parts[$j], $v)) ? $v[$parts[$j]] : null;
+    return $v;
+}
+function cc_tpl_render(array $nodes, array $scopes) {
+    $out = '';
+    foreach ($nodes as $n) {
+        if (is_string($n)) { $out .= $n; continue; }
+        if (isset($n['v'])) {
+            $v = cc_tpl_lookup($scopes, $n['v']);
+            $out .= ($n['raw'] && $v instanceof CcTrusted) ? $v->h : htmlspecialchars(cc_tpl_text($v));
+            continue;
+        }
+        $v = cc_tpl_lookup($scopes, $n['path']);
+        if ($n['kind'] === 'eq') { if ((cc_tpl_text($v) === $n['eq']) !== $n['inv']) $out .= cc_tpl_render($n['body'], $scopes); continue; }
+        if ($n['inv'] || $n['kind'] === 'test') { if (cc_tpl_truthy($v) !== $n['inv']) $out .= cc_tpl_render($n['body'], $scopes); continue; }
+        if (is_array($v) && $v !== [] && array_is_list($v)) {
+            $last = count($v) - 1;
+            foreach ($v as $i => $it) $out .= cc_tpl_render($n['body'], array_merge($scopes, [['@index' => $i, '@number' => $i + 1, '@first' => $i === 0, '@last' => $i === $last], $it]));
+        } elseif (cc_tpl_is_obj($v) && $v !== []) $out .= cc_tpl_render($n['body'], array_merge($scopes, [$v]));
+        elseif (!is_array($v) && cc_tpl_truthy($v)) $out .= cc_tpl_render($n['body'], $scopes);
+    }
+    return $out;
+}
+
+// Behaviour scripts of the blocks (site only): the definition's "script" names one
+const CC_TPL_SCRIPTS = ['progress' => 'cc_script_progress'];
+
+// The HTML of a block that has a definition (cc_render_block_body adds the custom CSS, render_block the device rules)
+function cc_render_def_block(array $def, array $block, $innerId) {
+    $styles = is_array($block['styles'] ?? null) ? $block['styles'] : [];
+    $content = is_array($block['content'] ?? null) ? $block['content'] : [];
+    $values = cc_tpl_clean_settings($def['settings'] ?? [], $content, $styles);
+    $rootStyles = $styles;
+    foreach ($def['rootStyleOmit'] ?? [] as $k) unset($rootStyles[$k]);
+    $field = [];
+    foreach ($def['settings'] ?? [] as $key => $s) if (!empty($s['inline'])) $field[$key] = new CcTrusted('');
+    $custom = !empty($content['customClass']) ? cc_tpl_str($content['customClass']) : '';
+    $script = '';
+    $fn = CC_TPL_SCRIPTS[$def['script'] ?? ''] ?? null;
+    if ($fn) $script = "<script>\n" . $fn($innerId) . "\n</script>\n";
+    $builtIn = ['_id' => $innerId, '_classes' => cc_effect_classes($styles, $content) . ($custom !== '' ? ' ' . $custom : ''),
+        '_style' => new CcTrusted(build_inline_style($rootStyles)), '_field' => $field, '_script' => new CcTrusted($script)];
+    return cc_tpl_render($def['_ast'], [$builtIn, $values]);
+}

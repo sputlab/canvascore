@@ -12,6 +12,7 @@ import { effectClasses, buttonHover } from './effects.mjs';
 import { ccPlain } from './blockRuntime.mjs';
 import { withTextPreset } from './typography.mjs';
 import { buttonPresetCss } from './kit.mjs';
+import { blockDef, renderDefBlock } from './blockDef.mjs';
 
 export function escapeHtml(s) {
   return String(s ?? '')
@@ -108,6 +109,7 @@ function toInt(v, d) {
 // ---- helpers shared by the "content" blocks (twins of cc_* in compiler.php) ----
 const COLOR_RE = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}|(?:rgb|rgba|hsl|hsla)\([0-9.,%\s/]+\)|var\(--[a-zA-Z0-9-]+(?:,\s*[#0-9a-zA-Z.,%()\s-]+)?\))$/;
 function ccColor(v, d) { v = String(v ?? '').trim(); if (v === '') return d; return COLOR_RE.test(v) ? v : d; }
+export { ccColor as ccColorValue };
 const ccIsNum = (v) => (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)));
 function ccNum(v, min, max, d) { return ccIsNum(v) ? Math.max(min, Math.min(max, Number(v))) : d; }
 function ccFmtNum(v, dec) {
@@ -315,6 +317,10 @@ function renderBlockBody(block, opts = {}) {
     return `<!-- Master: ${escapeHtml(content.name ?? '')} -->\n`;
   }
 
+  // A block with a shared definition (canvascore-admin/blocks/) is rendered from it, here and on the site
+  const def = blockDef(t);
+  if (def) return customCss + renderDefBlock(def, block, { innerId, fields: !!opts.fields });
+
   switch (t) {
     case 'SECTION': {
       const r = blockRoot(block);
@@ -337,21 +343,6 @@ function renderBlockBody(block, opts = {}) {
       html += `<div id="${r.id}" class="${r.className}" style="${buildInlineStyle(r.style)}">\n${childrenHtml}</div>\n`;
       return customCss + html;
     }
-
-    case 'TEXT':
-      return customCss + `<div id="${innerId}" class="cc-text${animClass}${innerClass}"${styleString}${field('text', 'Type your text…')}>\n${content.text ?? ''}\n</div>\n`;
-
-    case 'IMAGE': {
-      const src = escapeHtml(content.src ?? '');
-      const alt = escapeHtml(content.alt ?? '');
-      const fit = escapeHtml(content.objectFit ?? 'cover');
-      const pos = escapeHtml(content.objectPosition ?? 'center');
-      const scale = escapeHtml(content.scale ?? '1');
-      const ar = content.aspectRatio ?? 'auto';
-      const arStyle = (ar && ar !== 'auto') ? ` aspect-ratio:${escapeHtml(ar)};` : '';
-      return customCss + `<figure id="${innerId}" class="cc-image${animClass}${innerClass}" style="${styleAttr} margin:0; overflow:hidden;${arStyle}"><img src="${src}" alt="${alt}" loading="lazy" style="width:100%; height:100%; object-fit:${fit}; object-position:${pos}; transform:scale(${scale}); display:block; border-radius:inherit;"></figure>\n`;
-    }
-
     case 'BUTTON': {
       const url = escapeHtml(resolveInternalUrl(content.url ?? '#'));
       const text = escapeHtml(content.text || 'Click here');
@@ -423,23 +414,6 @@ function renderBlockBody(block, opts = {}) {
       if (!embed) return '';
       return customCss + `<div id="${innerId}" class="cc-video${animClass}${innerClass}"${styleString}>\n<div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:inherit;">\n<iframe src="${embed}" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allowfullscreen loading="lazy"></iframe>\n</div>\n</div>\n`;
     }
-
-    case 'ICON_BOX': {
-      const icon = escapeHtml(content.icon ?? '\u26a1');
-      const title = escapeHtml(content.title ?? '');
-      const desc = escapeHtml(content.description ?? '');
-      const align = escapeHtml(styles.textAlign ?? 'center');
-      const ibOwn = { ...styles }; delete ibOwn.textAlign; delete ibOwn.animation;
-      return customCss + `<div id="${innerId}" class="cc-icon-box${animClass}${innerClass}" style="${buildInlineStyle(ibOwn)}text-align:${align};">\n<div style="font-size:36px; margin-bottom:15px;">${icon}</div>\n<h3 style="margin:0 0 10px 0; font-size:18px;">${title}</h3>\n<p style="margin:0; font-size:14px; opacity:0.8;">${desc}</p>\n</div>\n`;
-    }
-
-    case 'TESTIMONIAL': {
-      const quote = escapeHtml(content.quote ?? '');
-      const author = escapeHtml(content.author ?? '');
-      const role = escapeHtml(content.role ?? '');
-      return customCss + `<div id="${innerId}" class="cc-testimonial${animClass}${innerClass}" style="${styleAttr}">\n<p style="font-size:16px; font-style:italic; margin:0 0 20px 0; line-height:1.6;">\u201c${quote}\u201d</p>\n<div style="font-weight:700; font-size:14px;">${author}</div>\n<div style="font-size:12px; opacity:0.6;">${role}</div>\n</div>\n`;
-    }
-
     case 'SLIDER': {
       const effect = content.effect ?? 'slide';
       const isFade = effect === 'fade';
@@ -686,56 +660,6 @@ function renderBlockBody(block, opts = {}) {
       }
       return customCss + `<div id="${innerId}" class="cc-divider cc-divider-${style}${animClass}${innerClass}" style="${styleAttr}">\n${inner}\n</div>\n`;
     }
-
-    case 'CALLOUT': {
-      const c = content;
-      const variants = {
-        info: ['#e0f2fe', '#0284c7', '#0c4a6e', '&#8505;'],
-        success: ['#dcfce7', '#16a34a', '#14532d', '&#10003;'],
-        warning: ['#fef3c7', '#d97706', '#78350f', '&#9888;'],
-        danger: ['#fee2e2', '#dc2626', '#7f1d1d', '&#10006;'],
-        note: ['#f1f5f9', '#64748b', '#1e293b', '&#9998;'],
-      };
-      const v = Object.prototype.hasOwnProperty.call(variants, c.variant) ? c.variant : 'info';
-      const [bg, bd, fg, ic] = variants[v];
-      const title = escapeHtml(c.title ?? '');
-      const text = c.text ?? '';
-      const showIcon = (c.showIcon ?? true) !== false;
-      return customCss + `<div id="${innerId}" class="cc-callout cc-callout-${v}${animClass}${innerClass}" role="note" style="${styleAttr} display:flex; gap:14px; padding:16px 18px; border-radius:10px; border-left:4px solid ${bd}; background:${bg}; color:${fg};">`
-        + (showIcon ? `<span class="cc-callout-icon" aria-hidden="true" style="font-size:20px; line-height:1.3; flex-shrink:0;">${ic}</span>` : '')
-        + `<div class="cc-callout-body" style="flex:1; min-width:0;">`
-        + (title !== '' ? `<div class="cc-callout-title" style="font-weight:700; margin-bottom:4px;">${title}</div>` : '')
-        + `<div class="cc-callout-text" style="font-size:15px; line-height:1.55;">${text}</div></div></div>\n`;
-    }
-
-    case 'STEPS': {
-      const c = content;
-      const items = Array.isArray(c.items) ? c.items : [];
-      const vertical = (c.layout ?? 'horizontal') === 'vertical';
-      const cols = Math.max(1, Math.min(4, items.length));
-      let css, rootStyle, numStyle;
-      if (vertical) {
-        css = `#${innerId} .cc-step{position:relative; padding-left:60px; padding-bottom:28px}#${innerId} .cc-step:last-child{padding-bottom:0}#${innerId} .cc-step:not(:last-child)::after{content:""; position:absolute; left:19px; top:44px; bottom:4px; width:2px; background:#e2e8f0}`;
-        rootStyle = ' list-style:none; margin:0; padding:0;';
-        numStyle = 'position:absolute; left:0; top:0; ';
-      } else {
-        css = `#${innerId} .cc-step{position:relative; text-align:center}#${innerId} .cc-step:not(:last-child)::after{content:""; position:absolute; top:19px; left:calc(50% + 28px); width:calc(100% - 32px); height:2px; background:#e2e8f0}@media(max-width:768px){#${innerId}.cc-steps-horizontal{grid-template-columns:1fr !important}#${innerId} .cc-step:not(:last-child)::after{display:none}}`;
-        rootStyle = ` list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:24px;`;
-        numStyle = 'margin:0 auto 14px; ';
-      }
-      let lis = '';
-      items.forEach((it, i) => {
-        const title = escapeHtml(it.title ?? '');
-        const text = escapeHtml(it.text ?? '');
-        lis += `<li class="cc-step"><div class="cc-step-num" style="${numStyle}display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; background:var(--brand-color, #3b82f6); color:#fff; font-weight:700;">${i + 1}</div>`
-          + `<h3 class="cc-step-title" style="margin:0 0 6px 0; font-size:17px;">${title}</h3>`
-          + (text !== '' ? `<p class="cc-step-text" style="margin:0; font-size:14px; color:#64748b; line-height:1.55;">${text}</p>` : '')
-          + `</li>`;
-      });
-      return customCss + `<style>${css}</style>`
-        + `<ol id="${innerId}" class="cc-steps cc-steps-${vertical ? 'vertical' : 'horizontal'}${animClass}${innerClass}" style="${styleAttr}${rootStyle}">${lis}</ol>\n`;
-    }
-
     case 'COUNTERS': {
       const c = content;
       const items = Array.isArray(c.items) ? c.items : [];
@@ -757,24 +681,6 @@ function renderBlockBody(block, opts = {}) {
       h += `</div>\n`;
       return customCss + h;
     }
-
-    case 'PROGRESS': {
-      const c = content;
-      const items = Array.isArray(c.items) ? c.items : [];
-      const hh = Math.trunc(ccNum(c.height ?? 10, 4, 30, 10));
-      const showValue = (c.showValue ?? true) !== false;
-      let rows = '';
-      for (const it of items) {
-        const label = escapeHtml(it.label ?? '');
-        const val = Math.round(ccNum(it.value ?? 0, 0, 100, 0) * 10) / 10;
-        const color = ccColor(it.color, 'var(--brand-color, #3b82f6)');
-        rows += `<div class="cc-progress-item" style="margin-bottom:18px;"><div class="cc-progress-head" style="display:flex; justify-content:space-between; font-size:14px; font-weight:600; margin-bottom:6px;"><span class="cc-progress-label">${label}</span>`
-          + (showValue ? `<span class="cc-progress-value">${val}%</span>` : '') + `</div>`
-          + `<div class="cc-progress-track" role="progressbar" aria-label="${label}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${val}" style="height:${hh}px; background:#e2e8f0; border-radius:999px; overflow:hidden;"><div class="cc-progress-fill" data-w="${val}" style="width:${val}%; height:100%; background:${color}; border-radius:999px;"></div></div></div>`;
-      }
-      return customCss + `<div id="${innerId}" class="cc-progress${animClass}${innerClass}" style="${styleAttr}">\n${rows}\n</div>\n`;
-    }
-
     case 'TABLE': {
       const c = content;
       const rows = ccLines(c.data ?? '').map((l) => l.split(/\s*\|\s*|\t/));
@@ -843,29 +749,6 @@ function renderBlockBody(block, opts = {}) {
       h += `</div>\n`;
       return customCss + h;
     }
-
-    case 'TIMELINE': {
-      const c = content;
-      const items = Array.isArray(c.items) ? c.items : [];
-      const alt = (c.layout ?? 'left') === 'alternate';
-      let css = `#${innerId}::before{content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:#e2e8f0}#${innerId} .cc-tl-item{position:relative; margin-bottom:28px}#${innerId} .cc-tl-item:last-child{margin-bottom:0}#${innerId} .cc-tl-dot{position:absolute; left:-34px; top:4px; width:20px; height:20px; border-radius:50%; background:var(--brand-color, #3b82f6); border:4px solid #fff; box-shadow:0 0 0 2px #e2e8f0; box-sizing:border-box}`;
-      if (alt) {
-        css += `@media(min-width:769px){#${innerId}{padding-left:0 !important}#${innerId}::before{left:50%; margin-left:-1px}#${innerId} .cc-tl-item{width:50%; box-sizing:border-box; padding-right:36px; text-align:right}#${innerId} .cc-tl-item:nth-child(even){margin-left:50%; padding-right:0; padding-left:36px; text-align:left}#${innerId} .cc-tl-dot{left:auto; right:-46px}#${innerId} .cc-tl-item:nth-child(even) .cc-tl-dot{right:auto; left:-46px}}`;
-      }
-      let lis = '';
-      for (const it of items) {
-        const date = escapeHtml(it.date ?? '');
-        const title = escapeHtml(it.title ?? '');
-        const text = escapeHtml(it.text ?? '');
-        lis += `<li class="cc-tl-item"><span class="cc-tl-dot" aria-hidden="true"></span>`
-          + (date !== '' ? `<div class="cc-tl-date" style="font-size:13px; font-weight:700; color:var(--brand-color, #3b82f6); margin-bottom:4px;">${date}</div>` : '')
-          + `<h3 class="cc-tl-title" style="margin:0 0 6px 0; font-size:18px;">${title}</h3>`
-          + (text !== '' ? `<p class="cc-tl-text" style="margin:0; font-size:14px; color:#64748b; line-height:1.55;">${text}</p>` : '')
-          + `</li>`;
-      }
-      return customCss + `<style>${css}</style><ol id="${innerId}" class="cc-timeline cc-timeline-${alt ? 'alternate' : 'left'}${animClass}${innerClass}" style="${styleAttr} list-style:none; margin:0; padding:0 0 0 34px; position:relative;">${lis}</ol>\n`;
-    }
-
     case 'LOGOS': {
       const c = content;
       const logos = Array.isArray(c.logos) ? c.logos : [];

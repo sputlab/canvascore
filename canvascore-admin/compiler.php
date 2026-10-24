@@ -3,6 +3,7 @@
 // Library file: included by the endpoints, never opened directly
 if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/blockdef.php';
 
 // Registry of the forms collected during the build (formId => recipient email)
 function &cc_form_registry() { static $r = []; return $r; }
@@ -1797,6 +1798,9 @@ function cc_render_block_body($block) {
         $customCss = "<style>\n" . $cssCode . "\n</style>\n";
     }
 
+    // A block with a shared definition (blocks/) is rendered from it, here and in the editor
+    if ($def = cc_block_def($block['type'])) return $customCss . cc_render_def_block($def, $block, $innerId);
+
     $childrenHtml = '';
     if (isset($block['children']) && is_array($block['children'])) {
         foreach ($block['children'] as $child) {
@@ -1828,22 +1832,6 @@ function cc_render_block_body($block) {
             $html .= $childrenHtml;
             $html .= "</div>\n";
             return $customCss . $html;
-
-        case 'TEXT':
-            $html = "<div id=\"$innerId\" class=\"cc-text$animClass$innerClass\"$styleString>\n" . cc_sanitize_html($block['content']['text'] ?? '') . "\n</div>\n";
-            return $customCss . $html;
-
-        case 'IMAGE':
-            $src = htmlspecialchars($block['content']['src'] ?? '');
-            $alt = htmlspecialchars($block['content']['alt'] ?? '');
-            $fit = htmlspecialchars($block['content']['objectFit'] ?? 'cover');
-            $pos = htmlspecialchars($block['content']['objectPosition'] ?? 'center');
-            $scale = htmlspecialchars($block['content']['scale'] ?? '1');
-            $ar = $block['content']['aspectRatio'] ?? 'auto';
-            $arStyle = ($ar && $ar !== 'auto') ? " aspect-ratio:" . htmlspecialchars($ar) . ";" : "";
-            $html = "<figure id=\"$innerId\" class=\"cc-image$animClass$innerClass\" style=\"$styleAttr margin:0; overflow:hidden;$arStyle\"><img src=\"$src\" alt=\"$alt\" loading=\"lazy\" style=\"width:100%; height:100%; object-fit:$fit; object-position:$pos; transform:scale($scale); display:block; border-radius:inherit;\"></figure>\n";
-            return $customCss . $html;
-
         case 'BUTTON':
             $url = htmlspecialchars($block['content']['url'] ?? '#');
             if (!preg_match('~^(?:f|ht)tps?://~i', $url) && $url !== '#') {
@@ -2174,57 +2162,6 @@ function cc_render_block_body($block) {
             }
             return $customCss . '<div id="' . $innerId . '" class="cc-divider cc-divider-' . $style . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n" . $inner . "\n</div>\n";
         }
-
-        case 'CALLOUT': {
-            $c = $block['content'] ?? [];
-            $variants = [
-                'info' => ['#e0f2fe', '#0284c7', '#0c4a6e', '&#8505;'],
-                'success' => ['#dcfce7', '#16a34a', '#14532d', '&#10003;'],
-                'warning' => ['#fef3c7', '#d97706', '#78350f', '&#9888;'],
-                'danger' => ['#fee2e2', '#dc2626', '#7f1d1d', '&#10006;'],
-                'note' => ['#f1f5f9', '#64748b', '#1e293b', '&#9998;'],
-            ];
-            $v = $c['variant'] ?? 'info';
-            if (!isset($variants[$v])) $v = 'info';
-            list($bg, $bd, $fg, $ic) = $variants[$v];
-            $title = htmlspecialchars($c['title'] ?? '');
-            $text = cc_sanitize_html($c['text'] ?? '');
-            $showIcon = ($c['showIcon'] ?? true) !== false;
-            $html = '<div id="' . $innerId . '" class="cc-callout cc-callout-' . $v . $animClass . $innerClass . '" role="note" style="' . $styleAttr . ' display:flex; gap:14px; padding:16px 18px; border-radius:10px; border-left:4px solid ' . $bd . '; background:' . $bg . '; color:' . $fg . ';">'
-                . ($showIcon ? '<span class="cc-callout-icon" aria-hidden="true" style="font-size:20px; line-height:1.3; flex-shrink:0;">' . $ic . '</span>' : '')
-                . '<div class="cc-callout-body" style="flex:1; min-width:0;">'
-                . ($title !== '' ? '<div class="cc-callout-title" style="font-weight:700; margin-bottom:4px;">' . $title . '</div>' : '')
-                . '<div class="cc-callout-text" style="font-size:15px; line-height:1.55;">' . $text . '</div></div></div>' . "\n";
-            return $customCss . $html;
-        }
-
-        case 'STEPS': {
-            $c = $block['content'] ?? [];
-            $items = array_values((isset($c['items']) && is_array($c['items'])) ? $c['items'] : []);
-            $vertical = (($c['layout'] ?? 'horizontal') === 'vertical');
-            $cols = max(1, min(4, count($items)));
-            if ($vertical) {
-                $css = '#' . $innerId . ' .cc-step{position:relative; padding-left:60px; padding-bottom:28px}#' . $innerId . ' .cc-step:last-child{padding-bottom:0}#' . $innerId . ' .cc-step:not(:last-child)::after{content:""; position:absolute; left:19px; top:44px; bottom:4px; width:2px; background:#e2e8f0}';
-                $rootStyle = ' list-style:none; margin:0; padding:0;';
-                $numStyle = 'position:absolute; left:0; top:0; ';
-            } else {
-                $css = '#' . $innerId . ' .cc-step{position:relative; text-align:center}#' . $innerId . ' .cc-step:not(:last-child)::after{content:""; position:absolute; top:19px; left:calc(50% + 28px); width:calc(100% - 32px); height:2px; background:#e2e8f0}@media(max-width:768px){#' . $innerId . '.cc-steps-horizontal{grid-template-columns:1fr !important}#' . $innerId . ' .cc-step:not(:last-child)::after{display:none}}';
-                $rootStyle = ' list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:24px;';
-                $numStyle = 'margin:0 auto 14px; ';
-            }
-            $lis = '';
-            foreach ($items as $i => $it) {
-                $title = htmlspecialchars($it['title'] ?? '');
-                $text = htmlspecialchars($it['text'] ?? '');
-                $lis .= '<li class="cc-step"><div class="cc-step-num" style="' . $numStyle . 'display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; background:var(--brand-color, #3b82f6); color:#fff; font-weight:700;">' . ($i + 1) . '</div>'
-                    . '<h3 class="cc-step-title" style="margin:0 0 6px 0; font-size:17px;">' . $title . '</h3>'
-                    . ($text !== '' ? '<p class="cc-step-text" style="margin:0; font-size:14px; color:#64748b; line-height:1.55;">' . $text . '</p>' : '')
-                    . '</li>';
-            }
-            return $customCss . '<style>' . $css . '</style>'
-                . '<ol id="' . $innerId . '" class="cc-steps cc-steps-' . ($vertical ? 'vertical' : 'horizontal') . $animClass . $innerClass . '" style="' . $styleAttr . $rootStyle . '">' . $lis . '</ol>' . "\n";
-        }
-
         case 'COUNTERS': {
             $c = $block['content'] ?? [];
             $items = array_values((isset($c['items']) && is_array($c['items'])) ? $c['items'] : []);
@@ -2249,28 +2186,6 @@ function cc_render_block_body($block) {
             $html .= '</div>' . "\n";
             return $customCss . $html;
         }
-
-        case 'PROGRESS': {
-            $c = $block['content'] ?? [];
-            $items = array_values((isset($c['items']) && is_array($c['items'])) ? $c['items'] : []);
-            $h = (int)cc_num($c['height'] ?? 10, 4, 30, 10);
-            $showValue = ($c['showValue'] ?? true) !== false;
-            $animate = ($c['animate'] ?? true) !== false;
-            $rows = '';
-            foreach ($items as $it) {
-                $label = htmlspecialchars($it['label'] ?? '');
-                $val = round(cc_num($it['value'] ?? 0, 0, 100, 0), 1);
-                $color = cc_color($it['color'] ?? '', 'var(--brand-color, #3b82f6)');
-                $rows .= '<div class="cc-progress-item" style="margin-bottom:18px;"><div class="cc-progress-head" style="display:flex; justify-content:space-between; font-size:14px; font-weight:600; margin-bottom:6px;"><span class="cc-progress-label">' . $label . '</span>'
-                    . ($showValue ? '<span class="cc-progress-value">' . $val . '%</span>' : '') . '</div>'
-                    . '<div class="cc-progress-track" role="progressbar" aria-label="' . $label . '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . $val . '" style="height:' . $h . 'px; background:#e2e8f0; border-radius:999px; overflow:hidden;"><div class="cc-progress-fill" data-w="' . $val . '" style="width:' . $val . '%; height:100%; background:' . $color . '; border-radius:999px;"></div></div></div>';
-            }
-            $html = '<div id="' . $innerId . '" class="cc-progress' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n" . $rows . "\n";
-            if ($animate && $items) $html .= "<script>\n" . cc_script_progress($innerId) . "\n</script>\n";
-            $html .= '</div>' . "\n";
-            return $customCss . $html;
-        }
-
         case 'TABLE': {
             $c = $block['content'] ?? [];
             $lines = cc_lines($c['data'] ?? '');
@@ -2343,29 +2258,6 @@ function cc_render_block_body($block) {
             $html .= '</div>' . "\n";
             return $customCss . $html;
         }
-
-        case 'TIMELINE': {
-            $c = $block['content'] ?? [];
-            $items = array_values((isset($c['items']) && is_array($c['items'])) ? $c['items'] : []);
-            $alt = (($c['layout'] ?? 'left') === 'alternate');
-            $css = '#' . $innerId . '::before{content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:#e2e8f0}#' . $innerId . ' .cc-tl-item{position:relative; margin-bottom:28px}#' . $innerId . ' .cc-tl-item:last-child{margin-bottom:0}#' . $innerId . ' .cc-tl-dot{position:absolute; left:-34px; top:4px; width:20px; height:20px; border-radius:50%; background:var(--brand-color, #3b82f6); border:4px solid #fff; box-shadow:0 0 0 2px #e2e8f0; box-sizing:border-box}';
-            if ($alt) {
-                $css .= '@media(min-width:769px){#' . $innerId . '{padding-left:0 !important}#' . $innerId . '::before{left:50%; margin-left:-1px}#' . $innerId . ' .cc-tl-item{width:50%; box-sizing:border-box; padding-right:36px; text-align:right}#' . $innerId . ' .cc-tl-item:nth-child(even){margin-left:50%; padding-right:0; padding-left:36px; text-align:left}#' . $innerId . ' .cc-tl-dot{left:auto; right:-46px}#' . $innerId . ' .cc-tl-item:nth-child(even) .cc-tl-dot{right:auto; left:-46px}}';
-            }
-            $lis = '';
-            foreach ($items as $it) {
-                $date = htmlspecialchars($it['date'] ?? '');
-                $title = htmlspecialchars($it['title'] ?? '');
-                $text = htmlspecialchars($it['text'] ?? '');
-                $lis .= '<li class="cc-tl-item"><span class="cc-tl-dot" aria-hidden="true"></span>'
-                    . ($date !== '' ? '<div class="cc-tl-date" style="font-size:13px; font-weight:700; color:var(--brand-color, #3b82f6); margin-bottom:4px;">' . $date . '</div>' : '')
-                    . '<h3 class="cc-tl-title" style="margin:0 0 6px 0; font-size:18px;">' . $title . '</h3>'
-                    . ($text !== '' ? '<p class="cc-tl-text" style="margin:0; font-size:14px; color:#64748b; line-height:1.55;">' . $text . '</p>' : '')
-                    . '</li>';
-            }
-            return $customCss . '<style>' . $css . '</style><ol id="' . $innerId . '" class="cc-timeline cc-timeline-' . ($alt ? 'alternate' : 'left') . $animClass . $innerClass . '" style="' . $styleAttr . ' list-style:none; margin:0; padding:0 0 0 34px; position:relative;">' . $lis . '</ol>' . "\n";
-        }
-
         case 'LOGOS': {
             $c = $block['content'] ?? [];
             $logos = array_values((isset($c['logos']) && is_array($c['logos'])) ? $c['logos'] : []);
@@ -2592,23 +2484,6 @@ function cc_render_block_body($block) {
         case 'HTML':
             $html = "<div id=\"$innerId\" class=\"cc-html-block$animClass$innerClass\"$styleString>\n" . ($block['content']['code'] ?? '') . "\n</div>\n";
             return $customCss . $html;
-
-        case 'ICON_BOX':
-            $icon = htmlspecialchars($block['content']['icon'] ?? '⚡');
-            $title = htmlspecialchars($block['content']['title'] ?? '');
-            $desc = htmlspecialchars($block['content']['description'] ?? '');
-            $align = htmlspecialchars($block['styles']['textAlign'] ?? 'center');
-            $ibOwn = $block['styles'] ?? []; unset($ibOwn['textAlign'], $ibOwn['animation']);
-            $html = "<div id=\"$innerId\" class=\"cc-icon-box$animClass$innerClass\" style=\"" . build_inline_style($ibOwn) . "text-align:$align;\">\n<div style=\"font-size:36px; margin-bottom:15px;\">$icon</div>\n<h3 style=\"margin:0 0 10px 0; font-size:18px;\">$title</h3>\n<p style=\"margin:0; font-size:14px; opacity:0.8;\">$desc</p>\n</div>\n";
-            return $customCss . $html;
-
-        case 'TESTIMONIAL':
-            $quote = htmlspecialchars($block['content']['quote'] ?? '');
-            $author = htmlspecialchars($block['content']['author'] ?? '');
-            $role = htmlspecialchars($block['content']['role'] ?? '');
-            $html = "<div id=\"$innerId\" class=\"cc-testimonial$animClass$innerClass\" style=\"$styleAttr\">\n<p style=\"font-size:16px; font-style:italic; margin:0 0 20px 0; line-height:1.6;\">&ldquo;$quote&rdquo;</p>\n<div style=\"font-weight:700; font-size:14px;\">$author</div>\n<div style=\"font-size:12px; opacity:0.6;\">$role</div>\n</div>\n";
-            return $customCss . $html;
-
         case 'FAQ':
             $html = "<div id=\"$innerId\" class=\"cc-faq$animClass$innerClass\" style=\"$styleAttr\">\n";
             if (isset($block['content']['items']) && is_array($block['content']['items'])) {

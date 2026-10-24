@@ -1,0 +1,16 @@
+{
+  "type": "TEXT",
+  "settings": {
+    "text": {
+      "type": "richtext",
+      "default": "",
+      "inline": "full",
+      "placeholder": "Type your text\u2026"
+    }
+  },
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-text{{_classes}}\"{{#_style?}} style=\"{{{_style}}}\"{{/_style?}}{{{_field.text}}}>\n",
+    "{{{text}}}\n",
+    "</div>\n"
+  ]
+}

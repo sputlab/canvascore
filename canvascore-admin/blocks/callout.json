@@ -1,0 +1,99 @@
+{
+  "type": "CALLOUT",
+  "settings": {
+    "variant": {
+      "type": "enum",
+      "default": "info",
+      "label": "Type",
+      "options": [
+        {
+          "value": "info",
+          "label": "Info",
+          "data": {
+            "bg": "#e0f2fe",
+            "border": "#0284c7",
+            "text": "#0c4a6e",
+            "icon": "&#8505;"
+          }
+        },
+        {
+          "value": "success",
+          "label": "Success",
+          "data": {
+            "bg": "#dcfce7",
+            "border": "#16a34a",
+            "text": "#14532d",
+            "icon": "&#10003;"
+          }
+        },
+        {
+          "value": "warning",
+          "label": "Warning",
+          "data": {
+            "bg": "#fef3c7",
+            "border": "#d97706",
+            "text": "#78350f",
+            "icon": "&#9888;"
+          }
+        },
+        {
+          "value": "danger",
+          "label": "Danger",
+          "data": {
+            "bg": "#fee2e2",
+            "border": "#dc2626",
+            "text": "#7f1d1d",
+            "icon": "&#10006;"
+          }
+        },
+        {
+          "value": "note",
+          "label": "Note",
+          "data": {
+            "bg": "#f1f5f9",
+            "border": "#64748b",
+            "text": "#1e293b",
+            "icon": "&#9998;"
+          }
+        }
+      ]
+    },
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Title (optional)"
+    },
+    "text": {
+      "type": "richtext",
+      "default": "",
+      "label": "Text (HTML allowed)",
+      "control": "code",
+      "rows": 5
+    },
+    "showIcon": {
+      "type": "bool",
+      "default": true,
+      "label": "Show icon"
+    }
+  },
+  "panel": [
+    {
+      "title": "Callout",
+      "icon": "Info",
+      "open": true,
+      "keys": [
+        "variant",
+        "title",
+        "text",
+        "showIcon"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-callout cc-callout-{{variant}}{{_classes}}\" role=\"note\" style=\"{{{_style}}} display:flex; gap:14px; padding:16px 18px; border-radius:10px; border-left:4px solid {{{opt.variant.border}}}; background:{{{opt.variant.bg}}}; color:{{{opt.variant.text}}};\">",
+    "{{#showIcon}}<span class=\"cc-callout-icon\" aria-hidden=\"true\" style=\"font-size:20px; line-height:1.3; flex-shrink:0;\">{{{opt.variant.icon}}}</span>{{/showIcon}}",
+    "<div class=\"cc-callout-body\" style=\"flex:1; min-width:0;\">",
+    "{{^title=}}<div class=\"cc-callout-title\" style=\"font-weight:700; margin-bottom:4px;\">{{title}}</div>{{/title=}}",
+    "<div class=\"cc-callout-text\" style=\"font-size:15px; line-height:1.55;\">{{{text}}}</div></div></div>\n"
+  ]
+}

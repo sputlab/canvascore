@@ -1,9 +1,12 @@
-// Content-tab panel of each block type (the Style and Advanced tabs are shared by all blocks).
+// Content-tab panel of each block type (the Style and Advanced tabs are shared by all blocks). A block with a shared
+// definition that has a "panel" gets a panel generated from its settings (SchemaPanel); the others have their own here.
+import React from 'react';
+import { BLOCK_DEFS } from '../../../render/blockDef.mjs';
+import SchemaPanel from '../SchemaPanel';
 import AccordionTabsPanel from './AccordionTabsPanel';
 import BeforeAfterPanel from './BeforeAfterPanel';
 import BusinessPanel from './BusinessPanel';
 import ButtonPanel from './ButtonPanel';
-import CalloutPanel from './CalloutPanel';
 import CollectionListPanel from './CollectionListPanel';
 import CountdownPanel from './CountdownPanel';
 import CountersPanel from './CountersPanel';
@@ -17,19 +20,13 @@ import FlexRowPanel from './FlexRowPanel';
 import SearchPanel from './SearchPanel';
 import HeroPanel from './HeroPanel';
 import HtmlPanel from './HtmlPanel';
-import IconBoxPanel from './IconBoxPanel';
-import ImagePanel from './ImagePanel';
 import LogosPanel from './LogosPanel';
 import MapsPanel from './MapsPanel';
 import PricingPanel from './PricingPanel';
-import ProgressPanel from './ProgressPanel';
 import SliderPanel from './SliderPanel';
-import StepsPanel from './StepsPanel';
 import TablePanel from './TablePanel';
 import TeamPanel from './TeamPanel';
-import TestimonialPanel from './TestimonialPanel';
 import TextPanel from './TextPanel';
-import TimelinePanel from './TimelinePanel';
 import VideoPanel from './VideoPanel';
 import BentoPanel from './BentoPanel';
 import SplitCtaPanel from './SplitCtaPanel';
@@ -58,7 +55,6 @@ export const CONTENT_PANELS = {
   BEFORE_AFTER: BeforeAfterPanel,
   BUSINESS: BusinessPanel,
   BUTTON: ButtonPanel,
-  CALLOUT: CalloutPanel,
   CARDS: GridCardsPanel,
   FLEX_ROW: FlexRowPanel,
   SEARCH: SearchPanel,
@@ -76,21 +72,15 @@ export const CONTENT_PANELS = {
   GRID: GridCardsPanel,
   HERO: HeroPanel,
   HTML: HtmlPanel,
-  ICON_BOX: IconBoxPanel,
-  IMAGE: ImagePanel,
   IMAGE_TEXT: TextPanel,
   LOGOS: LogosPanel,
   MAPS: MapsPanel,
   PRICING: PricingPanel,
-  PROGRESS: ProgressPanel,
   SLIDER: SliderPanel,
-  STEPS: StepsPanel,
   TABLE: TablePanel,
   TABS: AccordionTabsPanel,
   TEAM: TeamPanel,
-  TESTIMONIAL: TestimonialPanel,
   TEXT: TextPanel,
-  TIMELINE: TimelinePanel,
   VIDEO: VideoPanel,
   BENTO: BentoPanel,
   SPLIT_CTA: SplitCtaPanel,
@@ -111,3 +101,10 @@ export const CONTENT_PANELS = {
   ANNOUNCEMENT_BAR: AnnouncementBarPanel,
   NEWSLETTER: NewsletterPanel,
 };
+
+for (const def of BLOCK_DEFS) {
+  if (!def.panel || CONTENT_PANELS[def.type]) continue;
+  const Generated = ({ ctx }) => React.createElement(SchemaPanel, { def, ctx });
+  Generated.displayName = `SchemaPanel(${def.type})`;
+  CONTENT_PANELS[def.type] = Generated;
+}

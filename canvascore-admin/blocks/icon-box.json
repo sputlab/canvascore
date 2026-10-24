@@ -1,0 +1,50 @@
+{
+  "type": "ICON_BOX",
+  "rootStyleOmit": [
+    "textAlign"
+  ],
+  "settings": {
+    "icon": {
+      "type": "text",
+      "default": "\u26a1",
+      "label": "Icon / Emoji"
+    },
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Title"
+    },
+    "description": {
+      "type": "text",
+      "default": "",
+      "label": "Description",
+      "control": "textarea",
+      "rows": 3
+    },
+    "align": {
+      "type": "text",
+      "from": "styles",
+      "key": "textAlign",
+      "default": "center"
+    }
+  },
+  "panel": [
+    {
+      "title": "Icon Box Content",
+      "icon": "Star",
+      "open": true,
+      "keys": [
+        "icon",
+        "title",
+        "description"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-icon-box{{_classes}}\" style=\"{{{_style}}}text-align:{{align}};\">\n",
+    "<div style=\"font-size:36px; margin-bottom:15px;\">{{icon}}</div>\n",
+    "<h3 style=\"margin:0 0 10px 0; font-size:18px;\">{{title}}</h3>\n",
+    "<p style=\"margin:0; font-size:14px; opacity:0.8;\">{{description}}</p>\n",
+    "</div>\n"
+  ]
+}

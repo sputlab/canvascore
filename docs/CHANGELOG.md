@@ -35,8 +35,31 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   repository). `scripts/release-package.php` builds the editor, packs `canvascore-admin/` with it, runs the same checks
   a site makes, and signs the package. Both files are uploaded as assets of the GitHub release.
 
+- **Shared block definitions**: a block can now be described once, in `canvascore-admin/blocks/<name>.json`, as a
+  settings schema plus a template. The editor (`src/render/blockDef.mjs`) and the published site (`blockdef.php`)
+  read the same file, so the block has one rendering by construction instead of two renderers kept in step by hand.
+  - **Settings** (`text`, `richtext`, `number`, `bool`, `enum`, `color`, `image`, `list`) rebuild every value before it
+    reaches the template: a value of the wrong type or a hostile value gets the setting's default.
+  - **Templates** use a logic-light, Mustache-like language with escaping built in: `{{name}}` is always escaped;
+    `{{{name}}}` prints raw only trusted HTML (sanitized rich text, the definition's own data). Sections cover lists,
+    tests and equality.
+  - **The Content panel** is generated from the same schema (`SchemaPanel.jsx`).
+  - Behaviour scripts stay site-side, named by the definition.
+
+  First blocks moved to it: **Text, Image, Icon Box, Testimonial, Callout, Timeline, Steps and Progress Bars**. Their
+  published HTML is unchanged (checked byte for byte against the previous renderer), and the editor and the site now
+  give exactly the same HTML for them. `npm run test:parity` checks both engines on every definition, hostile values
+  included, and on the template language itself.
+
 ### Changed
 - The admin folder's `.htaccess` also blocks direct access to `publish.php`, `update.php` and `update-keys.php`.
+- Update packages must contain `blockdef.php` and the `blocks/` definitions.
+
+### Fixed
+- Publishing no longer stops on content of the wrong type in the blocks above (for example a list where a text was
+  expected, from an import): the value gets its default. An Image block no longer outputs a `javascript:` address
+  or an object-fit value that is not one of its choices, and a Progress bar colour that is not a colour gets the
+  brand colour.
 
 ## [0.20.0] - 2026-10-24 — Categories and tags, archives, scheduled publishing, faceted search
 

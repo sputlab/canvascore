@@ -178,6 +178,29 @@ try {
   click(buttonByText('+ Add event')); await sleep(40);
   check('TIMELINE: adding an event', content().items.length === 4);
 
+  // panels generated from the shared block definitions (canvascore-admin/blocks/)
+  addAndSelect('IMAGE'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Aspect Ratio'));
+  check('IMAGE: the panel generated from its definition shows every setting', ['Image URL', 'Alt Text (SEO)', 'Object-Fit Mode', 'Aspect Ratio', 'Focus / Object Position', 'Zoom (Scale)'].every((l) => !!field(l)));
+  st().updateBlock(st().blocks[0].id, { content: { src: 'a.jpg' } }); await sleep(40);
+  check('IMAGE: a missing value shows the setting\'s default (cover, auto, centre, zoom 1)', field('Object-Fit Mode').value === 'cover' && field('Aspect Ratio').value === 'auto' && field('Focus / Object Position').value === 'center' && field('Zoom (Scale)').value === '1');
+  setValue(field('Aspect Ratio'), '4 / 3'); setValue(field('Object-Fit Mode'), 'contain'); await sleep(40);
+  check('IMAGE: picking a choice updates the store', content().aspectRatio === '4 / 3' && content().objectFit === 'contain');
+  setValue(field('Zoom (Scale)'), '1.5'); await sleep(40);
+  check('IMAGE: the zoom slider stores a number', content().scale === 1.5);
+  check('IMAGE: the image field has the media library button', !!$$('button').find((b) => b.getAttribute('aria-label') === 'Choose from the media library'));
+  addAndSelect('ICON_BOX'); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Icon / Emoji'));
+  setValue(field('Icon / Emoji'), '\u2605'); await sleep(40);
+  check('ICON_BOX: text settings update the store; "textarea" gives several lines', content().icon === '\u2605' && field('Description').tagName === 'TEXTAREA');
+  addAndSelect('CALLOUT'); mount(React.createElement(PropertyPanel)); await waitFor(() => checkbox('Show icon'));
+  check('CALLOUT: a switch that is on by default shows checked', checkbox('Show icon').checked === true && field('Text').tagName === 'TEXTAREA');
+  click(checkbox('Show icon')); await sleep(40);
+  check('CALLOUT: …and turning it off stores false', content().showIcon === false);
+  addAndSelect('STEPS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('Steps Layout'));
+  click(buttonByText('Steps Layout')); await waitFor(() => field('Layout'));
+  setValue(field('Layout'), 'vertical'); await sleep(40);
+  check('STEPS: a closed section opens; its choice and its hint are there', content().layout === 'vertical' && doc.body.textContent.includes('becomes vertical on small screens'));
+  check('STEPS: each item card is titled from the definition', $$('span').some((x) => x.textContent === 'Step 1'));
+
   addAndSelect('LOGOS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add empty slot'));
   click(buttonByText('+ Add empty slot')); await sleep(40);
   check('LOGOS: adding an empty slot', content().logos.length === 6 && content().logos[5].src === '');
