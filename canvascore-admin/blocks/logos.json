@@ -1,0 +1,119 @@
+{
+  "type": "LOGOS",
+  "script": "logos",
+  "settings": {
+    "logos": {
+      "type": "list",
+      "item": {
+        "src": {
+          "type": "image",
+          "default": ""
+        },
+        "alt": {
+          "type": "text",
+          "default": ""
+        },
+        "href": {
+          "type": "text",
+          "default": "",
+          "trim": true
+        },
+        "link": {
+          "type": "text",
+          "default": "",
+          "key": "href",
+          "transform": "blockUrl"
+        },
+        "isLink": {
+          "type": "flag",
+          "when": {
+            "href": {
+              "not": [
+                ""
+              ]
+            },
+            "link": {
+              "not": [
+                "#"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "type": "enum",
+      "default": "grid",
+      "options": [
+        {
+          "value": "grid"
+        },
+        {
+          "value": "marquee"
+        }
+      ]
+    },
+    "title": {
+      "type": "text",
+      "default": ""
+    },
+    "columns": {
+      "type": "number",
+      "default": 5,
+      "min": 1,
+      "max": 8,
+      "int": true
+    },
+    "height": {
+      "type": "number",
+      "default": 48,
+      "min": 20,
+      "max": 120,
+      "int": true
+    },
+    "gap": {
+      "type": "number",
+      "default": 40,
+      "min": 8,
+      "max": 80,
+      "int": true
+    },
+    "grayscale": {
+      "type": "bool",
+      "default": true
+    },
+    "speed": {
+      "type": "number",
+      "default": 30,
+      "min": 10,
+      "max": 120,
+      "int": true
+    },
+    "direction": {
+      "type": "text",
+      "default": ""
+    },
+    "fade": {
+      "type": "bool",
+      "strict": true,
+      "default": false
+    },
+    "mobileColumns": {
+      "type": "calc",
+      "of": "columns",
+      "max": 3
+    }
+  },
+  "template": [
+    "<style>{{#grayscale}}#{{_id}} .cc-logo-item:hover img,#{{_id}} .cc-logo-item:focus-visible img{filter:none !important; opacity:1 !important}{{/grayscale}}",
+    "{{#layout=marquee}}@keyframes ccMq_{{_id}}{from{transform:translateX(0)}to{transform:translateX(-50%)}}#{{_id}} .cc-logos-track{animation:ccMq_{{_id}} {{speed}}s linear infinite{{#direction=right}} reverse{{/direction=right}}}#{{_id}} .cc-logos-marquee:hover .cc-logos-track{animation-play-state:paused}",
+    "{{#fade}}#{{_id}} .cc-logos-marquee{-webkit-mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)}{{/fade}}",
+    "@media(prefers-reduced-motion:reduce){#{{_id}} .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#{{_id}} .cc-logos-set[aria-hidden=\"true\"]{display:none}{{#fade}}#{{_id}} .cc-logos-marquee{-webkit-mask-image:none;mask-image:none}{{/fade}}}{{/layout=marquee}}",
+    "{{^layout=marquee}}@media(max-width:768px){#{{_id}} .cc-logos-grid{grid-template-columns:repeat({{mobileColumns}}, 1fr) !important}}{{/layout=marquee}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-logos{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "{{^title=}}<div class=\"cc-logos-title\" style=\"text-align:center; font-size:14px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:24px;\">{{title}}</div>{{/title=}}",
+    "{{#layout=marquee}}<div class=\"cc-logos-marquee\" style=\"overflow:hidden; contain:inline-size;\"><div class=\"cc-logos-track\" style=\"display:flex; width:max-content;\"><div class=\"cc-logos-set\" style=\"display:flex; align-items:center; gap:{{gap}}px; padding-right:{{gap}}px;\">{{#logos}}{{#isLink}}<a href=\"{{link}}\" class=\"cc-logo-item\" rel=\"noopener\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></a>{{/isLink}}{{^isLink}}<div class=\"cc-logo-item\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></div>{{/isLink}}{{/logos}}</div><div class=\"cc-logos-set\" aria-hidden=\"true\" style=\"display:flex; align-items:center; gap:{{gap}}px; padding-right:{{gap}}px;\">{{#logos}}{{#isLink}}<a href=\"{{link}}\" class=\"cc-logo-item\" rel=\"noopener\" tabindex=\"-1\" aria-hidden=\"true\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></a>{{/isLink}}{{^isLink}}<div class=\"cc-logo-item\" aria-hidden=\"true\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></div>{{/isLink}}{{/logos}}</div></div></div>{{/layout=marquee}}",
+    "{{^layout=marquee}}<div class=\"cc-logos-grid\" style=\"display:grid; grid-template-columns:repeat({{columns}}, 1fr); gap:{{gap}}px; align-items:center; justify-items:center;\">{{#logos}}{{#isLink}}<a href=\"{{link}}\" class=\"cc-logo-item\" rel=\"noopener\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></a>{{/isLink}}{{^isLink}}<div class=\"cc-logo-item\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></div>{{/isLink}}{{/logos}}</div>{{/layout=marquee}}",
+    "\n{{#layout=marquee}}{{#logos?}}{{{_script}}}{{/logos?}}{{/layout=marquee}}</div>\n"
+  ]
+}

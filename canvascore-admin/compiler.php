@@ -88,6 +88,27 @@ function cc_initials($name) {
 function cc_enc($s) { return rawurlencode((string)$s); }
 
 // Block scripts (nowdoc: no interpolation/escaping). Placeholders __ID__ / __DUR__.
+// Gallery: the lightbox (images open full size, arrows, swipe, keyboard)
+function cc_script_gallery($id) {
+    return "(function(){\n"
+        . "var root=document.getElementById('" . $id . "'); if(!root) return;\n"
+        . "var items=[].slice.call(root.querySelectorAll('a.cc-gal-item')); var box=root.querySelector('.cc-lightbox'); if(!box||!items.length) return;\n"
+        . "document.body.appendChild(box);\n"
+        . "var img=box.querySelector('.cc-lb-img'), cap=box.querySelector('.cc-lb-cap'), cur=0, last=null;\n"
+        . "function show(i){cur=(i+items.length)%items.length; var a=items[cur]; img.src=a.getAttribute('href'); var t=a.querySelector('img'); img.alt=t?t.alt:''; cap.textContent=a.getAttribute('data-caption')||'';}\n"
+        . "function open(i){last=document.activeElement; show(i); box.style.display='flex'; document.documentElement.style.overflow='hidden'; box.querySelector('.cc-lb-close').focus();}\n"
+        . "function close(){box.style.display='none'; document.documentElement.style.overflow=''; if(last&&last.focus) last.focus();}\n"
+        . "items.forEach(function(a,i){a.addEventListener('click',function(e){e.preventDefault(); open(i);});});\n"
+        . "box.querySelector('.cc-lb-close').addEventListener('click',close);\n"
+        . "box.querySelector('.cc-lb-prev').addEventListener('click',function(){show(cur-1);});\n"
+        . "box.querySelector('.cc-lb-next').addEventListener('click',function(){show(cur+1);});\n"
+        . "box.addEventListener('click',function(e){if(e.target===box) close();});\n"
+        . "document.addEventListener('keydown',function(e){if(box.style.display==='none') return; if(e.key==='Escape') close(); else if(e.key==='ArrowLeft') show(cur-1); else if(e.key==='ArrowRight') show(cur+1);});\n"
+        . "var sx=null; box.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});\n"
+        . "box.addEventListener('touchend',function(e){if(sx===null) return; var dx=e.changedTouches[0].clientX-sx; if(Math.abs(dx)>50) show(cur+(dx<0?1:-1)); sx=null;});\n"
+        . "box.addEventListener('keydown',function(e){if(e.key!=='Tab') return; var f=box.querySelectorAll('button'); var a=f[0], z=f[f.length-1]; if(e.shiftKey&&document.activeElement===a){e.preventDefault(); z.focus();} else if(!e.shiftKey&&document.activeElement===z){e.preventDefault(); a.focus();}});\n"
+        . "})();";
+}
 function cc_script_counters($id, $dur) {
     $js = <<<'JS'
 (function(){var root=document.getElementById('__ID__'); if(!root) return;
@@ -1925,177 +1946,6 @@ function cc_render_block_body($block) {
             $html .= "<button type=\"submit\" style=\"padding:12px 24px; background:var(--brand-color, #3b82f6); color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;\">$btnText</button>\n</form>\n</div>\n";
             return $customCss . $html;
 
-        case 'ACCORDION': {
-            $items = array_values((isset($block['content']['items']) && is_array($block['content']['items'])) ? $block['content']['items'] : []);
-            $multi = !empty($block['content']['allowMultiple']);
-            $openFirst = !empty($block['content']['openFirst']);
-            $icon = $block['content']['icon'] ?? 'plus';
-            $variant = $block['content']['variant'] ?? 'card';
-            $iconChar = $icon === 'chevron' ? '&#9662;' : ($icon === 'none' ? '' : '+');
-            $rot = $icon === 'chevron' ? 'rotate(180deg)' : 'rotate(45deg)';
-            $itemStyle = $variant === 'flat'
-                ? 'border-bottom:1px solid #e2e8f0;'
-                : 'margin-bottom:10px; background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;';
-            $sumStyle = 'display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 18px; font-weight:600; cursor:pointer; list-style:none;';
-            $bodyStyle = 'padding:4px 18px 16px; font-size:15px; color:#475569; line-height:1.6;';
-            $html  = '<div id="' . $innerId . '" class="cc-accordion' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n";
-            $html .= '<style>#' . $innerId . ' .cc-acc-item>summary{list-style:none}#' . $innerId . ' .cc-acc-item>summary::-webkit-details-marker{display:none}#' . $innerId . ' .cc-acc-icon{transition:transform .2s ease; display:inline-block; color:var(--brand-color, #3b82f6)}#' . $innerId . ' .cc-acc-item[open]>summary .cc-acc-icon{transform:' . $rot . '}</style>' . "\n";
-            foreach ($items as $i => $it) {
-                $title = htmlspecialchars($it['title'] ?? '');
-                $body = cc_sanitize_html($it['content'] ?? '');
-                $attrs = ($multi ? '' : ' name="' . $innerId . '"') . (($openFirst && $i === 0) ? ' open' : '');
-                $html .= '<details class="cc-acc-item"' . $attrs . ' style="' . $itemStyle . '">' . "\n";
-                $html .= '<summary style="' . $sumStyle . '"><span class="cc-acc-title">' . $title . '</span>' . ($iconChar !== '' ? '<span class="cc-acc-icon" aria-hidden="true">' . $iconChar . '</span>' : '') . '</summary>' . "\n";
-                $html .= '<div class="cc-acc-body" style="' . $bodyStyle . '">' . $body . '</div>' . "\n";
-                $html .= '</details>' . "\n";
-            }
-            $html .= '</div>' . "\n";
-            return $customCss . $html;
-        }
-
-        case 'TABS': {
-            $items = array_values((isset($block['content']['items']) && is_array($block['content']['items'])) ? $block['content']['items'] : []);
-            $variant = $block['content']['variant'] ?? 'underline';
-            $align = $block['content']['tabAlign'] ?? 'left';
-            $justify = $align === 'center' ? 'center' : ($align === 'right' ? 'flex-end' : 'flex-start');
-            $n = count($items);
-            $barStyle = 'display:flex; flex-wrap:wrap; gap:6px; justify-content:' . $justify . ';' . ($variant === 'underline' ? ' border-bottom:1px solid #e2e8f0;' : '');
-            $tabStyle = $variant === 'pills'
-                ? 'display:inline-block; padding:8px 16px; border-radius:999px; font-weight:600; font-size:14px; cursor:pointer; color:#475569; background:#f1f5f9;'
-                : 'display:inline-block; padding:10px 16px; font-weight:600; font-size:14px; cursor:pointer; color:#64748b; border-bottom:2px solid transparent; margin-bottom:-1px;';
-            $activeCss = $variant === 'pills'
-                ? 'background:var(--brand-color, #3b82f6) !important; color:#fff !important;'
-                : 'color:var(--brand-color, #3b82f6) !important; border-bottom-color:var(--brand-color, #3b82f6) !important;';
-            $css = '#' . $innerId . ' .cc-tab-input{position:absolute; opacity:0; width:0; height:0; pointer-events:none}#' . $innerId . ' .cc-tab-panel{display:none}';
-            for ($k = 1; $k <= $n; $k++) {
-                $css .= '#' . $innerId . ' .cc-tab-input:nth-of-type(' . $k . '):checked ~ .cc-tab-bar .cc-tab:nth-child(' . $k . '){' . $activeCss . '}';
-                $css .= '#' . $innerId . ' .cc-tab-input:nth-of-type(' . $k . '):checked ~ .cc-tab-panels .cc-tab-panel:nth-child(' . $k . '){display:block}';
-                $css .= '#' . $innerId . ' .cc-tab-input:nth-of-type(' . $k . '):focus-visible ~ .cc-tab-bar .cc-tab:nth-child(' . $k . '){outline:2px solid var(--brand-color, #3b82f6); outline-offset:2px}';
-            }
-            $inputs = ''; $labels = ''; $panels = '';
-            foreach ($items as $i => $it) {
-                $k = $i + 1;
-                $title = htmlspecialchars($it['title'] ?? '');
-                $body = cc_sanitize_html($it['content'] ?? '');
-                $inputs .= '<input type="radio" class="cc-tab-input" name="' . $innerId . '-tabs" id="' . $innerId . '-t' . $k . '"' . ($i === 0 ? ' checked' : '') . '>';
-                $labels .= '<label class="cc-tab" for="' . $innerId . '-t' . $k . '" style="' . $tabStyle . '">' . $title . '</label>';
-                $panels .= '<div class="cc-tab-panel" style="font-size:15px; line-height:1.6; color:#475569;">' . $body . '</div>';
-            }
-            $html  = '<div id="' . $innerId . '" class="cc-tabs' . $animClass . $innerClass . '" style="' . $styleAttr . ' position:relative;">' . "\n";
-            $html .= '<style>' . $css . '</style>' . "\n";
-            $html .= $inputs . "\n";
-            $html .= '<div class="cc-tab-bar" style="' . $barStyle . '">' . $labels . '</div>' . "\n";
-            $html .= '<div class="cc-tab-panels" style="padding-top:18px;">' . $panels . '</div>' . "\n";
-            $html .= '</div>' . "\n";
-            return $customCss . $html;
-        }
-
-        case 'PRICING': {
-            $plans = array_values((isset($block['content']['plans']) && is_array($block['content']['plans'])) ? $block['content']['plans'] : []);
-            $cols = intval($block['content']['columns'] ?? 0);
-            if ($cols < 1) $cols = max(1, min(4, count($plans)));
-            $cols = min($cols, 4);
-            $cards = '';
-            foreach ($plans as $pl) {
-                $hl = !empty($pl['highlighted']);
-                $name = htmlspecialchars($pl['name'] ?? '');
-                $price = htmlspecialchars($pl['price'] ?? '');
-                $period = htmlspecialchars($pl['period'] ?? '');
-                $desc = htmlspecialchars($pl['description'] ?? '');
-                $badge = htmlspecialchars($pl['badge'] ?? '');
-                $btnText = htmlspecialchars($pl['buttonText'] ?? '');
-                $btnUrl = htmlspecialchars(cc_block_url($pl['buttonUrl'] ?? '#'));
-                $cardStyle = 'position:relative; display:flex; flex-direction:column; padding:28px 24px; border-radius:14px; background:#fff; box-sizing:border-box; ' . ($hl ? 'border:2px solid var(--brand-color, #3b82f6); box-shadow:0 10px 30px rgba(15,23,42,0.12);' : 'border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(15,23,42,0.04);');
-                $badgeHtml = ($badge !== '') ? '<div class="cc-plan-badge" style="position:absolute; top:-12px; left:50%; transform:translateX(-50%); background:var(--brand-color, #3b82f6); color:#fff; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:4px 12px; border-radius:999px; white-space:nowrap;">' . $badge . '</div>' : '';
-                $periodHtml = ($period !== '') ? '<span class="cc-plan-period" style="font-size:14px; color:#64748b; margin-left:4px;">' . $period . '</span>' : '';
-                $descHtml = ($desc !== '') ? '<p class="cc-plan-desc" style="margin:10px 0 0 0; font-size:14px; color:#64748b; line-height:1.5;">' . $desc . '</p>' : '';
-                $feat = '';
-                $features = (isset($pl['features']) && is_array($pl['features'])) ? $pl['features'] : [];
-                foreach ($features as $f) {
-                    $f = trim((string)$f);
-                    if ($f === '') continue;
-                    $feat .= '<li style="display:flex; gap:10px; align-items:flex-start; margin:0 0 10px 0; font-size:14px; color:#334155;"><span aria-hidden="true" style="color:var(--brand-color, #3b82f6); font-weight:700;">&#10003;</span><span>' . htmlspecialchars($f) . '</span></li>';
-                }
-                $btnHtml = ($btnText !== '') ? '<a href="' . $btnUrl . '" class="cc-plan-btn" style="display:block; text-align:center; text-decoration:none; font-weight:700; padding:12px 18px; border-radius:8px; margin-top:auto; box-sizing:border-box; ' . ($hl ? 'background:var(--brand-color, #3b82f6); color:#fff;' : 'background:#f1f5f9; color:#0f172a;') . '">' . $btnText . '</a>' : '';
-                $cards .= '<div class="cc-plan' . ($hl ? ' cc-plan-hl' : '') . '" style="' . $cardStyle . '">' . $badgeHtml
-                    . '<h3 class="cc-plan-name" style="margin:0; font-size:18px; color:#0f172a;">' . $name . '</h3>'
-                    . '<div class="cc-plan-price" style="margin-top:14px; display:flex; align-items:baseline;"><span class="cc-plan-amount" style="font-size:38px; font-weight:800; color:#0f172a; line-height:1;">' . $price . '</span>' . $periodHtml . '</div>'
-                    . $descHtml
-                    . '<ul class="cc-plan-features" style="list-style:none; padding:0; margin:20px 0 24px 0;">' . $feat . '</ul>'
-                    . $btnHtml . '</div>';
-            }
-            $html  = '<style>@media(max-width:900px){#' . $innerId . ' .cc-pricing-grid{grid-template-columns:1fr !important}}</style>';
-            $html .= '<div id="' . $innerId . '" class="cc-pricing' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n";
-            $html .= '<div class="cc-pricing-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:24px; align-items:stretch; padding-top:12px;">' . $cards . '</div>' . "\n";
-            $html .= '</div>' . "\n";
-            return $customCss . $html;
-        }
-
-        case 'GALLERY': {
-            $images = array_values((isset($block['content']['images']) && is_array($block['content']['images'])) ? $block['content']['images'] : []);
-            $isMasonry = (($block['content']['layout'] ?? 'grid') === 'masonry');
-            $cols = max(1, min(6, intval($block['content']['columns'] ?? 3)));
-            $gap = max(0, min(80, intval($block['content']['gap'] ?? 12)));
-            $ar = $block['content']['aspectRatio'] ?? '1 / 1';
-            $radius = htmlspecialchars($block['content']['borderRadius'] ?? '8px');
-            $lightbox = (($block['content']['lightbox'] ?? true) !== false) && count($images) > 0;
-            $captions = !empty($block['content']['showCaptions']);
-            $mobCols = min($cols, 2);
-            $useAr = (!$isMasonry && $ar && $ar !== 'auto');
-            $containerStyle = $isMasonry
-                ? 'column-count:' . $cols . '; column-gap:' . $gap . 'px;'
-                : 'display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:' . $gap . 'px;';
-            $figStyle = $isMasonry ? 'margin:0 0 ' . $gap . 'px 0; break-inside:avoid;' : 'margin:0;';
-            $itemStyle = 'display:block; overflow:hidden; border-radius:' . $radius . ';' . ($useAr ? ' aspect-ratio:' . htmlspecialchars($ar) . ';' : '') . ($lightbox ? ' cursor:zoom-in;' : '');
-            $imgStyle = $useAr ? 'width:100%; height:100%; object-fit:cover; display:block;' : 'width:100%; height:auto; display:block;';
-            $figs = '';
-            foreach ($images as $im) {
-                $src = htmlspecialchars(cc_img_url($im['src'] ?? ''));
-                $alt = htmlspecialchars($im['alt'] ?? '');
-                $cap = htmlspecialchars($im['caption'] ?? '');
-                $imgHtml = '<img src="' . $src . '" alt="' . $alt . '" loading="lazy" style="' . $imgStyle . '">';
-                $inner = $lightbox
-                    ? '<a href="' . $src . '" class="cc-gal-item" data-caption="' . $cap . '" style="' . $itemStyle . '">' . $imgHtml . '</a>'
-                    : '<div class="cc-gal-item" style="' . $itemStyle . '">' . $imgHtml . '</div>';
-                $capHtml = ($captions && $cap !== '') ? '<figcaption class="cc-gal-cap" style="font-size:13px; color:#64748b; margin-top:6px;">' . $cap . '</figcaption>' : '';
-                $figs .= '<figure class="cc-gal-fig" style="' . $figStyle . '">' . $inner . $capHtml . '</figure>';
-            }
-            $mobCss = $isMasonry ? 'column-count:' . $mobCols . ' !important' : 'grid-template-columns:repeat(' . $mobCols . ', 1fr) !important';
-            $html  = '<style>@media(max-width:768px){#' . $innerId . ' .cc-gal-grid{' . $mobCss . '}}</style>';
-            $html .= '<div id="' . $innerId . '" class="cc-gallery' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n";
-            $html .= '<div class="cc-gal-grid" style="' . $containerStyle . '">' . $figs . '</div>' . "\n";
-            if ($lightbox) {
-                $btn = 'position:absolute; background:rgba(15,23,42,0.6); color:#fff; border:none; cursor:pointer; line-height:1; border-radius:999px; width:44px; height:44px; font-size:26px;';
-                $html .= '<div class="cc-lightbox" role="dialog" aria-modal="true" aria-label="Image viewer" style="display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(2,6,23,0.92); z-index:100000; align-items:center; justify-content:center; flex-direction:column;">'
-                    . '<button type="button" class="cc-lb-close" aria-label="Close" style="' . $btn . ' top:16px; right:16px;">&times;</button>'
-                    . '<button type="button" class="cc-lb-prev" aria-label="Previous" style="' . $btn . ' left:16px; top:50%; margin-top:-22px;">&#8249;</button>'
-                    . '<img class="cc-lb-img" alt="" style="max-width:90vw; max-height:78vh; object-fit:contain; border-radius:8px;">'
-                    . '<div class="cc-lb-cap" style="color:#e2e8f0; font-size:14px; margin-top:12px; text-align:center; padding:0 60px;"></div>'
-                    . '<button type="button" class="cc-lb-next" aria-label="Next" style="' . $btn . ' right:16px; top:50%; margin-top:-22px;">&#8250;</button>'
-                    . '</div>' . "\n";
-                $html .= "<script>\n(function(){\n"
-                    . "var root=document.getElementById('" . $innerId . "'); if(!root) return;\n"
-                    . "var items=[].slice.call(root.querySelectorAll('a.cc-gal-item')); var box=root.querySelector('.cc-lightbox'); if(!box||!items.length) return;\n"
-                    . "document.body.appendChild(box);\n"
-                    . "var img=box.querySelector('.cc-lb-img'), cap=box.querySelector('.cc-lb-cap'), cur=0, last=null;\n"
-                    . "function show(i){cur=(i+items.length)%items.length; var a=items[cur]; img.src=a.getAttribute('href'); var t=a.querySelector('img'); img.alt=t?t.alt:''; cap.textContent=a.getAttribute('data-caption')||'';}\n"
-                    . "function open(i){last=document.activeElement; show(i); box.style.display='flex'; document.documentElement.style.overflow='hidden'; box.querySelector('.cc-lb-close').focus();}\n"
-                    . "function close(){box.style.display='none'; document.documentElement.style.overflow=''; if(last&&last.focus) last.focus();}\n"
-                    . "items.forEach(function(a,i){a.addEventListener('click',function(e){e.preventDefault(); open(i);});});\n"
-                    . "box.querySelector('.cc-lb-close').addEventListener('click',close);\n"
-                    . "box.querySelector('.cc-lb-prev').addEventListener('click',function(){show(cur-1);});\n"
-                    . "box.querySelector('.cc-lb-next').addEventListener('click',function(){show(cur+1);});\n"
-                    . "box.addEventListener('click',function(e){if(e.target===box) close();});\n"
-                    . "document.addEventListener('keydown',function(e){if(box.style.display==='none') return; if(e.key==='Escape') close(); else if(e.key==='ArrowLeft') show(cur-1); else if(e.key==='ArrowRight') show(cur+1);});\n"
-                    . "var sx=null; box.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});\n"
-                    . "box.addEventListener('touchend',function(e){if(sx===null) return; var dx=e.changedTouches[0].clientX-sx; if(Math.abs(dx)>50) show(cur+(dx<0?1:-1)); sx=null;});\n"
-                    . "box.addEventListener('keydown',function(e){if(e.key!=='Tab') return; var f=box.querySelectorAll('button'); var a=f[0], z=f[f.length-1]; if(e.shiftKey&&document.activeElement===a){e.preventDefault(); z.focus();} else if(!e.shiftKey&&document.activeElement===z){e.preventDefault(); a.focus();}});\n"
-                    . "})();\n</script>\n";
-            }
-            $html .= '</div>' . "\n";
-            return $customCss . $html;
-        }
-
         case 'TABLE': {
             $c = $block['content'] ?? [];
             $lines = cc_lines($c['data'] ?? '');
@@ -2168,91 +2018,6 @@ function cc_render_block_body($block) {
             $html .= '</div>' . "\n";
             return $customCss . $html;
         }
-        case 'LOGOS': {
-            $c = $block['content'] ?? [];
-            $logos = array_values((isset($c['logos']) && is_array($c['logos'])) ? $c['logos'] : []);
-            $marquee = (($c['layout'] ?? 'grid') === 'marquee');
-            $title = htmlspecialchars($c['title'] ?? '');
-            $cols = (int)cc_num($c['columns'] ?? 5, 1, 8, 5);
-            $h = (int)cc_num($c['height'] ?? 48, 20, 120, 48);
-            $gap = (int)cc_num($c['gap'] ?? 40, 8, 80, 40);
-            $gray = ($c['grayscale'] ?? true) !== false;
-            $speed = (int)cc_num($c['speed'] ?? 30, 10, 120, 30);
-            $imgStyle = 'height:' . $h . 'px; width:auto; max-width:100%; object-fit:contain; display:block;' . ($gray ? ' filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;' : '');
-            $mk = function ($lg, $dup) use ($imgStyle) {
-                $src = htmlspecialchars($lg['src'] ?? '');
-                $alt = $dup ? '' : htmlspecialchars($lg['alt'] ?? '');
-                $href = cc_block_url($lg['href'] ?? '');
-                $img = '<img src="' . $src . '" alt="' . $alt . '" loading="lazy" style="' . $imgStyle . '">';
-                $box = 'display:flex; align-items:center; justify-content:center;';
-                if (trim((string)($lg['href'] ?? '')) !== '' && $href !== '#') {
-                    return '<a href="' . htmlspecialchars($href) . '" class="cc-logo-item" rel="noopener"' . ($dup ? ' tabindex="-1" aria-hidden="true"' : '') . ' style="' . $box . '">' . $img . '</a>';
-                }
-                return '<div class="cc-logo-item"' . ($dup ? ' aria-hidden="true"' : '') . ' style="' . $box . '">' . $img . '</div>';
-            };
-            $set1 = ''; $set2 = '';
-            foreach ($logos as $lg) { $set1 .= $mk($lg, false); $set2 .= $mk($lg, true); }
-            $css = $gray ? '#' . $innerId . ' .cc-logo-item:hover img,#' . $innerId . ' .cc-logo-item:focus-visible img{filter:none !important; opacity:1 !important}' : '';
-            if ($marquee) {
-                // direction: right plays the same loop backwards; fade: edges fade out (both off when missing, as before)
-                $reverse = ($c['direction'] ?? '') === 'right' ? ' reverse' : '';
-                $fade = ($c['fade'] ?? false) === true;
-                $css .= '@keyframes ccMq_' . $innerId . '{from{transform:translateX(0)}to{transform:translateX(-50%)}}#' . $innerId . ' .cc-logos-track{animation:ccMq_' . $innerId . ' ' . $speed . 's linear infinite' . $reverse . '}#' . $innerId . ' .cc-logos-marquee:hover .cc-logos-track{animation-play-state:paused}'
-                    . ($fade ? '#' . $innerId . ' .cc-logos-marquee{-webkit-mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)}' : '')
-                    . '@media(prefers-reduced-motion:reduce){#' . $innerId . ' .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#' . $innerId . ' .cc-logos-set[aria-hidden="true"]{display:none}' . ($fade ? '#' . $innerId . ' .cc-logos-marquee{-webkit-mask-image:none;mask-image:none}' : '') . '}';
-                $setStyle = 'display:flex; align-items:center; gap:' . $gap . 'px; padding-right:' . $gap . 'px;';
-                // contain:inline-size: the moving track (wider than the strip) never widens the page, a row or the editor
-                $body = '<div class="cc-logos-marquee" style="overflow:hidden; contain:inline-size;"><div class="cc-logos-track" style="display:flex; width:max-content;"><div class="cc-logos-set" style="' . $setStyle . '">' . $set1 . '</div><div class="cc-logos-set" aria-hidden="true" style="' . $setStyle . '">' . $set2 . '</div></div></div>';
-            } else {
-                $css .= '@media(max-width:768px){#' . $innerId . ' .cc-logos-grid{grid-template-columns:repeat(' . min($cols, 3) . ', 1fr) !important}}';
-                $body = '<div class="cc-logos-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:' . $gap . 'px; align-items:center; justify-items:center;">' . $set1 . '</div>';
-            }
-            return $customCss . '<style>' . $css . '</style><div id="' . $innerId . '" class="cc-logos' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
-                . ($title !== '' ? '<div class="cc-logos-title" style="text-align:center; font-size:14px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:24px;">' . $title . '</div>' : '')
-                . $body . "\n"
-                . ($marquee && $logos ? '<script>' . str_replace(['%ID%', '%SPEED%'], [$innerId, (string)$speed], CC_LOGOS_SCRIPT) . "</script>\n" : '')
-                . "</div>\n";
-        }
-
-        case 'TEAM': {
-            $c = $block['content'] ?? [];
-            $members = array_values((isset($c['members']) && is_array($c['members'])) ? $c['members'] : []);
-            $cols = (int)cc_num($c['columns'] ?? 0, 0, 4, 0);
-            if ($cols < 1) $cols = max(1, min(4, count($members)));
-            $shape = $c['photoShape'] ?? 'circle';
-            $radius = $shape === 'square' ? '0' : ($shape === 'rounded' ? '16px' : '50%');
-            $card = (($c['layout'] ?? 'card') === 'card');
-            $cardStyle = $card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:24px; ' : 'padding:8px; ';
-            $linkDefs = [['email', 'Email'], ['linkedin', 'LinkedIn'], ['twitter', 'X'], ['website', 'Website']];
-            $cells = '';
-            foreach ($members as $m) {
-                $name = htmlspecialchars($m['name'] ?? '');
-                $role = htmlspecialchars($m['role'] ?? '');
-                $bio = htmlspecialchars($m['bio'] ?? '');
-                $photo = trim((string)($m['photo'] ?? ''));
-                $pstyle = 'width:112px; height:112px; border-radius:' . $radius . '; margin:0 auto 14px; ';
-                if ($photo !== '') $media = '<img src="' . htmlspecialchars($photo) . '" alt="' . $name . '" loading="lazy" style="' . $pstyle . 'object-fit:cover; display:block;">';
-                else $media = '<div class="cc-member-initials" aria-hidden="true" style="' . $pstyle . 'background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; text-transform:uppercase;">' . htmlspecialchars(cc_initials($m['name'] ?? '')) . '</div>';
-                $links = '';
-                foreach ($linkDefs as $ld) {
-                    $raw = trim((string)($m[$ld[0]] ?? ''));
-                    if ($raw === '') continue;
-                    if ($ld[0] === 'email') { if (!preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $raw)) continue; $href = 'mailto:' . $raw; }
-                    else $href = cc_ext_url($raw);
-                    $links .= '<a href="' . htmlspecialchars($href) . '" class="cc-member-link" rel="noopener" aria-label="' . $name . ' - ' . $ld[1] . '" style="color:inherit;">' . $ld[1] . '</a>';
-                }
-                $cells .= '<div class="cc-member" style="' . $cardStyle . 'text-align:center;">' . $media
-                    . '<h3 class="cc-member-name" style="margin:0; font-size:18px;">' . $name . '</h3>'
-                    . ($role !== '' ? '<div class="cc-member-role" style="color:var(--brand-color, #3b82f6); font-weight:600; font-size:14px; margin-top:2px;">' . $role . '</div>' : '')
-                    . ($bio !== '' ? '<p class="cc-member-bio" style="margin:10px 0 0 0; font-size:14px; color:#64748b; line-height:1.55;">' . $bio . '</p>' : '')
-                    . ($links !== '' ? '<div class="cc-member-links" style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:12px; font-size:13px;">' . $links . '</div>' : '')
-                    . '</div>';
-            }
-            return $customCss . '<style>@media(max-width:768px){#' . $innerId . ' .cc-team-grid{grid-template-columns:repeat(' . min($cols, 2) . ', 1fr) !important}}@media(max-width:480px){#' . $innerId . ' .cc-team-grid{grid-template-columns:1fr !important}}</style>'
-                . '<div id="' . $innerId . '" class="cc-team' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
-                . '<div class="cc-team-grid" style="display:grid; grid-template-columns:repeat(' . $cols . ', 1fr); gap:24px;">' . $cells . '</div>' . "\n</div>\n";
-        }
-
         case 'BEFORE_AFTER': {
             $c = $block['content'] ?? [];
             $b = (isset($c['before']) && is_array($c['before'])) ? $c['before'] : [];

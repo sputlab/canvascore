@@ -8,12 +8,13 @@
 //
 //   settings   { key: { type, default, … } }: every value the template may use. Raw content never reaches the
 //              template: each value is rebuilt from its setting, so a wrong type or a hostile value gets the default.
-//     text      a string (numbers and booleans as PHP casts them; arrays and objects → ''); fallbackWhenEmpty,
+//     text      a string (numbers and booleans as PHP casts them; arrays and objects → ''); trim, fallbackWhenEmpty,
 //               pattern (a regex the whole value must match, else the default), maxLength
 //     richtext  HTML: sanitized by the server (cc_sanitize_html), as is in the editor; may be printed raw
 //     number    min, max, default; int (whole number) or round (decimals); parse: "int" reads the leading whole
 //               number of a text ("7px" → 7), as cc_int()
-//     bool      default true: anything but false is true; default false: true when PHP finds it non-empty
+//     bool      default true: anything but false is true; default false: true when PHP finds it non-empty;
+//               strict: only the value true
 //     enum      options [{ value, label, data? }]: one of the values, else the default. The chosen option's data
 //               (strings written in the definition, so trusted HTML) is opt.<key>.<name>
 //     color     a CSS colour (cc_color), else the default
@@ -22,12 +23,15 @@
 //     list      item: { key: setting } per item (a non-object item gets the defaults), or of: setting (a list of
 //               plain values, {{.}} in the loop); max; skipEmpty (drops the values that are empty once trimmed);
 //               count: { as, min, max } adds a top-level number: the item count, clamped
-//     calc      a number from another one: of, mul, add (e.g. a size that follows a thickness)
+//     calc      a number from another one: of (or fallback when that one is 0), mul, add, then min / max
+//     flag      true when its conditions on the other clean values hold ("when", all of them, or one with "any"):
+//               { key: true | false } (as a section sees it), { key: [texts] }, { key: { not: [texts] } }
 //     from: "styles" reads the value from the block's styles (after its text style) instead of its content.
 //     transform: once every value is clean, one of TRANSFORMS below (twins of the PHP ones): blockUrl (an internal
 //               link → {{BASE_URL}}…), cssUrl (for url('…')), urlencode, lines2br (escaped, a <br /> per line break:
 //               trusted), videoEmbed (a YouTube or Vimeo address → its player address, '' otherwise), fmtNum
-//               (thousands separators, decimals from the sibling named by decimalsFrom)
+//               (thousands separators, decimals from the sibling named by decimalsFrom), extUrl (https:// added when
+//               missing), initials (of a name), mailto (a valid address → mailto:…, else '')
 //   renderIf   a value that must be true, or the block (and its custom CSS) renders nothing
 //   script     the name of the block's behaviour script (site only; CC_TPL_SCRIPTS in blockdef.php)
 //
@@ -44,32 +48,39 @@
 //     Names can be dotted (opt.variant.bg). Built in: _id (the block's id), _classes (effect and custom classes,
 //     starting with a space), _style (the block's inline style, minus the keys in rootStyleOmit; trusted),
 //     _field.<key> (editor only: the in-place editing attributes of a setting with "inline"), _script (site only:
-//     the block's behaviour script, named by "script").
+//     the block's behaviour script, named by "script"), _lb and _rb ({ and }: a literal { can't stand right before a
+//     tag, so CSS like .x{{{#a}}…{{/a}}} is written .x{{{_lb}}}{{#a}}…{{/a}}{{{_rb}}}; the parser refuses the former).
 //
 // The engine knows no block: a new block needs a definition file, its line in BLOCK_DEFS below, and nothing else.
-import { ccImgUrl, ccCssUrl, ccColorValue, buildInlineStyle, resolveBlockUrl, ccFmtNum } from './renderBlock.mjs';
+import { ccImgUrl, ccCssUrl, ccColorValue, buildInlineStyle, resolveBlockUrl, ccFmtNum, ccExtUrlValue, ccInitialsValue } from './renderBlock.mjs';
 import { effectClasses } from './effects.mjs';
 import { withTextPreset } from './typography.mjs';
 
 // <defs:begin> one import per file in canvascore-admin/blocks/ (tests/parity.mjs checks the two lists agree)
+import ACCORDION from '../../../canvascore-admin/blocks/accordion.json' with { type: 'json' };
 import CALLOUT from '../../../canvascore-admin/blocks/callout.json' with { type: 'json' };
 import CARDS from '../../../canvascore-admin/blocks/cards.json' with { type: 'json' };
 import COUNTERS from '../../../canvascore-admin/blocks/counters.json' with { type: 'json' };
 import DIVIDER from '../../../canvascore-admin/blocks/divider.json' with { type: 'json' };
 import FAQ from '../../../canvascore-admin/blocks/faq.json' with { type: 'json' };
+import GALLERY from '../../../canvascore-admin/blocks/gallery.json' with { type: 'json' };
 import GRID from '../../../canvascore-admin/blocks/grid.json' with { type: 'json' };
 import HTML from '../../../canvascore-admin/blocks/html.json' with { type: 'json' };
 import ICON_BOX from '../../../canvascore-admin/blocks/icon-box.json' with { type: 'json' };
 import IMAGE_TEXT from '../../../canvascore-admin/blocks/image-text.json' with { type: 'json' };
 import IMAGE from '../../../canvascore-admin/blocks/image.json' with { type: 'json' };
+import LOGOS from '../../../canvascore-admin/blocks/logos.json' with { type: 'json' };
 import MAPS from '../../../canvascore-admin/blocks/maps.json' with { type: 'json' };
+import PRICING from '../../../canvascore-admin/blocks/pricing.json' with { type: 'json' };
 import PROGRESS from '../../../canvascore-admin/blocks/progress.json' with { type: 'json' };
 import STEPS from '../../../canvascore-admin/blocks/steps.json' with { type: 'json' };
+import TABS from '../../../canvascore-admin/blocks/tabs.json' with { type: 'json' };
+import TEAM from '../../../canvascore-admin/blocks/team.json' with { type: 'json' };
 import TESTIMONIAL from '../../../canvascore-admin/blocks/testimonial.json' with { type: 'json' };
 import TEXT from '../../../canvascore-admin/blocks/text.json' with { type: 'json' };
 import TIMELINE from '../../../canvascore-admin/blocks/timeline.json' with { type: 'json' };
 import VIDEO from '../../../canvascore-admin/blocks/video.json' with { type: 'json' };
-export const BLOCK_DEFS = [CALLOUT, CARDS, COUNTERS, DIVIDER, FAQ, GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, MAPS, PROGRESS, STEPS, TESTIMONIAL, TEXT, TIMELINE, VIDEO];
+export const BLOCK_DEFS = [ACCORDION, CALLOUT, CARDS, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PRICING, PROGRESS, STEPS, TABS, TEAM, TESTIMONIAL, TEXT, TIMELINE, VIDEO];
 // <defs:end>
 const BY_TYPE = new Map(BLOCK_DEFS.map((d) => [d.type, d]));
 export const blockDef = (type) => BY_TYPE.get(type) || null;
@@ -104,6 +115,8 @@ function cleanValue(s, raw, ctx) {
   switch (s.type) {
     case 'text': {
       let v = missing ? str(s.default ?? '') : str(raw);
+      // eslint-disable-next-line no-control-regex -- the characters PHP's trim() removes
+      if (s.trim) v = v.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');   // PHP's trim()
       if (s.fallbackWhenEmpty && v === '') v = str(s.default ?? '');
       if (s.pattern && !new RegExp(s.pattern, 'u').test(v)) v = str(s.default ?? '');
       if (s.maxLength) v = [...v].slice(0, s.maxLength).join('');
@@ -121,7 +134,7 @@ function cleanValue(s, raw, ctx) {
       else if (s.round !== undefined) n = roundTo(n, s.round);
       return n;
     }
-    case 'bool': return s.default === true ? raw !== false : !phpEmpty(raw);
+    case 'bool': return s.strict ? raw === true : s.default === true ? raw !== false : !phpEmpty(raw);
     case 'enum': {
       const v = str(raw);
       return (s.options || []).some((o) => o.value === v) && !missing ? v : str(s.default ?? '');
@@ -138,7 +151,7 @@ function cleanValue(s, raw, ctx) {
       }
       return items.map((it) => cleanSettings(s.item || {}, isObj(it) ? it : {}, {}, ctx));
     }
-    case 'calc': return 0;   // computed once the other values are clean
+    case 'calc': case 'flag': return 0;   // computed once the other values are clean
     default: return '';
   }
 }
@@ -159,11 +172,25 @@ function cleanSettings(settings, content, styles, ctx) {
   }
   // second pass: values computed from the clean ones
   for (const [key, s] of Object.entries(settings)) {
-    if (s.type === 'calc') { const b = out[s.of]; out[key] = (typeof b === 'number' ? b : 0) * (s.mul ?? 1) + (s.add ?? 0); }
+    if (s.type === 'calc') { const b = s.fallback && !truthy(out[s.of]) ? out[s.fallback] : out[s.of]; out[key] = Math.max(s.min ?? -Infinity, Math.min(s.max ?? Infinity, (typeof b === 'number' ? b : 0) * (s.mul ?? 1) + (s.add ?? 0))); }
+    if (s.type === 'flag') out[key] = condHolds(s.when || {}, out, !!s.any);
     if (s.transform && TRANSFORMS[s.transform]) out[key] = TRANSFORMS[s.transform](out[key], s, out);
   }
   if (Object.keys(opt).length) out.opt = opt;
   return out;
+}
+
+// A flag's conditions on the clean values: { key: true | false } (true / false as a section sees it), { key: [texts] }
+// (one of them), { key: { not: [texts] } } (none of them); all must hold, or one with "any"
+function condHolds(when, vals, any) {
+  const one = ([k, want]) => {
+    const v = vals[k];
+    if (want === true || want === false) return truthy(v) === want;
+    if (Array.isArray(want)) return want.includes(asText(v));
+    return !(want.not || []).includes(asText(v));
+  };
+  const list = Object.entries(when);
+  return any ? list.some(one) : list.every(one);
 }
 
 // Value transforms: twins of CC_TPL_TRANSFORMS in blockdef.php
@@ -182,6 +209,10 @@ const TRANSFORMS = {
     m = u.match(VIDEO_VM);
     return m ? 'https://player.vimeo.com/video/' + m[1] : '';
   },
+  extUrl: (v) => ccExtUrlValue(asText(v)),
+  initials: (v) => ccInitialsValue(asText(v)),
+  // a valid email address → mailto:…, anything else → ''
+  mailto: (v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(asText(v)) ? 'mailto:' + asText(v) : ''),
   fmtNum: (v, s, sib) => ccFmtNum(typeof v === 'number' ? v : 0, s.decimalsFrom ? sib[s.decimalsFrom] : (s.decimals ?? 0)),
 };
 
@@ -197,10 +228,14 @@ export function parseTemplate(src) {
     const top = stack[stack.length - 1];
     if (m.index > last) top.body.push(text.slice(last, m.index));
     last = TAG.lastIndex;
-    if (m[1] !== undefined) { top.body.push({ v: m[1], raw: true }); continue; }
+    if (m[1] !== undefined) {
+      if (m[1].startsWith('{')) throw new Error(`Template: a literal { before {{{ (write {{{_lb}}}): ${m[1]}`);
+      top.body.push({ v: m[1], raw: true }); continue;
+    }
     const [sigil, name] = [m[2], m[3]];
     if (sigil === '!') continue;
     if (sigil === '#' || sigil === '^') {
+      if (name.startsWith('{')) throw new Error(`Template: a literal { before {{ (write {{{_lb}}}): ${name}`);
       const node = { s: name, inv: sigil === '^', body: [] };
       if (name.endsWith('?')) Object.assign(node, { kind: 'test', path: name.slice(0, -1) });
       else if (name.includes('=')) Object.assign(node, { kind: 'eq', path: name.slice(0, name.indexOf('=')), eq: name.slice(name.indexOf('=') + 1) });
@@ -215,6 +250,7 @@ export function parseTemplate(src) {
       continue;
     }
     if (name === '') throw new Error('Template: empty tag');
+    if (name.startsWith('{')) throw new Error(`Template: a literal { before {{ (write {{{_lb}}}): ${name}`);
     top.body.push({ v: name, raw: false });
   }
   if (stack.length > 1) throw new Error(`Template: {{#${stack[stack.length - 1].name}}} is not closed`);
@@ -271,6 +307,6 @@ export function renderDefBlock(def, block, host) {
     if (s.inline) field[key] = trusted(host.fields ? ` data-cc-field="${key}" contenteditable="true" data-cc-placeholder="${esc(s.placeholder || '')}"` : '');
   }
   if (def.renderIf && !truthy(values[def.renderIf])) return null;   // nothing at all, not even the custom CSS
-  const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted('') };
+  const builtIn = { _id: host.innerId, _classes: anim + (custom !== '' ? ' ' + custom : ''), _style: trusted(buildInlineStyle(rootStyles)), _field: field, _script: trusted(''), _lb: trusted('{'), _rb: trusted('}') };
   return renderNodes(parsed(def), [builtIn, values]);
 }

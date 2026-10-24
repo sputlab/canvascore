@@ -346,8 +346,9 @@ try {
   {
     const key = (el, k, extra = {}) => el.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
     useStore.setState({ currentView: 'manager', userRole: 'admin', pages: PAGES.map((p) => ({ ...p })) });
-    mount(React.createElement(AdminLayout, null, React.createElement(PageManager))); await sleep(60);
+    mount(React.createElement(AdminLayout, null, React.createElement(PageManager)));
     const delBtn = () => $('[aria-label="Delete Contact"]');
+    await waitFor(delBtn);
     click(delBtn());
     let dlg = await waitFor(() => $('[role="alertdialog"]'));
     check('deleting a page asks in an in-app dialog (no browser confirm)', !!dlg && /Delete the page "Contact"\?/.test(dlg.textContent) && dlg.getAttribute('aria-modal') === 'true');

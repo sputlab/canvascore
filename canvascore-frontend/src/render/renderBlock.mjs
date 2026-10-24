@@ -101,11 +101,6 @@ export function resolveBlockUrl(url) {
   return '{{BASE_URL}}' + clean.replace(/^\/+/, '');
 }
 
-function toInt(v, d) {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : d;
-}
-
 // ---- helpers shared by the "content" blocks (twins of cc_* in compiler.php) ----
 const COLOR_RE = /^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}|(?:rgb|rgba|hsl|hsla)\([0-9.,%\s/]+\)|var\(--[a-zA-Z0-9-]+(?:,\s*[#0-9a-zA-Z.,%()\s-]+)?\))$/;
 function ccColor(v, d) { v = String(v ?? '').trim(); if (v === '') return d; return COLOR_RE.test(v) ? v : d; }
@@ -123,6 +118,7 @@ export function ccFmtNum(v, dec) {
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return parts.join('.');
 }
+export { ccExtUrl as ccExtUrlValue, ccInitials as ccInitialsValue };
 function ccExtUrl(v) {
   v = String(v ?? '').trim();
   if (v === '') return '';
@@ -438,153 +434,6 @@ function renderBlockBody(block, opts = {}) {
       return customCss + `<div id="${innerId}" class="cc-form-block${animClass}${innerClass}"${styleString}>\n<div style="margin-bottom:20px;"${field('title', 'Form title')}>${title}</div>\n<form id="${formId}" action="{{BASE_URL}}canvascore-admin/submit_form.php" method="POST">\n<input type="hidden" name="_form" value="${formId}">\n<input type="hidden" name="_success" value="${successMsg}">\n<input type="text" name="_hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute; left:-9999px; width:0; height:0; opacity:0;">\n${fieldsHtml}<button type="submit" style="padding:12px 24px; background:var(--brand-color, #3b82f6); color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">${btnText}</button>\n</form>\n</div>\n`;
     }
 
-    case 'ACCORDION': {
-      const items = Array.isArray(content.items) ? content.items : [];
-      const multi = !!content.allowMultiple;
-      const openFirst = !!content.openFirst;
-      const icon = content.icon ?? 'plus';
-      const variant = content.variant ?? 'card';
-      const iconChar = icon === 'chevron' ? '&#9662;' : (icon === 'none' ? '' : '+');
-      const rot = icon === 'chevron' ? 'rotate(180deg)' : 'rotate(45deg)';
-      const itemStyle = variant === 'flat'
-        ? 'border-bottom:1px solid #e2e8f0;'
-        : 'margin-bottom:10px; background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;';
-      const sumStyle = 'display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 18px; font-weight:600; cursor:pointer; list-style:none;';
-      const bodyStyle = 'padding:4px 18px 16px; font-size:15px; color:#475569; line-height:1.6;';
-      let h = `<div id="${innerId}" class="cc-accordion${animClass}${innerClass}" style="${styleAttr}">\n`;
-      h += `<style>#${innerId} .cc-acc-item>summary{list-style:none}#${innerId} .cc-acc-item>summary::-webkit-details-marker{display:none}#${innerId} .cc-acc-icon{transition:transform .2s ease; display:inline-block; color:var(--brand-color, #3b82f6)}#${innerId} .cc-acc-item[open]>summary .cc-acc-icon{transform:${rot}}</style>\n`;
-      items.forEach((it, i) => {
-        const attrs = (multi ? '' : ` name="${innerId}"`) + ((openFirst && i === 0) ? ' open' : '');
-        h += `<details class="cc-acc-item"${attrs} style="${itemStyle}">\n`;
-        h += `<summary style="${sumStyle}"><span class="cc-acc-title">${escapeHtml(it.title ?? '')}</span>${iconChar !== '' ? `<span class="cc-acc-icon" aria-hidden="true">${iconChar}</span>` : ''}</summary>\n`;
-        h += `<div class="cc-acc-body" style="${bodyStyle}">${it.content ?? ''}</div>\n`;
-        h += `</details>\n`;
-      });
-      h += `</div>\n`;
-      return customCss + h;
-    }
-
-    case 'TABS': {
-      const items = Array.isArray(content.items) ? content.items : [];
-      const variant = content.variant ?? 'underline';
-      const align = content.tabAlign ?? 'left';
-      const justify = align === 'center' ? 'center' : (align === 'right' ? 'flex-end' : 'flex-start');
-      const n = items.length;
-      const barStyle = `display:flex; flex-wrap:wrap; gap:6px; justify-content:${justify};` + (variant === 'underline' ? ' border-bottom:1px solid #e2e8f0;' : '');
-      const tabStyle = variant === 'pills'
-        ? 'display:inline-block; padding:8px 16px; border-radius:999px; font-weight:600; font-size:14px; cursor:pointer; color:#475569; background:#f1f5f9;'
-        : 'display:inline-block; padding:10px 16px; font-weight:600; font-size:14px; cursor:pointer; color:#64748b; border-bottom:2px solid transparent; margin-bottom:-1px;';
-      const activeCss = variant === 'pills'
-        ? 'background:var(--brand-color, #3b82f6) !important; color:#fff !important;'
-        : 'color:var(--brand-color, #3b82f6) !important; border-bottom-color:var(--brand-color, #3b82f6) !important;';
-      let css = `#${innerId} .cc-tab-input{position:absolute; opacity:0; width:0; height:0; pointer-events:none}#${innerId} .cc-tab-panel{display:none}`;
-      for (let k = 1; k <= n; k++) {
-        css += `#${innerId} .cc-tab-input:nth-of-type(${k}):checked ~ .cc-tab-bar .cc-tab:nth-child(${k}){${activeCss}}`;
-        css += `#${innerId} .cc-tab-input:nth-of-type(${k}):checked ~ .cc-tab-panels .cc-tab-panel:nth-child(${k}){display:block}`;
-        css += `#${innerId} .cc-tab-input:nth-of-type(${k}):focus-visible ~ .cc-tab-bar .cc-tab:nth-child(${k}){outline:2px solid var(--brand-color, #3b82f6); outline-offset:2px}`;
-      }
-      let inputs = '', labels = '', panels = '';
-      items.forEach((it, i) => {
-        const k = i + 1;
-        inputs += `<input type="radio" class="cc-tab-input" name="${innerId}-tabs" id="${innerId}-t${k}"${i === 0 ? ' checked' : ''}>`;
-        labels += `<label class="cc-tab" for="${innerId}-t${k}" style="${tabStyle}">${escapeHtml(it.title ?? '')}</label>`;
-        panels += `<div class="cc-tab-panel" style="font-size:15px; line-height:1.6; color:#475569;">${it.content ?? ''}</div>`;
-      });
-      let h = `<div id="${innerId}" class="cc-tabs${animClass}${innerClass}" style="${styleAttr} position:relative;">\n`;
-      h += `<style>${css}</style>\n${inputs}\n`;
-      h += `<div class="cc-tab-bar" style="${barStyle}">${labels}</div>\n`;
-      h += `<div class="cc-tab-panels" style="padding-top:18px;">${panels}</div>\n</div>\n`;
-      return customCss + h;
-    }
-
-    case 'PRICING': {
-      const plans = Array.isArray(content.plans) ? content.plans : [];
-      let cols = toInt(content.columns, 0);
-      if (cols < 1) cols = Math.max(1, Math.min(4, plans.length));
-      cols = Math.min(cols, 4);
-      let cards = '';
-      for (const pl of plans) {
-        const hl = !!pl.highlighted;
-        const name = escapeHtml(pl.name ?? '');
-        const price = escapeHtml(pl.price ?? '');
-        const period = escapeHtml(pl.period ?? '');
-        const desc = escapeHtml(pl.description ?? '');
-        const badge = escapeHtml(pl.badge ?? '');
-        const btnText = escapeHtml(pl.buttonText ?? '');
-        const btnUrl = escapeHtml(resolveBlockUrl(pl.buttonUrl ?? '#'));
-        const cardStyle = 'position:relative; display:flex; flex-direction:column; padding:28px 24px; border-radius:14px; background:#fff; box-sizing:border-box; ' + (hl ? 'border:2px solid var(--brand-color, #3b82f6); box-shadow:0 10px 30px rgba(15,23,42,0.12);' : 'border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(15,23,42,0.04);');
-        const badgeHtml = badge !== '' ? `<div class="cc-plan-badge" style="position:absolute; top:-12px; left:50%; transform:translateX(-50%); background:var(--brand-color, #3b82f6); color:#fff; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:4px 12px; border-radius:999px; white-space:nowrap;">${badge}</div>` : '';
-        const periodHtml = period !== '' ? `<span class="cc-plan-period" style="font-size:14px; color:#64748b; margin-left:4px;">${period}</span>` : '';
-        const descHtml = desc !== '' ? `<p class="cc-plan-desc" style="margin:10px 0 0 0; font-size:14px; color:#64748b; line-height:1.5;">${desc}</p>` : '';
-        let feat = '';
-        const features = Array.isArray(pl.features) ? pl.features : [];
-        for (const f0 of features) {
-          const f = String(f0 ?? '').trim();
-          if (f === '') continue;
-          feat += `<li style="display:flex; gap:10px; align-items:flex-start; margin:0 0 10px 0; font-size:14px; color:#334155;"><span aria-hidden="true" style="color:var(--brand-color, #3b82f6); font-weight:700;">&#10003;</span><span>${escapeHtml(f)}</span></li>`;
-        }
-        const btnHtml = btnText !== '' ? `<a href="${btnUrl}" class="cc-plan-btn" style="display:block; text-align:center; text-decoration:none; font-weight:700; padding:12px 18px; border-radius:8px; margin-top:auto; box-sizing:border-box; ${hl ? 'background:var(--brand-color, #3b82f6); color:#fff;' : 'background:#f1f5f9; color:#0f172a;'}">${btnText}</a>` : '';
-        cards += `<div class="cc-plan${hl ? ' cc-plan-hl' : ''}" style="${cardStyle}">${badgeHtml}`
-          + `<h3 class="cc-plan-name" style="margin:0; font-size:18px; color:#0f172a;">${name}</h3>`
-          + `<div class="cc-plan-price" style="margin-top:14px; display:flex; align-items:baseline;"><span class="cc-plan-amount" style="font-size:38px; font-weight:800; color:#0f172a; line-height:1;">${price}</span>${periodHtml}</div>`
-          + descHtml
-          + `<ul class="cc-plan-features" style="list-style:none; padding:0; margin:20px 0 24px 0;">${feat}</ul>`
-          + `${btnHtml}</div>`;
-      }
-      let h = `<style>@media(max-width:900px){#${innerId} .cc-pricing-grid{grid-template-columns:1fr !important}}</style>`;
-      h += `<div id="${innerId}" class="cc-pricing${animClass}${innerClass}" style="${styleAttr}">\n`;
-      h += `<div class="cc-pricing-grid" style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:24px; align-items:stretch; padding-top:12px;">${cards}</div>\n</div>\n`;
-      return customCss + h;
-    }
-
-    case 'GALLERY': {
-      const images = Array.isArray(content.images) ? content.images : [];
-      const isMasonry = (content.layout ?? 'grid') === 'masonry';
-      const cols = Math.max(1, Math.min(6, toInt(content.columns, 3)));
-      const gap = Math.max(0, Math.min(80, toInt(content.gap, 12)));
-      const ar = content.aspectRatio ?? '1 / 1';
-      const radius = escapeHtml(content.borderRadius ?? '8px');
-      const lightbox = (content.lightbox ?? true) !== false && images.length > 0;
-      const captions = !!content.showCaptions;
-      const mobCols = Math.min(cols, 2);
-      const useAr = !isMasonry && !!ar && ar !== 'auto';
-      const containerStyle = isMasonry
-        ? `column-count:${cols}; column-gap:${gap}px;`
-        : `display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:${gap}px;`;
-      const figStyle = isMasonry ? `margin:0 0 ${gap}px 0; break-inside:avoid;` : 'margin:0;';
-      const itemStyle = `display:block; overflow:hidden; border-radius:${radius};` + (useAr ? ` aspect-ratio:${escapeHtml(ar)};` : '') + (lightbox ? ' cursor:zoom-in;' : '');
-      const imgStyle = useAr ? 'width:100%; height:100%; object-fit:cover; display:block;' : 'width:100%; height:auto; display:block;';
-      let figs = '';
-      for (const im of images) {
-        const src = escapeHtml(ccImgUrl(im.src));
-        const alt = escapeHtml(im.alt ?? '');
-        const cap = escapeHtml(im.caption ?? '');
-        const imgHtml = `<img src="${src}" alt="${alt}" loading="lazy" style="${imgStyle}">`;
-        const inner = lightbox
-          ? `<a href="${src}" class="cc-gal-item" data-caption="${cap}" style="${itemStyle}">${imgHtml}</a>`
-          : `<div class="cc-gal-item" style="${itemStyle}">${imgHtml}</div>`;
-        const capHtml = (captions && cap !== '') ? `<figcaption class="cc-gal-cap" style="font-size:13px; color:#64748b; margin-top:6px;">${cap}</figcaption>` : '';
-        figs += `<figure class="cc-gal-fig" style="${figStyle}">${inner}${capHtml}</figure>`;
-      }
-      const mobCss = isMasonry ? `column-count:${mobCols} !important` : `grid-template-columns:repeat(${mobCols}, 1fr) !important`;
-      let h = `<style>@media(max-width:768px){#${innerId} .cc-gal-grid{${mobCss}}}</style>`;
-      h += `<div id="${innerId}" class="cc-gallery${animClass}${innerClass}" style="${styleAttr}">\n`;
-      h += `<div class="cc-gal-grid" style="${containerStyle}">${figs}</div>\n`;
-      if (lightbox) {
-        const btn = 'position:absolute; background:rgba(15,23,42,0.6); color:#fff; border:none; cursor:pointer; line-height:1; border-radius:999px; width:44px; height:44px; font-size:26px;';
-        h += `<div class="cc-lightbox" role="dialog" aria-modal="true" aria-label="Image viewer" style="display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(2,6,23,0.92); z-index:100000; align-items:center; justify-content:center; flex-direction:column;">`
-          + `<button type="button" class="cc-lb-close" aria-label="Close" style="${btn} top:16px; right:16px;">&times;</button>`
-          + `<button type="button" class="cc-lb-prev" aria-label="Previous" style="${btn} left:16px; top:50%; margin-top:-22px;">&#8249;</button>`
-          + `<img class="cc-lb-img" alt="" style="max-width:90vw; max-height:78vh; object-fit:contain; border-radius:8px;">`
-          + `<div class="cc-lb-cap" style="color:#e2e8f0; font-size:14px; margin-top:12px; text-align:center; padding:0 60px;"></div>`
-          + `<button type="button" class="cc-lb-next" aria-label="Next" style="${btn} right:16px; top:50%; margin-top:-22px;">&#8250;</button>`
-          + `</div>\n`;
-        // the lightbox <script> is emitted only by the compiler (behavior, not structure)
-      }
-      h += `</div>\n`;
-      return customCss + h;
-    }
-
     case 'TABLE': {
       const c = content;
       const rows = ccLines(c.data ?? '').map((l) => l.split(/\s*\|\s*|\t/));
@@ -653,92 +502,6 @@ function renderBlockBody(block, opts = {}) {
       h += `</div>\n`;
       return customCss + h;
     }
-    case 'LOGOS': {
-      const c = content;
-      const logos = Array.isArray(c.logos) ? c.logos : [];
-      const marquee = (c.layout ?? 'grid') === 'marquee';
-      const title = escapeHtml(c.title ?? '');
-      const cols = Math.trunc(ccNum(c.columns ?? 5, 1, 8, 5));
-      const hh = Math.trunc(ccNum(c.height ?? 48, 20, 120, 48));
-      const gap = Math.trunc(ccNum(c.gap ?? 40, 8, 80, 40));
-      const gray = (c.grayscale ?? true) !== false;
-      const speed = Math.trunc(ccNum(c.speed ?? 30, 10, 120, 30));
-      const imgStyle = `height:${hh}px; width:auto; max-width:100%; object-fit:contain; display:block;` + (gray ? ' filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;' : '');
-      const mk = (lg, dup) => {
-        const src = escapeHtml(lg.src ?? '');
-        const altT = dup ? '' : escapeHtml(lg.alt ?? '');
-        const href = resolveBlockUrl(lg.href ?? '');
-        const img = `<img src="${src}" alt="${altT}" loading="lazy" style="${imgStyle}">`;
-        const box = 'display:flex; align-items:center; justify-content:center;';
-        if (String(lg.href ?? '').trim() !== '' && href !== '#') {
-          return `<a href="${escapeHtml(href)}" class="cc-logo-item" rel="noopener"${dup ? ' tabindex="-1" aria-hidden="true"' : ''} style="${box}">${img}</a>`;
-        }
-        return `<div class="cc-logo-item"${dup ? ' aria-hidden="true"' : ''} style="${box}">${img}</div>`;
-      };
-      let set1 = '', set2 = '';
-      for (const lg of logos) { set1 += mk(lg, false); set2 += mk(lg, true); }
-      let css = gray ? `#${innerId} .cc-logo-item:hover img,#${innerId} .cc-logo-item:focus-visible img{filter:none !important; opacity:1 !important}` : '';
-      let body;
-      if (marquee) {
-        // direction: right plays the same loop backwards; fade: edges fade out (both off when missing, as before)
-        const reverse = c.direction === 'right' ? ' reverse' : '';
-        const fade = c.fade === true;
-        css += `@keyframes ccMq_${innerId}{from{transform:translateX(0)}to{transform:translateX(-50%)}}#${innerId} .cc-logos-track{animation:ccMq_${innerId} ${speed}s linear infinite${reverse}}#${innerId} .cc-logos-marquee:hover .cc-logos-track{animation-play-state:paused}`
-          + (fade ? `#${innerId} .cc-logos-marquee{-webkit-mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)}` : '')
-          + `@media(prefers-reduced-motion:reduce){#${innerId} .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#${innerId} .cc-logos-set[aria-hidden="true"]{display:none}${fade ? `#${innerId} .cc-logos-marquee{-webkit-mask-image:none;mask-image:none}` : ''}}`;
-        const setStyle = `display:flex; align-items:center; gap:${gap}px; padding-right:${gap}px;`;
-        // contain:inline-size: the moving track (wider than the strip) never widens the page, a row or the editor
-        body = `<div class="cc-logos-marquee" style="overflow:hidden; contain:inline-size;"><div class="cc-logos-track" style="display:flex; width:max-content;"><div class="cc-logos-set" style="${setStyle}">${set1}</div><div class="cc-logos-set" aria-hidden="true" style="${setStyle}">${set2}</div></div></div>`;
-      } else {
-        css += `@media(max-width:768px){#${innerId} .cc-logos-grid{grid-template-columns:repeat(${Math.min(cols, 3)}, 1fr) !important}}`;
-        body = `<div class="cc-logos-grid" style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:${gap}px; align-items:center; justify-items:center;">${set1}</div>`;
-      }
-      return customCss + `<style>${css}</style><div id="${innerId}" class="cc-logos${animClass}${innerClass}" style="${styleAttr}">\n`
-        + (title !== '' ? `<div class="cc-logos-title" style="text-align:center; font-size:14px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:24px;">${title}</div>` : '')
-        + body + `\n</div>\n`;
-    }
-
-    case 'TEAM': {
-      const c = content;
-      const members = Array.isArray(c.members) ? c.members : [];
-      let cols = Math.trunc(ccNum(c.columns ?? 0, 0, 4, 0));
-      if (cols < 1) cols = Math.max(1, Math.min(4, members.length));
-      const shape = c.photoShape ?? 'circle';
-      const radius = shape === 'square' ? '0' : (shape === 'rounded' ? '16px' : '50%');
-      const card = (c.layout ?? 'card') === 'card';
-      const cardStyle = card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:24px; ' : 'padding:8px; ';
-      const linkDefs = [['email', 'Email'], ['linkedin', 'LinkedIn'], ['twitter', 'X'], ['website', 'Website']];
-      let cells = '';
-      for (const m of members) {
-        const name = escapeHtml(m.name ?? '');
-        const role = escapeHtml(m.role ?? '');
-        const bio = escapeHtml(m.bio ?? '');
-        const photo = String(m.photo ?? '').trim();
-        const pstyle = `width:112px; height:112px; border-radius:${radius}; margin:0 auto 14px; `;
-        const media = photo !== ''
-          ? `<img src="${escapeHtml(photo)}" alt="${name}" loading="lazy" style="${pstyle}object-fit:cover; display:block;">`
-          : `<div class="cc-member-initials" aria-hidden="true" style="${pstyle}background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; text-transform:uppercase;">${escapeHtml(ccInitials(m.name ?? ''))}</div>`;
-        let links = '';
-        for (const ld of linkDefs) {
-          const raw = String(m[ld[0]] ?? '').trim();
-          if (raw === '') continue;
-          let href;
-          if (ld[0] === 'email') { if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) continue; href = 'mailto:' + raw; }
-          else href = ccExtUrl(raw);
-          links += `<a href="${escapeHtml(href)}" class="cc-member-link" rel="noopener" aria-label="${name} - ${ld[1]}" style="color:inherit;">${ld[1]}</a>`;
-        }
-        cells += `<div class="cc-member" style="${cardStyle}text-align:center;">${media}`
-          + `<h3 class="cc-member-name" style="margin:0; font-size:18px;">${name}</h3>`
-          + (role !== '' ? `<div class="cc-member-role" style="color:var(--brand-color, #3b82f6); font-weight:600; font-size:14px; margin-top:2px;">${role}</div>` : '')
-          + (bio !== '' ? `<p class="cc-member-bio" style="margin:10px 0 0 0; font-size:14px; color:#64748b; line-height:1.55;">${bio}</p>` : '')
-          + (links !== '' ? `<div class="cc-member-links" style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:12px; font-size:13px;">${links}</div>` : '')
-          + `</div>`;
-      }
-      return customCss + `<style>@media(max-width:768px){#${innerId} .cc-team-grid{grid-template-columns:repeat(${Math.min(cols, 2)}, 1fr) !important}}@media(max-width:480px){#${innerId} .cc-team-grid{grid-template-columns:1fr !important}}</style>`
-        + `<div id="${innerId}" class="cc-team${animClass}${innerClass}" style="${styleAttr}">\n`
-        + `<div class="cc-team-grid" style="display:grid; grid-template-columns:repeat(${cols}, 1fr); gap:24px;">${cells}</div>\n</div>\n`;
-    }
-
     case 'BEFORE_AFTER': {
       const c = content;
       const b = (c.before && typeof c.before === 'object') ? c.before : {};

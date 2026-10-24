@@ -398,6 +398,17 @@ console.log('\nSHARED BLOCK DEFINITIONS');
       { a: '7px', b: 'abc', c: true, d: 7.9, e: '-3' }),
   ];
   cases[cases.length - 2].def.renderIf = 'v';
+  cases.push(T('.x{{{#a}}y{{/a}}}', {}), T('.x{{{{a}}}}', {}), T('.x{{{_lb}}}{{#a}}y{{/a}}{{{_rb}}}', { a: { type: 'bool', default: true } }));
+  cases.push(
+    T('[{{t}}]{{#s}}S{{/s}}{{#n}}N{{/n}}|{{c}} {{m}}|{{#all}}A{{/all}}{{#any}}Y{{/any}}{{#none}}0{{/none}}', {
+      t: { type: 'text', trim: true }, s: { type: 'bool', strict: true }, n: { type: 'bool', strict: true },
+      cols: { type: 'number', int: true }, auto: { type: 'number', default: 3 }, c: { type: 'calc', of: 'cols', fallback: 'auto' }, m: { type: 'calc', of: 'c', max: 2 },
+      l: { type: 'list', of: { type: 'text' } },
+      all: { type: 'flag', when: { t: { not: [''] }, l: true, cols: ['0'] } }, any: { type: 'flag', any: true, when: { s: true, n: true } }, none: { type: 'flag', when: { l: false } } },
+      { t: ' \t hi \n', s: true, n: 1, cols: 0, l: ['x'] }),
+    T('{{i}}|{{m}}|{{x}}|{{e}}', { i: { type: 'text', transform: 'initials' }, m: { type: 'text', transform: 'mailto' }, x: { type: 'text', key: 'm', transform: 'mailto' }, e: { type: 'text', transform: 'extUrl' } },
+      { i: '  émile   zola  rossi', m: 'bad@address', e: '//linkedin.com/in/x' }),
+  );
   const phpOut = JSON.parse(execFileSync('php', [fileURLToPath(new URL('./render_def.php', import.meta.url))], { input: JSON.stringify(cases) }).toString());
   let ok = 0;
   cases.forEach((c, i) => {
@@ -425,6 +436,10 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   expect(17, '{{BASE_URL}}chi-siamo/|a%27%28b%29.jpg|a+b%26c%2F%C3%A9%7E%21%2A%27%28%29|one<br />\ntwo<br />\r\n&lt;3|https://www.youtube.com/embed/dQw4w9WgXcQ|https://player.vimeo.com/video/123456|1,234,567.88');
   expect(18, null);   // renderIf: nothing at all
   expect(19, '7 15 15 7 1');
+  expect(20, 'ERROR'); expect(21, 'ERROR');   // a literal { right before a tag is refused
+  expect(22, '.x{y}');
+  expect(23, '[hi]S|3 2|AY');
+  expect(24, 'éz|||https://linkedin.com/in/x');
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

@@ -58,6 +58,7 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
     switch ($type) {
         case 'text':
             $v = $missing ? cc_tpl_str($def ?? '') : cc_tpl_str($raw);
+            if (!empty($s['trim'])) $v = trim($v);
             if (!empty($s['fallbackWhenEmpty']) && $v === '') $v = cc_tpl_str($def ?? '');
             if (!empty($s['pattern']) && !preg_match('~' . str_replace('~', '\\~', $s['pattern']) . '~u', $v)) $v = cc_tpl_str($def ?? '');
             if (!empty($s['maxLength'])) $v = mb_substr($v, 0, (int)$s['maxLength']);
@@ -72,6 +73,7 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
             elseif (isset($s['round'])) $n = cc_tpl_round((float)$n, (int)$s['round']);
             return $n;
         case 'bool':
+            if (!empty($s['strict'])) return !$missing && $raw === true;
             return ($def === true) ? ($missing || $raw !== false) : !$missing && !empty($raw);
         case 'enum':
             $v = cc_tpl_str($raw);
@@ -97,6 +99,7 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
             foreach ($items as $it) $out[] = cc_tpl_clean_settings($s['item'] ?? [], cc_tpl_is_obj($it) ? $it : [], []);
             return $out;
         case 'calc':
+        case 'flag':
             return 0;
     }
     return '';
@@ -117,18 +120,38 @@ function cc_tpl_clean_settings(array $settings, array $content, array $styles) {
     }
     // second pass: values computed from the clean ones
     foreach ($settings as $key => $s) {
-        if (($s['type'] ?? '') === 'calc') { $b = $out[$s['of']] ?? 0; $out[$key] = ((is_int($b) || is_float($b)) ? $b : 0) * ($s['mul'] ?? 1) + ($s['add'] ?? 0); }
+        if (($s['type'] ?? '') === 'calc') { $b = (!empty($s['fallback']) && !cc_tpl_truthy($out[$s['of']] ?? null)) ? ($out[$s['fallback']] ?? 0) : ($out[$s['of']] ?? 0); $out[$key] = max($s['min'] ?? -INF, min($s['max'] ?? INF, ((is_int($b) || is_float($b)) ? $b : 0) * ($s['mul'] ?? 1) + ($s['add'] ?? 0))); }
+        if (($s['type'] ?? '') === 'flag') $out[$key] = cc_tpl_cond($s['when'] ?? [], $out, !empty($s['any']));
         if (!empty($s['transform']) && isset(CC_TPL_TRANSFORMS[$s['transform']])) $out[$key] = (CC_TPL_TRANSFORMS[$s['transform']])($out[$key], $s, $out);
     }
     if ($opt) $out['opt'] = $opt;
     return $out;
 }
 
+// A flag's conditions (twin of condHolds() in blockDef.mjs)
+function cc_tpl_cond(array $when, array $vals, $any) {
+    $hits = 0;
+    foreach ($when as $k => $want) {
+        $v = $vals[$k] ?? null;
+        if ($want === true || $want === false) $ok = cc_tpl_truthy($v) === $want;
+        elseif (is_array($want) && array_is_list($want)) $ok = in_array(cc_tpl_text($v), $want, true);
+        else $ok = !in_array(cc_tpl_text($v), $want['not'] ?? [], true);
+        if ($ok) $hits++;
+        if ($any && $ok) return true;
+        if (!$any && !$ok) return false;
+    }
+    return $any ? false : true;
+}
+
 // Value transforms: twins of TRANSFORMS in blockDef.mjs
 const CC_TPL_TRANSFORMS = [
     'blockUrl' => 'cc_tpl_tf_block_url', 'cssUrl' => 'cc_tpl_tf_css_url', 'urlencode' => 'cc_tpl_tf_urlencode',
     'lines2br' => 'cc_tpl_tf_lines2br', 'videoEmbed' => 'cc_tpl_tf_video', 'fmtNum' => 'cc_tpl_tf_fmt_num',
+    'extUrl' => 'cc_tpl_tf_ext_url', 'initials' => 'cc_tpl_tf_initials', 'mailto' => 'cc_tpl_tf_mailto',
 ];
+function cc_tpl_tf_ext_url($v) { return cc_ext_url(cc_tpl_text($v)); }
+function cc_tpl_tf_initials($v) { return cc_initials(cc_tpl_text($v)); }
+function cc_tpl_tf_mailto($v) { $t = cc_tpl_text($v); return preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $t) ? 'mailto:' . $t : ''; }
 function cc_tpl_tf_block_url($v) { return cc_block_url(cc_tpl_text($v)); }
 function cc_tpl_tf_css_url($v) { return cc_css_url(cc_tpl_text($v)); }
 function cc_tpl_tf_urlencode($v) { return urlencode(cc_tpl_text($v)); }
@@ -150,9 +173,13 @@ function cc_tpl_parse($src) {
         $top = count($stack) - 1;
         if ($m[0][1] > $last) $stack[$top]['body'][] = substr($text, $last, $m[0][1] - $last);
         $last = $m[0][1] + strlen($m[0][0]);
-        if (isset($m[1]) && $m[1][1] >= 0 && $m[1][0] !== '') { $stack[$top]['body'][] = ['v' => $m[1][0], 'raw' => true]; continue; }
+        if (isset($m[1]) && $m[1][1] >= 0 && $m[1][0] !== '') {
+            if (strpos($m[1][0], '{') === 0) throw new RuntimeException('Template: a literal { before {{{ (write {{{_lb}}}): ' . $m[1][0]);
+            $stack[$top]['body'][] = ['v' => $m[1][0], 'raw' => true]; continue;
+        }
         $sigil = $m[2][0]; $name = $m[3][0];
         if ($sigil === '!') continue;
+        if ($sigil !== '!' && strpos($name, '{') === 0) throw new RuntimeException('Template: a literal { before {{ (write {{{_lb}}}): ' . $name);
         if ($sigil === '#' || $sigil === '^') {
             $node = ['s' => $name, 'inv' => $sigil === '^', 'body' => []];
             if (substr($name, -1) === '?') { $node['kind'] = 'test'; $node['path'] = substr($name, 0, -1); }
@@ -206,10 +233,12 @@ function cc_tpl_render(array $nodes, array $scopes) {
 }
 
 // Behaviour scripts of the blocks (site only): the definition's "script" names one
-// (each gets the block's id and its clean values)
-const CC_TPL_SCRIPTS = ['progress' => 'cc_tpl_script_progress', 'counters' => 'cc_tpl_script_counters'];
-function cc_tpl_script_progress($id, $v) { return cc_script_progress($id); }
-function cc_tpl_script_counters($id, $v) { return cc_script_counters($id, $v['duration'] ?? 1800); }
+// (each gets the block's id and its clean values, and gives the whole <script> element)
+const CC_TPL_SCRIPTS = ['progress' => 'cc_tpl_script_progress', 'counters' => 'cc_tpl_script_counters', 'gallery' => 'cc_tpl_script_gallery', 'logos' => 'cc_tpl_script_logos'];
+function cc_tpl_script_progress($id, $v) { return "<script>\n" . cc_script_progress($id) . "\n</script>\n"; }
+function cc_tpl_script_counters($id, $v) { return "<script>\n" . cc_script_counters($id, $v['duration'] ?? 1800) . "\n</script>\n"; }
+function cc_tpl_script_gallery($id, $v) { return "<script>\n" . cc_script_gallery($id) . "\n</script>\n"; }
+function cc_tpl_script_logos($id, $v) { return '<script>' . str_replace(['%ID%', '%SPEED%'], [$id, (string)($v['speed'] ?? 30)], CC_LOGOS_SCRIPT) . "</script>\n"; }
 
 // The HTML of a block that has a definition (cc_render_block_body adds the custom CSS, render_block the device rules)
 function cc_render_def_block(array $def, array $block, $innerId) {
@@ -224,8 +253,9 @@ function cc_render_def_block(array $def, array $block, $innerId) {
     $custom = !empty($content['customClass']) ? cc_tpl_str($content['customClass']) : '';
     $script = '';
     $fn = CC_TPL_SCRIPTS[$def['script'] ?? ''] ?? null;
-    if ($fn) $script = "<script>\n" . $fn($innerId, $values) . "\n</script>\n";
+    if ($fn) $script = $fn($innerId, $values);
     $builtIn = ['_id' => $innerId, '_classes' => cc_effect_classes($styles, $content) . ($custom !== '' ? ' ' . $custom : ''),
-        '_style' => new CcTrusted(build_inline_style($rootStyles)), '_field' => $field, '_script' => new CcTrusted($script)];
+        '_style' => new CcTrusted(build_inline_style($rootStyles)), '_field' => $field, '_script' => new CcTrusted($script),
+        '_lb' => new CcTrusted('{'), '_rb' => new CcTrusted('}')];
     return cc_tpl_render($def['_ast'], [$builtIn, $values]);
 }

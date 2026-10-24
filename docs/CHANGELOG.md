@@ -47,11 +47,11 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   - Behaviour scripts stay site-side, named by the definition.
 
   Blocks moved to it: **Text, Image, Icon Box, Testimonial, Callout, Timeline, Steps, Progress Bars, Grid, Cards,
-  Image + Text, FAQ, Map, Video, Custom HTML, Divider and Counters**. Their published HTML is unchanged for real content
+  Image + Text, FAQ, Map, Video, Custom HTML, Divider, Counters, Accordion, Tabs, Pricing, Gallery, Logos and Team**. Their published HTML is unchanged for real content
   (checked byte for byte against the previous renderer, with every field also fuzzed with wrong types and hostile
   values), and the editor and the site now give exactly the same HTML for them. The engine also has lists of plain
   values, value transforms (internal links, CSS addresses, URL encoding, line breaks, video players, number format),
-  computed sizes, admin-only code, blocks that render only when a value is set, and behaviour scripts that receive
+  computed sizes and flags, admin-only code, blocks that render only when a value is set, and behaviour scripts that receive
   the block's values. The generated panel shows a field only when another setting calls for it, warns about a link
   it can't use, and keeps code read-only for editors. `npm run test:parity` checks both engines on every definition, hostile values
   included, and on the template language itself.
@@ -65,7 +65,9 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   expected, from an import): the value gets its default. An Image block no longer outputs a `javascript:` address
   or an object-fit value that is not one of its choices, and a Progress bar colour that is not a colour gets the
   brand colour. Likewise Grid, Cards, FAQ and Counters with an object where a list belongs, Image + Text with a
-  `javascript:` image, Divider with a colour that is not a colour; a Map zoom is kept between 1 and 21.
+  `javascript:` image, Divider with a colour that is not a colour; a Map zoom is kept between 1 and 21. Gallery,
+  Logos and Team images go through the image address check (no `javascript:`), a Gallery aspect ratio or corner radius
+  that is not one gets the default, and an unknown Tabs or Team style gets the default style.
 
 ## [0.20.0] - 2026-10-24 — Categories and tags, archives, scheduled publishing, faceted search
 

@@ -1,0 +1,146 @@
+{
+  "type": "TEAM",
+  "settings": {
+    "members": {
+      "type": "list",
+      "count": {
+        "as": "autoColumns",
+        "min": 1,
+        "max": 4
+      },
+      "item": {
+        "name": {
+          "type": "text",
+          "default": ""
+        },
+        "role": {
+          "type": "text",
+          "default": ""
+        },
+        "bio": {
+          "type": "text",
+          "default": ""
+        },
+        "photo": {
+          "type": "image",
+          "default": ""
+        },
+        "initials": {
+          "type": "text",
+          "default": "",
+          "key": "name",
+          "transform": "initials"
+        },
+        "emailHref": {
+          "type": "text",
+          "default": "",
+          "key": "email",
+          "trim": true,
+          "transform": "mailto"
+        },
+        "linkedinHref": {
+          "type": "text",
+          "default": "",
+          "key": "linkedin",
+          "trim": true,
+          "transform": "extUrl"
+        },
+        "twitterHref": {
+          "type": "text",
+          "default": "",
+          "key": "twitter",
+          "trim": true,
+          "transform": "extUrl"
+        },
+        "websiteHref": {
+          "type": "text",
+          "default": "",
+          "key": "website",
+          "trim": true,
+          "transform": "extUrl"
+        },
+        "hasLinks": {
+          "type": "flag",
+          "any": true,
+          "when": {
+            "emailHref": true,
+            "linkedinHref": true,
+            "twitterHref": true,
+            "websiteHref": true
+          }
+        }
+      }
+    },
+    "columns": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 4,
+      "int": true
+    },
+    "photoShape": {
+      "type": "enum",
+      "default": "circle",
+      "options": [
+        {
+          "value": "circle",
+          "data": {
+            "radius": "50%"
+          }
+        },
+        {
+          "value": "rounded",
+          "data": {
+            "radius": "16px"
+          }
+        },
+        {
+          "value": "square",
+          "data": {
+            "radius": "0"
+          }
+        }
+      ]
+    },
+    "layout": {
+      "type": "enum",
+      "default": "card",
+      "options": [
+        {
+          "value": "card",
+          "data": {
+            "card": "background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:24px; "
+          }
+        },
+        {
+          "value": "minimal",
+          "data": {
+            "card": "padding:8px; "
+          }
+        }
+      ]
+    },
+    "cols": {
+      "type": "calc",
+      "of": "columns",
+      "fallback": "autoColumns"
+    },
+    "mobileColumns": {
+      "type": "calc",
+      "of": "cols",
+      "max": 2
+    }
+  },
+  "template": [
+    "<style>@media(max-width:768px){#{{_id}} .cc-team-grid{grid-template-columns:repeat({{mobileColumns}}, 1fr) !important}}@media(max-width:480px){#{{_id}} .cc-team-grid{grid-template-columns:1fr !important}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-team{{_classes}}\" style=\"{{{_style}}}\">\n<div class=\"cc-team-grid\" style=\"display:grid; grid-template-columns:repeat({{cols}}, 1fr); gap:24px;\">",
+    "{{#members}}<div class=\"cc-member\" style=\"{{{opt.layout.card}}}text-align:center;\">",
+    "{{^photo=}}<img src=\"{{photo}}\" alt=\"{{name}}\" loading=\"lazy\" style=\"width:112px; height:112px; border-radius:{{{opt.photoShape.radius}}}; margin:0 auto 14px; object-fit:cover; display:block;\">{{/photo=}}",
+    "{{#photo=}}<div class=\"cc-member-initials\" aria-hidden=\"true\" style=\"width:112px; height:112px; border-radius:{{{opt.photoShape.radius}}}; margin:0 auto 14px; background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:700; text-transform:uppercase;\">{{initials}}</div>{{/photo=}}",
+    "<h3 class=\"cc-member-name\" style=\"margin:0; font-size:18px;\">{{name}}</h3>",
+    "{{^role=}}<div class=\"cc-member-role\" style=\"color:var(--brand-color, #3b82f6); font-weight:600; font-size:14px; margin-top:2px;\">{{role}}</div>{{/role=}}",
+    "{{^bio=}}<p class=\"cc-member-bio\" style=\"margin:10px 0 0 0; font-size:14px; color:#64748b; line-height:1.55;\">{{bio}}</p>{{/bio=}}",
+    "{{#hasLinks}}<div class=\"cc-member-links\" style=\"display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-top:12px; font-size:13px;\">{{^emailHref=}}<a href=\"{{emailHref}}\" class=\"cc-member-link\" rel=\"noopener\" aria-label=\"{{name}} - Email\" style=\"color:inherit;\">Email</a>{{/emailHref=}}{{^linkedinHref=}}<a href=\"{{linkedinHref}}\" class=\"cc-member-link\" rel=\"noopener\" aria-label=\"{{name}} - LinkedIn\" style=\"color:inherit;\">LinkedIn</a>{{/linkedinHref=}}{{^twitterHref=}}<a href=\"{{twitterHref}}\" class=\"cc-member-link\" rel=\"noopener\" aria-label=\"{{name}} - X\" style=\"color:inherit;\">X</a>{{/twitterHref=}}{{^websiteHref=}}<a href=\"{{websiteHref}}\" class=\"cc-member-link\" rel=\"noopener\" aria-label=\"{{name}} - Website\" style=\"color:inherit;\">Website</a>{{/websiteHref=}}</div>{{/hasLinks}}",
+    "</div>{{/members}}</div>\n</div>\n"
+  ]
+}
