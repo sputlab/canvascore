@@ -386,7 +386,7 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    should not stay on the server).
 6. Open the editor. **Database migrations run automatically** on the first request: each
    pending schema step is applied in order, in a transaction, and recorded in the `cc_meta`
-   table (key `db_schema`). There is nothing to run by hand. The current schema is **11**
+   table (key `db_schema`). There is nothing to run by hand. The current schema is **14**
    (`db_schema` in `version.json`); the most recent steps are:
 
    | Migration | Adds |
@@ -397,6 +397,9 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    | 9 | Custom fields per collection: `collections.fields` and `collection_items.field_values` |
    | 10 | Structured data per collection: `collections.schema_json` |
    | 11 | One design per collection: `collections.design_json` |
+   | 12 | Categories and tags: `collection_taxonomies`, `collection_terms` tables and `collection_items.terms_json` |
+   | 13 | Listing and archive pages: `collections.archive_json` (page size and archives) |
+   | 14 | Scheduled publishing: `publish_at` and `unpublish_at` on pages and items (section 7.9) |
 
    Back up the data directory before updating: a migration cannot be undone by installing the
    older release again.
@@ -457,7 +460,8 @@ header/footer and most Global Options, and can run Publish Site. Editors **canno
 - see, export or delete form **Submissions**;
 - create, rename or delete **collections** (they can add, edit, move, archive and delete the
   items of existing ones);
-- define a collection's **fields**, its **design** and its **structured data** (Collections › Fields and Design);
+- define a collection's **fields**, its **design**, its **structured data**, its **categories and tags** and its **listing
+  and archive** settings (Collections › Fields, Design, Categories & tags, Listing & archives);
 - add or change **code**. Custom HTML blocks and a block's custom CSS/JS stay **exactly as an
   admin saved them** when an editor saves the page, item, header/footer, master or template
   (matched by block id on the server); an editor can only move or delete those blocks. Custom
@@ -587,7 +591,9 @@ written.
 The Google Fonts link on every page loads the site font and each font chosen for a text style (Global Options › Text styles). Visitors' browsers therefore need access to `fonts.googleapis.com`, as before.
 
 Items of a collection with a **design** (Collections › Design) are built from that design, so publishing the site also
-publishes the design. An item page of a collection with **structured data** carries a `<script type="application/ld+json">`
+publishes the design. Each collection also publishes its **listing** (`/<collection>/`, paginated), its **year and month
+archives**, its **filter archives** (one per choice of a choice field), its **sorted listings** and the pages of its **categories
+and tags** (`/<collection>/<taxonomy>/<term>/`), all in the sitemap; the archives are switched on and sized in Collections › Listing & archives. An item page of a collection with **structured data** carries a `<script type="application/ld+json">`
 block (schema.org Product, Event or Person) built from the item's values.
 
 ### 7.2 Removal of stale pages
@@ -733,6 +739,27 @@ so it is included in server-level backups (section 8.3) and, if you tick the opt
 backups made on the Backup page (section 8.1).
 
 ---
+
+### 7.9 Scheduled publishing and cron
+
+A page or a collection item can be given a time to go live (**Publish at**) and a time to come down (**Unpublish at**), as
+explained in the [User Guide](USER-GUIDE.md#scheduled-publishing). The server makes each change at its time, then publishes the
+site again. It does so in one of two ways:
+
+- **On the next admin visit.** Any request to the admin after the time makes the due changes. This needs an administrator to
+  sign in, so a site that nobody edits must use the second way.
+- **From the server's scheduler (cron).** Run the publisher every few minutes from the command line:
+
+  ```
+  */5 * * * *  php /path/to/site/canvascore-admin/cron.php > /dev/null 2>&1
+  ```
+
+  `cron.php` only runs from the command line: a request from the web gets "not found". It prints what it changed, and the
+  first lines of any skipped change (an address another live page uses, or a page with unpublished edits waiting).
+
+Times are the **server's local time** (the `date.timezone` setting of PHP). Check it if the times look shifted. Test the
+scheduler once: make a draft item, set its **Publish at** a few minutes ahead, then run `php cron.php` after that time and check
+that it is published.
 
 ## 8. Backup and restore
 

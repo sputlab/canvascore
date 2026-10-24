@@ -3,6 +3,7 @@
 // CanvasCore — API backend (Phase 1: CSRF, hardened session, data outside the web root, hardening)
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
+require_once __DIR__ . '/publish.php';
 require_once __DIR__ . '/media.php';
 require_once __DIR__ . '/backup.php';
 header('Content-Type: application/json');
@@ -167,6 +168,10 @@ if ($action === 'version') {
 // Account management (admin only)
 // ---------------------------------------------------------------------------
 $is_admin = $account['role'] === 'admin';
+
+// Scheduled publishing: the first admin request after a scheduled time makes the due changes (cron.php does it on a server
+// with no admin in use). A failure here never stops the request.
+try { if (cc_schedules_pending($pdo)) cc_run_schedules($pdo, cc_data_dir()); } catch (Throwable $e) { error_log('CanvasCore schedules: ' . $e->getMessage()); }
 
 // Read-only requests release the session lock right away: PHP keeps one request per session at a time,
 // so a slow request (publish, big page list) would otherwise hold every other screen's data back.
@@ -779,13 +784,14 @@ if ($action === 'clear_submissions' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ---- Collections (management: admin) ----
 if ($action === 'get_collections') {
-    $rows = $pdo->query("SELECT id, name, slug, fields, schema_json, design_json, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $pdo->query("SELECT id, name, slug, fields, schema_json, design_json, archive_json, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as &$r) {
         $r['fields'] = cc_field_defs(json_decode((string)($r['fields'] ?? '[]'), true), $pdo);
         $r['schema'] = cc_schema_clean(json_decode((string)($r['schema_json'] ?? '{}'), true), $r['fields']);
         $design = json_decode((string)($r['design_json'] ?? '[]'), true);
         $r['has_design'] = is_array($design) && count($design) > 0;
-        unset($r['schema_json'], $r['design_json']);
+        $r['archive'] = cc_archive_clean(json_decode((string)($r['archive_json'] ?? '{}'), true));
+        unset($r['schema_json'], $r['design_json'], $r['archive_json']);
     }
     unset($r);
     echo json_encode($rows); exit;
@@ -801,6 +807,8 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $fields_json = null;
     if (array_key_exists('fields', $d)) $fields_json = json_encode(cc_field_defs($d['fields'], $pdo));
     // Structured data: checked against the fields being saved (or the ones the collection has)
+    // Listing and archive pages: sent with the collection (a save without them keeps the ones it has)
+    $archive_json = array_key_exists('archive', $d) ? json_encode(cc_archive_clean($d['archive'])) : null;
     $schema_json = null;
     if (array_key_exists('schema', $d)) {
         $sdefs = $fields_json !== null ? json_decode($fields_json, true) : null;
@@ -820,6 +828,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare("UPDATE collections SET name=?, slug=? WHERE id=?")->execute([$name, $slug, $id]);
             if ($fields_json !== null) $pdo->prepare("UPDATE collections SET fields=? WHERE id=?")->execute([$fields_json, $id]);
             if ($schema_json !== null) $pdo->prepare("UPDATE collections SET schema_json=? WHERE id=?")->execute([$schema_json, $id]);
+            if ($archive_json !== null) $pdo->prepare("UPDATE collections SET archive_json=? WHERE id=?")->execute([$archive_json, $id]);
             // New address: every published item forwards from its old URL (the files move at the next publish)
             if ($existing['slug'] !== $slug) {
                 $its = $pdo->prepare("SELECT slug FROM collection_items WHERE collection_id = ? AND status = 'published'"); $its->execute([$id]);
@@ -834,7 +843,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'message' => 'Could not rename the collection: ' . $e->getMessage()]); exit;
         }
     } else {
-        $pdo->prepare("INSERT INTO collections (id, name, slug, fields, schema_json) VALUES (?,?,?,?,?)")->execute([$id, $name, $slug, $fields_json ?? '[]', $schema_json ?? '{}']);
+        $pdo->prepare("INSERT INTO collections (id, name, slug, fields, schema_json, archive_json) VALUES (?,?,?,?,?,?)")->execute([$id, $name, $slug, $fields_json ?? '[]', $schema_json ?? '{}', $archive_json ?? '{}']);
     }
     echo json_encode(['success' => true, 'id' => $id, 'name' => $name, 'slug' => $slug, 'moved' => $existing && $existing['slug'] !== $slug]); exit;
 }
@@ -855,6 +864,72 @@ if ($action === 'save_collection_design' && $_SERVER['REQUEST_METHOD'] === 'POST
     $pdo->prepare("UPDATE collections SET design_json = ? WHERE id = ?")->execute([json_encode($blocks), $cid]);
     echo json_encode(['success' => true, 'blocks' => count($blocks)]); exit;
 }
+// Scheduled publishing of a page or an item: when it goes live and when it comes down ("YYYY-MM-DD HH:MM", server time;
+// '' clears it). The change itself is made by the scheduler (publish.php) at that time.
+if ($action === 'set_schedule' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true);
+    $kind = ($d['kind'] ?? '') === 'item' ? 'item' : 'page';
+    $id = is_string($d['id'] ?? null) ? $d['id'] : '';
+    $pa = cc_schedule_clean($d['publish_at'] ?? ''); $ua = cc_schedule_clean($d['unpublish_at'] ?? '');
+    if ($pa === false || $ua === false) { echo json_encode(['success' => false, 'message' => 'Use a date and a time, such as 2026-11-03 09:30.']); exit; }
+    if ($pa !== '' && $ua !== '' && $ua <= $pa) { echo json_encode(['success' => false, 'message' => 'The unpublish time must be after the publish time.']); exit; }
+    if ($kind === 'item') {
+        $st = $pdo->prepare("UPDATE collection_items SET publish_at = ?, unpublish_at = ? WHERE id = ?");
+    } else {
+        // a page being edited may be its hidden draft copy: the schedule belongs to the live page
+        $own = $pdo->prepare("SELECT is_draft_copy, parent_id FROM pages WHERE id = ?"); $own->execute([$id]);
+        $row = $own->fetch(PDO::FETCH_ASSOC);
+        if ($row && (int)$row['is_draft_copy'] === 1 && $row['parent_id']) $id = (string)$row['parent_id'];
+        $st = $pdo->prepare("UPDATE pages SET publish_at = ?, unpublish_at = ? WHERE id = ? AND is_draft_copy = 0");
+    }
+    $st->execute([$pa, $ua, $id]);
+    if ($st->rowCount() === 0) { echo json_encode(['success' => false, 'message' => 'That page or item does not exist.']); exit; }
+    echo json_encode(['success' => true, 'publish_at' => $pa, 'unpublish_at' => $ua]); exit;
+}
+// Every taxonomy of the site, with its collection: the facets the Site Search block can offer
+if ($action === 'get_taxonomy_list') {
+    echo json_encode($pdo->query("SELECT t.id, t.name, c.name AS collection FROM collection_taxonomies t JOIN collections c ON c.id = t.collection_id ORDER BY c.name, t.position")->fetchAll(PDO::FETCH_ASSOC)); exit;
+}
+// Categories and tags of a collection: its taxonomies and their terms
+if ($action === 'get_taxonomies') {
+    echo json_encode(cc_taxonomies_load($pdo, $_GET['collection'] ?? '')); exit;
+}
+if ($action === 'save_taxonomies' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can change the categories and tags of a collection.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true);
+    $cid = is_string($d['collection_id'] ?? null) ? $d['collection_id'] : '';
+    if (!cc_collection_exists($pdo, $cid)) { echo json_encode(['success' => false, 'message' => 'The collection does not exist.']); exit; }
+    $list = cc_taxonomies_clean($d['taxonomies'] ?? []);
+    $pdo->beginTransaction();
+    try {
+        foreach ($list as $ti => $t) {
+            $list[$ti]['id'] = cc_tax_free_id($pdo, 'collection_taxonomies', $t['id'], $cid);
+            foreach ($t['terms'] as $mi => $m) $list[$ti]['terms'][$mi]['id'] = cc_tax_free_id($pdo, 'collection_terms', $m['id'], $cid);
+        }
+        $pdo->prepare("DELETE FROM collection_terms WHERE collection_id = ?")->execute([$cid]);
+        $pdo->prepare("DELETE FROM collection_taxonomies WHERE collection_id = ?")->execute([$cid]);
+        foreach ($list as $pos => $t) {
+            $pdo->prepare("INSERT INTO collection_taxonomies (id, collection_id, name, slug, multiple, position) VALUES (?,?,?,?,?,?)")
+                ->execute([$t['id'], $cid, $t['name'], $t['slug'], $t['multiple'] ? 1 : 0, $pos]);
+            foreach ($t['terms'] as $mpos => $m) {
+                $pdo->prepare("INSERT INTO collection_terms (id, taxonomy_id, collection_id, name, slug, description, position) VALUES (?,?,?,?,?,?,?)")
+                    ->execute([$m['id'], $t['id'], $cid, $m['name'], $m['slug'], $m['description'], $mpos]);
+            }
+        }
+        // the items keep only the terms that still exist in this collection
+        $items = $pdo->prepare("SELECT id, terms_json FROM collection_items WHERE collection_id = ?"); $items->execute([$cid]);
+        $upd = $pdo->prepare("UPDATE collection_items SET terms_json = ? WHERE id = ?");
+        foreach ($items->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $kept = cc_terms_clean(json_decode((string)($row['terms_json'] ?? '{}'), true), $pdo, $cid);
+            $upd->execute([json_encode((object)$kept), $row['id']]);
+        }
+        $pdo->commit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        echo json_encode(['success' => false, 'message' => 'Could not save the categories and tags: ' . $e->getMessage()]); exit;
+    }
+    echo json_encode(['success' => true, 'taxonomies' => cc_taxonomies_load($pdo, $cid)]); exit;
+}
 if ($action === 'delete_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can manage collections.']); exit; }
     $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
@@ -864,6 +939,8 @@ if ($action === 'delete_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $item_ids = $ids->fetchAll(PDO::FETCH_COLUMN);
     $pdo->prepare("DELETE FROM collection_items WHERE collection_id = ?")->execute([$id]);
     $pdo->prepare("DELETE FROM collections WHERE id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM collection_terms WHERE collection_id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM collection_taxonomies WHERE collection_id = ?")->execute([$id]);
     try { $rv = $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?"); foreach ($item_ids as $iid) $rv->execute(['item:' . $iid]); } catch (Exception $e) {}
     // Its pages and feed go offline now (the folder is the collection's own: slugs are unique site-wide)
     $removed = 0;
@@ -928,27 +1005,29 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL slug \"$slug\" is already used by \"$t\" in this collection. Change it and publish again."]); exit;
         }
     }
-    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id, field_values FROM collection_items WHERE id = ?"); $chk->execute([$id]);
+    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id, field_values, terms_json FROM collection_items WHERE id = ?"); $chk->execute([$id]);
     $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
     $fv_json = $fv_clean !== null ? json_encode($fv_clean) : (string)($existing_item['field_values'] ?? '{}');
+    // Categories and tags of the item (cleaned against its collection; kept when the client sends none)
+    $tj_json = array_key_exists('terms', $d) ? json_encode((object)cc_terms_clean($d['terms'], $pdo, $cid)) : (string)($existing_item['terms_json'] ?? '{}');
     if ($existing_item) {
         // A client that does not send the flag must never reset it: the saved value is kept
         if (!$archived_sent) $archived = (int)($existing_item['archived'] ?? 0);
         if ($blocks !== null) {
             if (!$is_admin) cc_keep_code_surfaces($blocks, $existing_item['content_json'] ?? '[]');
-            $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, content_json=?, content_schema=?, field_values=?, updated_at=? WHERE id=?")
-                ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($blocks), $cschema, $fv_json, $now, $id]);
+            $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, content_json=?, content_schema=?, field_values=?, terms_json=?, updated_at=? WHERE id=?")
+                ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($blocks), $cschema, $fv_json, $tj_json, $now, $id]);
         } else {
-            $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, field_values=?, updated_at=? WHERE id=?")
-                ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, $fv_json, $now, $id]);
+            $pdo->prepare("UPDATE collection_items SET collection_id=?, title=?, slug=?, excerpt=?, cover_image=?, date=?, status=?, archived=?, seo_title=?, seo_description=?, field_values=?, terms_json=?, updated_at=? WHERE id=?")
+                ->execute([$cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, $fv_json, $tj_json, $now, $id]);
         }
     } else {
         $b = $blocks ?? [];
         if (!$is_admin) cc_keep_code_surfaces($b, []);
         // Demo mode: a new item uses up one of the visitors' items
         if (!$is_admin && !cc_demo_take('items')) { echo json_encode(['success' => false, 'message' => 'The demo allows ' . cc_demo_config()['maxNewItems'] . ' new collection items until the next reset. Edit an existing item instead.']); exit; }
-        $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-            ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $fv_json, $now]);
+        $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, terms_json, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $fv_json, $tj_json, $now]);
     }
     // A published item that changed its address: the old one forwards to the new one
     if ($status === 'published') {

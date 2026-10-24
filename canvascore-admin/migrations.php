@@ -204,6 +204,33 @@ function cc_db_migrations() {
         11 => function ($pdo) {
             cc_add_col($pdo, 'collections', 'design_json', "TEXT DEFAULT '[]'");
         },
+
+        // v12 — categories and tags: the taxonomies of a collection, their terms, and each item's terms
+        12 => function ($pdo) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS collection_taxonomies (
+                id TEXT PRIMARY KEY, collection_id TEXT, name TEXT DEFAULT '', slug TEXT DEFAULT '',
+                multiple INTEGER DEFAULT 1, position INTEGER DEFAULT 0
+            )");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS collection_terms (
+                id TEXT PRIMARY KEY, taxonomy_id TEXT, collection_id TEXT, name TEXT DEFAULT '', slug TEXT DEFAULT '',
+                description TEXT DEFAULT '', position INTEGER DEFAULT 0
+            )");
+            cc_add_col($pdo, 'collection_items', 'terms_json', "TEXT DEFAULT '{}'");
+        },
+
+        // v13 — listing and archive pages: the page size and which archives a collection publishes
+        13 => function ($pdo) {
+            cc_add_col($pdo, 'collections', 'archive_json', "TEXT DEFAULT '{}'");
+        },
+
+        // v14 — scheduled publishing: when a page or an item goes live (publish_at) and comes down (unpublish_at),
+        // as "YYYY-MM-DD HH:MM" in the server's local time; '' when not scheduled
+        14 => function ($pdo) {
+            cc_add_col($pdo, 'pages', 'publish_at', "TEXT DEFAULT ''");
+            cc_add_col($pdo, 'pages', 'unpublish_at', "TEXT DEFAULT ''");
+            cc_add_col($pdo, 'collection_items', 'publish_at', "TEXT DEFAULT ''");
+            cc_add_col($pdo, 'collection_items', 'unpublish_at', "TEXT DEFAULT ''");
+        },
     ];
 }
 

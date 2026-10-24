@@ -257,6 +257,9 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
       return emptyPlaceholder(d ? `Item field: ${d.label}. Shown on each collection item page.` : 'Item field: choose a field in the settings panel.');
     }
 
+    // ITEM_TERMS: the categories and tags of the item being published (shown on its page)
+    if (block.type === 'ITEM_TERMS') return emptyPlaceholder('Categories and tags of the item, shown on each collection item page.');
+
     // RELATED: the items that point to the collection item being published (listed on the published item page)
     if (block.type === 'RELATED') {
       const cname = block.content?.collectionName;

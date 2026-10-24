@@ -10,6 +10,43 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-24 — Categories and tags, archives, scheduled publishing, faceted search
+
+### Added
+- **Related items by tag**: the Related block has a second mode, **That share tags with this item**: the other items of
+  the collection that share terms with this one, the most shared first, optionally through one taxonomy.
+- **Faceted Site Search**: the Site Search block offers filters (the collection, and each taxonomy). Visitors tick
+  choices: the choices of one filter combine with "or", and the filters with "and". With filters on, a search with no
+  words browses the matching items. The search index carries each entry's collection and terms.
+- **Scheduled publishing**: a page or a collection item can go live at a date and time (**Publish at**) and come down
+  at one (**Unpublish at**), set in its settings (Page Settings › Scheduled publishing). The change is made by the server
+  at that time: on the next admin request, or by `cron.php` from the command line on a server with no admin in use
+  (for example `*/5 * * * * php /path/to/site/canvascore-admin/cron.php`). The site is published again after a change.
+  A page with unpublished edits waiting, or an address another live page uses, is left alone and reported.
+- **Listing and archive pages** of each collection, built from one paginated layout: the listing (`/<collection>/`,
+  `/<collection>/page/2/`…), its sorts (oldest first, A–Z), its years and months (`/<collection>/2026/`,
+  `/<collection>/2026/10/`), a filter archive for each choice of its choice fields (`/<collection>/filter/tier/gold/`),
+  and the pages of its categories and tags, now paginated. The first listing page links to all of them.
+- **Collections › Listing & archives** (admins): the items per page (3 to 50) and which archives are published.
+  An address that an item already uses is never written over; the archive is skipped with a publish warning.
+- Database schema 13: `collections.archive_json` (added on update).
+- Database schema 14: `pages.publish_at`, `pages.unpublish_at`, `collection_items.publish_at`, `collection_items.unpublish_at` (added on update).
+
+### Categories and tags per collection (Collections › Categories & tags, admins define them): a collection has
+  taxonomies (for example Category, which takes one term, and Tags, which takes several). Each taxonomy has terms with
+  a name, an address and a description. An item picks its terms in its settings (Page Settings › Categories & tags).
+- **Listing pages**: each taxonomy gets a page with its terms and their counts, and each term gets a page with its
+  live items (newest first), built from the same layout as the item pages and listed in the sitemap.
+- **Categories & Tags block**: on an item page, shows the item's terms as links to their listing pages (one taxonomy,
+  or all of them, with a separator).
+- Database schema 12: `collection_taxonomies`, `collection_terms`, and `collection_items.terms_json` (added on update).
+
+### Documentation
+- The user guide (categories and tags, listing and archive pages, scheduled publishing, related items by tag, search
+  filters), the block reference (Categories & Tags, the Related modes, the Site Search filters), the administrator
+  guide (migrations 12 to 14, the archive pages, scheduled publishing and cron) and the developer guide (the tables, the
+  publish split into `publish.php`, the helpers and the API) are updated. The manuals index is at 0.20.0.
+
 ## [0.19.0] - 2026-10-22 — Custom fields, one design per collection, structured data
 
 ### Added

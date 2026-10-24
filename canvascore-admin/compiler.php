@@ -167,7 +167,7 @@ function cc_collections_data() {
                 'live' => $ii['status'] === 'published' && (int)($ii['archived'] ?? 0) !== 1];
         }
         $cols = $pdo->query("SELECT id, name, slug, fields FROM collections")->fetchAll(PDO::FETCH_ASSOC);
-        $ist = $pdo->prepare("SELECT id, title, slug, excerpt, cover_image, date, archived, field_values FROM collection_items WHERE collection_id = ? AND status = 'published' ORDER BY (date = '') ASC, date DESC, updated_at DESC");
+        $ist = $pdo->prepare("SELECT id, title, slug, excerpt, cover_image, date, archived, field_values, terms_json FROM collection_items WHERE collection_id = ? AND status = 'published' ORDER BY (date = '') ASC, date DESC, updated_at DESC");
         foreach ($cols as $c) {
             $defs = cc_field_defs(json_decode((string)($c['fields'] ?? '[]'), true), $pdo);
             $c['defsById'] = [];
@@ -178,6 +178,10 @@ function cc_collections_data() {
                 $v = json_decode((string)($row['field_values'] ?? '{}'), true);
                 $row['vals'] = is_array($v) ? $v : [];
                 unset($row['field_values']);
+                // categories and tags of the item: taxonomy id => term ids (for the related items by tag)
+                $t = json_decode((string)($row['terms_json'] ?? '{}'), true);
+                $row['terms'] = is_array($t) ? $t : [];
+                unset($row['terms_json']);
                 $c['items'][] = $row;
             }
             $d['by_id'][$c['id']] = $c;
@@ -325,10 +329,132 @@ function cc_item_jsonld($schema, $defsById, $values, $title, $url, $image_fn) {
     $json = json_encode($ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     return $json === false ? '' : '<script type="application/ld+json">' . $json . "</script>\n";
 }
+// Listing and archive pages (one layout). An archive's first page is its address; the next ones are in page/N/.
+// The page links point to the archive's own pages: "← Newer" to the page before, "Older →" to the page after.
+function cc_archive_nav($dir, $p, $total) {
+    if ($total <= 1) return '';
+    $href = function ($n) use ($dir) { return '{{BASE_URL}}' . $dir . ($n > 1 ? 'page/' . $n . '/' : ''); };
+    $link = 'color:#0f172a; text-decoration:none; font-weight:600;';
+    $prev = $p > 1 ? '<a href="' . htmlspecialchars($href($p - 1)) . '" rel="prev" style="' . $link . '">← Newer</a>' : '<span></span>';
+    $next = $p < $total ? '<a href="' . htmlspecialchars($href($p + 1)) . '" rel="next" style="' . $link . '">Older →</a>' : '<span></span>';
+    return '<nav class="cc-pagination" aria-label="Pages" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0 48px; color:#475569; font-size:15px;">'
+        . $prev . '<span>Page ' . (int)$p . ' of ' . (int)$total . '</span>' . $next . '</nav>';
+}
+// The "browse" part of the first listing page: the sorts, the years, the filters of the choice fields and the taxonomies
+// $groups: [[label, [[text, dir], ...]], ...]
+function cc_archive_browse_html($groups) {
+    $html = '';
+    foreach ($groups as [$label, $links]) {
+        if (!$links) continue;
+        $chips = '';
+        foreach ($links as [$text, $dir]) {
+            $chips .= '<a href="' . htmlspecialchars('{{BASE_URL}}' . $dir) . '" style="display:inline-block; border:1px solid #cbd5e1; border-radius:999px; padding:5px 12px; margin:0 6px 6px 0; color:#0f172a; text-decoration:none; font-size:14px;">' . htmlspecialchars($text) . '</a>';
+        }
+        $html .= '<div style="margin:0 0 12px;"><div style="font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">' . htmlspecialchars($label) . '</div>' . $chips . '</div>';
+    }
+    return $html === '' ? '' : '<div class="cc-archive-browse" style="padding:8px 0 20px; border-bottom:1px solid #e2e8f0; margin-bottom:24px;">' . $html . '</div>';
+}
+// The body of an archive page: its kind, title and description, the browse links, the cards and the page links
+function cc_archive_page_inner($kind, $title, $desc, $cards, $nav, $browse) {
+    $d = $desc !== '' ? '<p style="margin:0; font-size:16px; color:#475569; line-height:1.6; max-width:720px;">' . htmlspecialchars($desc) . '</p>' : '';
+    return '<section class="cc-archive-head" style="padding:48px 0 16px;"><div style="font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">' . htmlspecialchars($kind) . '</div>'
+        . '<h1 style="margin:6px 0 12px; font-size:40px; line-height:1.15; color:#0f172a;">' . htmlspecialchars($title) . '</h1>' . $d . '</section>'
+        . $browse
+        . '<style>@media(max-width:768px){ .cc-archive-grid { grid-template-columns:1fr !important; } }</style>'
+        . '<div class="cc-archive-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:24px; padding:8px 0 16px;">' . $cards . '</div>'
+        . $nav;
+}
+
+// The page of one term: its taxonomy, its name and description, and the cards of its items
+function cc_term_page_inner($tax_name, $term_name, $desc, $cards) {
+    $d = $desc !== '' ? '<p style="margin:0; font-size:16px; color:#475569; line-height:1.6; max-width:720px;">' . htmlspecialchars($desc) . '</p>' : '';
+    return '<section class="cc-term-head" style="padding:48px 0 16px;"><div style="font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">' . htmlspecialchars($tax_name) . '</div>'
+        . '<h1 style="margin:6px 0 12px; font-size:40px; line-height:1.15; color:#0f172a;">' . htmlspecialchars($term_name) . '</h1>' . $d . '</section>'
+        . '<style>@media(max-width:768px){ .cc-term-grid { grid-template-columns:1fr !important; } }</style>'
+        . '<div class="cc-term-grid" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:24px; padding:16px 0 48px;">' . $cards . '</div>';
+}
+// The page of a taxonomy: its name and the list of its terms, each with how many items it has
+function cc_taxonomy_index_inner($tax_name, $terms) {
+    $list = '';
+    foreach ($terms as $t) {
+        $list .= '<li style="padding:12px 0; border-bottom:1px solid #e2e8f0;"><a href="' . htmlspecialchars($t['href']) . '" style="color:#0f172a; text-decoration:none; font-size:18px;">' . htmlspecialchars($t['name']) . '</a>'
+            . ' <span style="color:#94a3b8; font-size:14px;">(' . (int)$t['count'] . ')</span>'
+            . ($t['description'] !== '' ? '<p style="margin:4px 0 0; color:#475569; font-size:14px;">' . htmlspecialchars($t['description']) . '</p>' : '') . '</li>';
+    }
+    return '<section style="padding:48px 0 16px;"><div style="font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:.5px;">' . htmlspecialchars($tax_name) . '</div>'
+        . '<h1 style="margin:6px 0 12px; font-size:40px; line-height:1.15; color:#0f172a;">' . htmlspecialchars($tax_name) . '</h1></section>'
+        . '<ul style="list-style:none; margin:0 0 48px; padding:0; max-width:760px;">' . $list . '</ul>';
+}
+// The terms of an item on its page (the Item Terms block): links to the term pages; names only for an archived item
+function cc_render_item_terms($block) {
+    $ctx = cc_item_context();
+    if ($ctx === null || empty($ctx['item_terms'])) return '';
+    $c = $block['content'] ?? [];
+    $only = is_string($c['taxonomy'] ?? null) ? $c['taxonomy'] : '';
+    $parts = [];
+    foreach ($ctx['item_terms'] as $tid => $mids) {
+        if ($only !== '' && $tid !== $only) continue;
+        foreach ($mids as $mid) {
+            $t = $ctx['terms'][$mid] ?? null;
+            if ($t === null) continue;
+            $label = htmlspecialchars($t['name']);
+            $link = !empty($ctx['item_archived']) ? $label
+                : '<a class="cc-item-term" href="' . htmlspecialchars('{{BASE_URL}}' . $t['col_slug'] . '/' . $t['tax_slug'] . '/' . $t['slug'] . '/') . '" style="color:inherit;">' . $label . '</a>';
+            $parts[] = ($only === '' ? '<span class="cc-item-term-tax" style="color:#64748b;">' . htmlspecialchars($t['tax_name']) . ': </span>' : '') . $link;
+        }
+    }
+    if (!$parts) return '';
+    $sep = is_string($c['separator'] ?? null) ? htmlspecialchars($c['separator']) : ' · ';
+    $style = build_inline_style($block['styles'] ?? []);
+    return '<div class="cc-item-terms"' . ($style !== '' ? ' style="' . $style . '"' : '') . '>' . implode($sep, $parts) . "</div>\n";
+}
+
+// The wrapper of a Related block: its heading and its cards (the same for every mode)
+function cc_related_html($block, $coll, $items, $data) {
+    $c = $block['content'] ?? [];
+    $cards = cc_list_cards($items, cc_safe_slug($coll['slug']), cc_list_options($c, $coll['defsById'], ['items' => $data['items']], 'grid', ''));
+    $rid = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($block['id'] ?? 'related'));
+    $cols = max(1, intval($c['columns'] ?? 3));
+    $title = is_string($c['title'] ?? null) && trim($c['title']) !== '' ? '<h2 style="margin:0 0 18px 0; font-size:24px; color:#0f172a;">' . htmlspecialchars($c['title']) . '</h2>' : '';
+    return "<div id=\"$rid\" class=\"cc-related\" style=\"margin:40px 0;\">\n<style>@media(max-width:768px){ #$rid .cc-cl-grid { grid-template-columns:1fr !important; } }</style>\n"
+        . $title . "<div class=\"cc-cl-grid\" style=\"display:grid; grid-template-columns:repeat($cols, 1fr); gap:24px;\">$cards</div>\n</div>\n";
+}
+// Related items by tag: the live items of this item's collection that share its terms (in one taxonomy, or in all of them),
+// the most shared first, then the newest
+function cc_render_related_tags($block, $ctx) {
+    $c = $block['content'] ?? [];
+    $data = cc_collections_data();
+    $coll = $data['by_id'][$ctx['collection_id']] ?? null;
+    if ($coll === null) return '';
+    $tax = is_string($c['taxonomy'] ?? null) ? $c['taxonomy'] : '';
+    $mine = $ctx['item_terms'] ?? [];
+    if ($tax !== '') $mine = isset($mine[$tax]) ? [$tax => $mine[$tax]] : [];
+    $mine_ids = [];
+    foreach ($mine as $mids) foreach ((array)$mids as $m) $mine_ids[$m] = true;   // term ids are unique across the site
+    if (!$mine_ids) return '';
+    $scored = [];
+    foreach ($coll['items'] as $it) {
+        if (!empty($it['archived']) || $it['id'] === $ctx['item']) continue;
+        $shared = 0;
+        foreach ((array)($it['terms'] ?? []) as $tid => $mids) {
+            if ($tax !== '' && $tid !== $tax) continue;
+            foreach ((array)$mids as $m) if (isset($mine_ids[$m])) $shared++;
+        }
+        if ($shared > 0) $scored[] = ['n' => $shared, 'it' => $it];
+    }
+    usort($scored, function ($a, $b) {
+        if ($a['n'] !== $b['n']) return $b['n'] - $a['n'];
+        return strcmp((string)($b['it']['date'] ?? ''), (string)($a['it']['date'] ?? ''));
+    });
+    $items = array_slice(array_map(function ($x) { return $x['it']; }, $scored), 0, max(1, intval($c['limit'] ?? 3)));
+    if (!$items) return '';
+    return cc_related_html($block, $coll, $items, $data);
+}
 function cc_render_related($block) {
     $ctx = cc_item_context();
     $c = $block['content'] ?? [];
     if ($ctx === null || empty($ctx['item']) || empty($ctx['collection_id'])) return '';
+    if (($c['mode'] ?? '') === 'tags') return cc_render_related_tags($block, $ctx);
     $data = cc_collections_data();
     $cid = is_string($c['collectionId'] ?? null) ? $c['collectionId'] : '';
     $fid = is_string($c['fieldId'] ?? null) ? $c['fieldId'] : '';
@@ -341,12 +467,7 @@ function cc_render_related($block) {
     $mine = cc_sort_items($mine, is_string($c['sortBy'] ?? null) ? $c['sortBy'] : '', ($c['sortDir'] ?? 'asc') === 'desc', $coll['defsById']);
     $mine = array_slice($mine, 0, max(1, intval($c['limit'] ?? 3)));
     if (!$mine) return '';
-    $cards = cc_list_cards($mine, cc_safe_slug($coll['slug']), cc_list_options($c, $coll['defsById'], ['items' => $data['items']], 'grid', ''));
-    $rid = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)($block['id'] ?? 'related'));
-    $cols = max(1, intval($c['columns'] ?? 3));
-    $title = is_string($c['title'] ?? null) && trim($c['title']) !== '' ? '<h2 style="margin:0 0 18px 0; font-size:24px; color:#0f172a;">' . htmlspecialchars($c['title']) . '</h2>' : '';
-    return "<div id=\"$rid\" class=\"cc-related\" style=\"margin:40px 0;\">\n<style>@media(max-width:768px){ #$rid .cc-cl-grid { grid-template-columns:1fr !important; } }</style>\n"
-        . $title . "<div class=\"cc-cl-grid\" style=\"display:grid; grid-template-columns:repeat($cols, 1fr); gap:24px;\">$cards</div>\n</div>\n";
+    return cc_related_html($block, $coll, $mine, $data);
 }
 // The options of the cards, from a block's content (the fields it shows, its filter, the definitions and the item index)
 function cc_list_options($c, $defsById, $ctx, $layout, $filterId) {
@@ -962,14 +1083,31 @@ CCJS;
 // Site search script (SEARCH block); %ID% = the block's id
 const CC_SEARCH_SCRIPT = <<<'CCJS'
 (function(){var r=document.getElementById('%ID%');if(!r)return;var f=r.querySelector('form'),i=r.querySelector('input'),o=r.querySelector('.cc-search-results'),idx=null,lim=+r.getAttribute('data-limit')||10;
+var keys=[];try{keys=JSON.parse(r.getAttribute('data-facets')||'[]');}catch(x){}
+var sel={},fbox=null;
 function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function load(){if(idx)return Promise.resolve(idx);return fetch(r.getAttribute('data-index')).then(function(x){return x.json();}).then(function(d){idx=(Array.isArray(d)?d:[]).map(function(e){e._t=norm(e.t);e._a=norm(e.t+' '+(e.d||'')+' '+(e.x||''));return e;});return idx;});}
-function run(q){var w=norm(q).split(/\s+/).filter(Boolean);if(!w.length){o.innerHTML='';return;}load().then(function(d){var res=d.filter(function(e){return w.every(function(x){return e._a.indexOf(x)>-1;});}).sort(function(a,b){return (b._t.indexOf(w[0])>-1)-(a._t.indexOf(w[0])>-1);}).slice(0,lim);
-o.innerHTML=res.length?'<ul style="list-style:none;margin:0;padding:0">'+res.map(function(e){return '<li style="padding:12px 0;border-bottom:1px solid #e2e8f0"><a href="'+esc(e.u)+'" style="font-weight:600;font-size:17px;color:var(--brand-color,#3b82f6)">'+esc(e.t)+'</a>'+(e.d?'<p style="margin:4px 0 0;color:#475569">'+esc(e.d)+'</p>':'')+'</li>';}).join('')+'</ul>':'<p style="color:#64748b">'+esc(r.getAttribute('data-empty'))+' “'+esc(q)+'”</p>';}).catch(function(){o.textContent='Search is not available right now.';});}
+function vals(e,k){var v=e.f&&e.f[k];return v==null?[]:[].concat(v);}
+function active(){return Object.keys(sel).some(function(k){return Object.keys(sel[k]).length>0;});}
+function passes(e){for(var k in sel){var want=Object.keys(sel[k]);if(!want.length)continue;var have=vals(e,k);if(!want.some(function(v){return have.indexOf(v)>-1;}))return false;}return true;}
+function buildFacets(d){if(!keys.length||fbox)return;fbox=document.createElement('div');fbox.className='cc-search-facets';fbox.setAttribute('style','display:grid; gap:10px; margin-top:14px');
+keys.forEach(function(k){var seen={},label=k,list=[];d.forEach(function(e){if(e.fl&&e.fl[k])label=e.fl[k];vals(e,k).forEach(function(v){if(!seen[v]){seen[v]=0;list.push(v);}seen[v]++;});});
+if(!list.length)return;sel[k]={};list.sort();
+var g=document.createElement('fieldset');g.setAttribute('style','border:0; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center');
+var lg=document.createElement('legend');lg.textContent=label;lg.setAttribute('style','font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; float:left; width:100%');g.appendChild(lg);
+list.forEach(function(v){var lab=document.createElement('label');lab.setAttribute('style','display:flex; align-items:center; gap:6px; font-size:14px; color:#0f172a; cursor:pointer');var cb=document.createElement('input');cb.type='checkbox';
+cb.addEventListener('change',function(){if(cb.checked)sel[k][v]=true;else delete sel[k][v];run(i.value);});lab.appendChild(cb);lab.appendChild(document.createTextNode(' '+v+' ('+seen[v]+')'));g.appendChild(lab);});
+fbox.appendChild(g);});
+if(fbox.childNodes.length)r.insertBefore(fbox,o);}
+function run(q){var w=norm(q).split(/\s+/).filter(Boolean);if(!w.length&&!active()){o.innerHTML='';return;}
+load().then(function(d){buildFacets(d);var res=d.filter(function(e){return passes(e)&&w.every(function(x){return e._a.indexOf(x)>-1;});});
+if(w.length)res.sort(function(a,b){return (b._t.indexOf(w[0])>-1)-(a._t.indexOf(w[0])>-1);});res=res.slice(0,lim);
+o.innerHTML=res.length?'<ul style="list-style:none;margin:0;padding:0">'+res.map(function(e){return '<li style="padding:12px 0;border-bottom:1px solid #e2e8f0"><a href="'+esc(e.u)+'" style="font-weight:600;font-size:17px;color:var(--brand-color,#3b82f6)">'+esc(e.t)+'</a>'+(e.d?'<p style="margin:4px 0 0;color:#475569">'+esc(e.d)+'</p>':'')+'</li>';}).join('')+'</ul>':'<p style="color:#64748b">'+esc(r.getAttribute('data-empty'))+(w.length?' “'+esc(q)+'”':'')+'</p>';}).catch(function(){o.textContent='Search is not available right now.';});}
 f.addEventListener('submit',function(e){e.preventDefault();run(i.value);try{history.replaceState(null,'',location.pathname+(i.value?'?q='+encodeURIComponent(i.value):''));}catch(x){}});
 var t;i.addEventListener('input',function(){clearTimeout(t);t=setTimeout(function(){run(i.value);},250);});
-var q=new URLSearchParams(location.search).get('q');if(q){i.value=q;run(q);}})();
+var q=new URLSearchParams(location.search).get('q');if(q){i.value=q;run(q);}
+if(keys.length)load().then(buildFacets);})();
 CCJS;
 
 const CC_FORM_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date'];
@@ -2447,6 +2585,10 @@ function cc_render_block_body($block) {
             // the items that point to the item being published (rebuild_all.php); nothing on other pages
             return $customCss . cc_render_related($block);
 
+        case 'ITEM_TERMS':
+            // the categories and tags of the item being published; nothing on other pages
+            return $customCss . cc_render_item_terms($block);
+
         case 'HTML':
             $html = "<div id=\"$innerId\" class=\"cc-html-block$animClass$innerClass\"$styleString>\n" . ($block['content']['code'] ?? '') . "\n</div>\n";
             return $customCss . $html;
@@ -2553,7 +2695,14 @@ function cc_render_block_body($block) {
             $sbtn = htmlspecialchars(trim((string)($c['buttonText'] ?? '')) !== '' ? $c['buttonText'] : 'Search');
             $empty = htmlspecialchars(trim((string)($c['noResults'] ?? '')) !== '' ? $c['noResults'] : 'No results for');
             $limit = cc_int($c['limit'] ?? null, 10, 1, 50);
-            $html = "<div id=\"$innerId\" class=\"cc-search$animClass$innerClass\" style=\"$styleAttr\" data-index=\"{{BASE_URL}}search-index.json\" data-empty=\"$empty\" data-limit=\"$limit\">\n";
+            // faceted search: the facets the visitor can filter by (the collection, and a taxonomy: tax:<id>)
+            $facets = [];
+            foreach ((is_array($c['facets'] ?? null) ? $c['facets'] : []) as $fk) {
+                if (is_string($fk) && ($fk === 'collection' || preg_match('/^tax:[a-z0-9_-]{1,40}$/', $fk))) $facets[] = $fk;
+            }
+            $facets = array_slice(array_values(array_unique($facets)), 0, 10);
+            $fattr = $facets ? ' data-facets="' . htmlspecialchars(json_encode($facets)) . '"' : '';
+            $html = "<div id=\"$innerId\" class=\"cc-search$animClass$innerClass\" style=\"$styleAttr\" data-index=\"{{BASE_URL}}search-index.json\" data-empty=\"$empty\" data-limit=\"$limit\"$fattr>\n";
             $html .= "<form class=\"cc-search-form\" role=\"search\" style=\"display:flex; gap:8px; flex-wrap:wrap;\">\n";
             $html .= "<input type=\"search\" name=\"q\" aria-label=\"$ph\" placeholder=\"$ph\" style=\"flex:1 1 220px; min-width:0; padding:12px 14px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:inherit; box-sizing:border-box;\">\n";
             $html .= "<button type=\"submit\" style=\"padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;\">$sbtn</button>\n";

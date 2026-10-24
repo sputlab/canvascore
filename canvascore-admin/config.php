@@ -583,6 +583,112 @@ function cc_schema_clean($raw, $defs) {
     return ['type' => $type, 'map' => $map, 'currency' => $cur];
 }
 
+// ---------------------------------------------------------------------------
+// Categories and tags (taxonomies per collection). A collection has taxonomies (collection_taxonomies: a name, an address
+// part and whether an item may have several of its terms); each taxonomy has terms (collection_terms). An item keeps its
+// terms as collection_items.terms_json: {taxonomy id: [term ids]}. Every taxonomy and term is cleaned here.
+// ---------------------------------------------------------------------------
+const CC_TAX_MAX = 20;
+const CC_TERM_MAX = 200;
+// A slug part that can be a folder of its own (no reserved word of the site)
+function cc_tax_slug($raw) {
+    $s = cc_safe_slug($raw);
+    return in_array($s, ['index', 'feed', 'feed-xml', 'search', 'uploads'], true) ? '' : $s;
+}
+function cc_tax_id($raw) {
+    $id = strtolower(trim(is_scalar($raw) ? (string)$raw : ''));
+    return preg_match('/^[a-z0-9_-]{1,40}$/', $id) ? $id : 't' . bin2hex(random_bytes(6));
+}
+// The tidy taxonomies of a collection: [{id, name, slug, multiple, terms: [{id, name, slug, description}]}]. Names and
+// addresses are unique within the collection; a term without a usable name or address is dropped.
+function cc_taxonomies_clean($raw) {
+    if (!is_array($raw)) return [];
+    $out = []; $tax_slugs = []; $tax_ids = [];
+    foreach ($raw as $t) {
+        if (count($out) >= CC_TAX_MAX) break;
+        if (!is_array($t)) continue;
+        $name = cc_field_text($t['name'] ?? '', 80);
+        $slug = cc_tax_slug($t['slug'] ?? '') ?: cc_tax_slug($name);
+        if ($name === '' || $slug === '' || isset($tax_slugs[$slug])) continue;
+        $id = cc_tax_id($t['id'] ?? '');
+        if (isset($tax_ids[$id])) $id = cc_tax_id('');
+        $terms = []; $term_slugs = []; $term_ids = [];
+        foreach ((is_array($t['terms'] ?? null) ? $t['terms'] : []) as $m) {
+            if (count($terms) >= CC_TERM_MAX) break;
+            if (!is_array($m)) continue;
+            $tname = cc_field_text($m['name'] ?? '', 80);
+            $tslug = cc_tax_slug($m['slug'] ?? '') ?: cc_tax_slug($tname);
+            if ($tname === '' || $tslug === '' || isset($term_slugs[$tslug])) continue;
+            $tid = cc_tax_id($m['id'] ?? '');
+            if (isset($term_ids[$tid])) $tid = cc_tax_id('');
+            $term_ids[$tid] = true; $term_slugs[$tslug] = true;
+            $terms[] = ['id' => $tid, 'name' => $tname, 'slug' => $tslug, 'description' => cc_field_text(strip_tags(is_scalar($m['description'] ?? null) ? (string)$m['description'] : ''), 500)];
+        }
+        $tax_ids[$id] = true; $tax_slugs[$slug] = true;
+        $out[] = ['id' => $id, 'name' => $name, 'slug' => $slug, 'multiple' => !array_key_exists('multiple', $t) || !empty($t['multiple']), 'terms' => $terms];
+    }
+    return $out;
+}
+// The taxonomies of a collection as stored (taxonomies in order, each with its terms in order)
+function cc_taxonomies_load($pdo, $cid) {
+    $out = [];
+    $st = $pdo->prepare("SELECT id, name, slug, multiple FROM collection_taxonomies WHERE collection_id = ? ORDER BY position, name");
+    $st->execute([$cid]);
+    $mt = $pdo->prepare("SELECT id, name, slug, description FROM collection_terms WHERE taxonomy_id = ? ORDER BY position, name");
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $t) {
+        $mt->execute([$t['id']]);
+        $out[] = ['id' => $t['id'], 'name' => $t['name'], 'slug' => $t['slug'], 'multiple' => (int)$t['multiple'] === 1, 'terms' => $mt->fetchAll(PDO::FETCH_ASSOC)];
+    }
+    return $out;
+}
+// An id for a taxonomy or term of this collection: the id sent when nothing else uses it, a new one otherwise
+function cc_tax_free_id($pdo, $table, $id, $cid) {
+    $st = $pdo->prepare("SELECT collection_id FROM $table WHERE id = ?");
+    $st->execute([$id]);
+    $owner = $st->fetchColumn();
+    return ($owner === false || $owner === $cid) ? $id : cc_tax_id('');
+}
+// An item's terms, cleaned against its collection: only terms of its taxonomies; one term at most for a taxonomy
+// that does not take several
+function cc_terms_clean($raw, $pdo, $cid) {
+    $raw = is_array($raw) ? $raw : [];
+    $st = $pdo->prepare("SELECT t.id AS tid, t.multiple, m.id AS mid FROM collection_taxonomies t LEFT JOIN collection_terms m ON m.taxonomy_id = t.id WHERE t.collection_id = ?");
+    $st->execute([$cid]);
+    $allowed = []; $multi = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $multi[$r['tid']] = (int)$r['multiple'] === 1;
+        if ($r['mid'] !== null) $allowed[$r['tid']][$r['mid']] = true;
+    }
+    $out = [];
+    foreach ($raw as $tid => $list) {
+        if (!isset($allowed[$tid]) || !is_array($list)) continue;
+        $picked = [];
+        foreach ($list as $mid) {
+            $mid = is_scalar($mid) ? (string)$mid : '';
+            if (isset($allowed[$tid][$mid]) && !in_array($mid, $picked, true)) $picked[] = $mid;
+        }
+        if (!$multi[$tid]) $picked = array_slice($picked, 0, 1);
+        if ($picked) $out[$tid] = $picked;
+    }
+    return $out;
+}
+
+// ---------------------------------------------------------------------------
+// Listing and archive pages of a collection: how many items a page holds, and which archives are published (the years,
+// the filters of its choice fields, the sorts). The layout is the same for every archive.
+// ---------------------------------------------------------------------------
+const CC_ARCHIVE_DEFAULT_PER_PAGE = 12;
+function cc_archive_clean($raw) {
+    $raw = is_array($raw) ? $raw : [];
+    $per = is_numeric($raw['perPage'] ?? null) ? (int)$raw['perPage'] : CC_ARCHIVE_DEFAULT_PER_PAGE;
+    return [
+        'perPage' => max(3, min(50, $per)),
+        'years' => !array_key_exists('years', $raw) || !empty($raw['years']),
+        'filters' => !array_key_exists('filters', $raw) || !empty($raw['filters']),
+        'sorts' => !array_key_exists('sorts', $raw) || !empty($raw['sorts']),
+    ];
+}
+
 // Top-level folders of the site that belong to CanvasCore itself: no page, collection or redirect may use them
 // (a page published there would replace or redirect the admin, the images or the data).
 function cc_reserved_slugs() {

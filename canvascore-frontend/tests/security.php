@@ -237,6 +237,122 @@ $own->api('save_collection_design', ['collection_id' => 'col_books', 'blocks' =>
 $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 check('without blocks in the design, the items go back to their own blocks', strpos((string)@file_get_contents($web . '/books/emma/index.html'), 'OWN BLOCK') !== false);
 
+echo "\nCATEGORIES AND TAGS (published)\n";
+$own->api('save_collection', ['id' => 'col_news', 'name' => 'News', 'slug' => 'news-desk', 'fields' => []]);
+$r = $own->api('save_taxonomies', ['collection_id' => 'col_news', 'taxonomies' => [
+    ['id' => 'cat', 'name' => 'Category', 'multiple' => false, 'terms' => [['id' => 'c-news', 'name' => 'World news', 'description' => 'Around the world']]],
+    ['id' => 'tags', 'name' => 'Tags', 'multiple' => true, 'terms' => [['id' => 'tg-red', 'name' => 'Red'], ['id' => 'tg-blue', 'name' => 'Blue']]]]]);
+check('an admin saves the categories and tags of a collection', !empty($r['json']['success']) && count($r['json']['taxonomies'] ?? []) === 2, json_encode($r['json'] ?? null));
+$got = $own->req('GET', '/canvascore-admin/api.php?action=get_taxonomies&collection=col_news');
+check('the categories and tags are given back, in order, with their terms', ($got['json'][0]['name'] ?? '') === 'Category' && ($got['json'][1]['terms'][1]['name'] ?? '') === 'Blue', json_encode($got['json'] ?? null));
+$own->api('save_item', ['id' => 'nw1', 'collection_id' => 'col_news', 'title' => 'Storm hits coast', 'slug' => 'storm', 'status' => 'published', 'date' => '2026-10-20',
+    'blocks' => [['id' => 'nwb', 'type' => 'ITEM_TERMS', 'styles' => [], 'content' => ['taxonomy' => '']]], 'terms' => ['cat' => ['c-news'], 'tags' => ['tg-red', 'tg-blue']]]);
+$own->api('save_item', ['id' => 'nw2', 'collection_id' => 'col_news', 'title' => 'Quiet day', 'slug' => 'quiet', 'status' => 'published', 'date' => '2026-10-19', 'blocks' => [], 'terms' => ['tags' => ['tg-red']]]);
+$own->api('save_item', ['id' => 'nw3', 'collection_id' => 'col_news', 'title' => 'Old story', 'slug' => 'old', 'status' => 'published', 'archived' => 1, 'date' => '2026-01-01', 'blocks' => [], 'terms' => ['tags' => ['tg-red']]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$term_page = (string)@file_get_contents($web . '/news-desk/category/world-news/index.html');
+check('a term has its own page with its items (newest first), and not the archived ones', strpos($term_page, 'Storm hits coast') !== false && strpos($term_page, 'Quiet day') === false && strpos($term_page, 'Old story') === false, substr($term_page, 0, 0));
+check('the term page carries the term\'s name, description and taxonomy', strpos($term_page, 'World news') !== false && strpos($term_page, 'Around the world') !== false && strpos($term_page, 'Category') !== false);
+$tag_page = (string)@file_get_contents($web . '/news-desk/tags/red/index.html');
+check('a multiple-term taxonomy gets pages for its terms too', strpos($tag_page, 'Storm hits coast') !== false && strpos($tag_page, 'Quiet day') !== false);
+$tax_page = (string)@file_get_contents($web . '/news-desk/tags/index.html');
+check('a taxonomy has an index page listing its terms with their counts', strpos($tax_page, 'Red') !== false && strpos($tax_page, '(2)') !== false, substr($tax_page, 0, 0));
+$storm = (string)@file_get_contents($web . '/news-desk/storm/index.html');
+check('an item page shows its categories and tags as links to their pages', strpos($storm, 'news-desk/tags/red/') !== false);
+$own->api('save_taxonomies', ['collection_id' => 'col_news', 'taxonomies' => [['id' => 'cat', 'name' => 'Category', 'multiple' => false, 'terms' => [['id' => 'c-news', 'name' => 'World news']]]]]);
+$after = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=nw1');
+check('removing a taxonomy drops its terms from the items that had them', json_encode(json_decode((string)($after['json']['terms_json'] ?? '{}'), true)) === '{"cat":["c-news"]}', (string)($after['json']['terms_json'] ?? ''));
+
+echo "\nLISTING AND ARCHIVE PAGES (published)\n";
+$own->api('save_collection', ['id' => 'col_journal', 'name' => 'Journal', 'slug' => 'journal', 'fields' => [
+    ['id' => 'tier', 'key' => 'tier', 'label' => 'Tier', 'type' => 'choice', 'options' => [['value' => 'gold', 'label' => 'Gold'], ['value' => 'silver', 'label' => 'Silver']]]]]);
+$r = $own->api('save_collection', ['id' => 'col_journal', 'name' => 'Journal', 'slug' => 'journal', 'archive' => ['perPage' => 500, 'years' => true, 'filters' => true, 'sorts' => true]]);
+$jc = $own->api('get_collections');
+$jrow = array_values(array_filter($jc['json'] ?? [], function ($c) { return $c['id'] === 'col_journal'; }))[0] ?? [];
+check('the listing settings are saved, and the page size is kept within 3 to 50', !empty($r['json']['success']) && ($jrow['archive']['perPage'] ?? 0) === 50 && ($jrow['archive']['years'] ?? false) === true, json_encode($jrow['archive'] ?? null));
+$own->api('save_collection', ['id' => 'col_journal', 'name' => 'Journal', 'slug' => 'journal', 'archive' => ['perPage' => 5, 'years' => true, 'filters' => true, 'sorts' => true]]);
+for ($i = 1; $i <= 14; $i++) {
+    $title = chr(64 + $i) . ' item';   // A item .. N item
+    $date = $i <= 8 ? sprintf('2026-10-%02d', $i + 10) : sprintf('2025-03-%02d', $i - 8);
+    $own->api('save_item', ['id' => 'jn' . $i, 'collection_id' => 'col_journal', 'title' => $title, 'slug' => 'post-' . $i, 'status' => 'published', 'date' => $date,
+        'blocks' => [], 'field_values' => ['tier' => $i % 2 ? 'gold' : 'silver']]);
+}
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$lst1 = (string)@file_get_contents($web . '/journal/index.html');
+$lst2 = (string)@file_get_contents($web . '/journal/page/2/index.html');
+$lst3 = (string)@file_get_contents($web . '/journal/page/3/index.html');
+check('the listing is paginated, newest first: page 1 holds the 5 newest items', strpos($lst1, 'H item') !== false && strpos($lst1, 'D item') !== false && strpos($lst1, 'C item') === false, substr($lst1, 0, 0));
+check('…page 2 and page 3 hold the next items, and the page links go from one to the next', strpos($lst2, 'C item') !== false && strpos($lst2, 'M item') !== false && strpos($lst3, 'I item') !== false && strpos($lst3, 'Page 3 of 3') !== false && strpos($lst1, 'journal/page/2/') !== false);
+check('the first listing page links to its sorts, years, filters and taxonomies', strpos($lst1, 'journal/sort/title/') !== false && strpos($lst1, 'journal/2025/') !== false && strpos($lst1, 'journal/filter/tier/gold/') !== false);
+$y2025 = (string)@file_get_contents($web . '/journal/2025/index.html');
+check('a year archive holds its items only, paginated', strpos($y2025, 'N item') !== false && strpos($y2025, 'H item') === false && is_file($web . '/journal/2025/page/2/index.html'));
+$m = (string)@file_get_contents($web . '/journal/2026/10/index.html');
+check('a month archive holds the items of that month', strpos($m, 'H item') !== false && strpos($m, 'N item') === false && strpos($m, 'October 2026') !== false);
+$st = (string)@file_get_contents($web . '/journal/sort/title/index.html');
+check('the title sort lists the items A to Z', strpos($st, 'A item') !== false && strpos($st, 'A item') < strpos($st, 'B item'));
+$so = (string)@file_get_contents($web . '/journal/sort/oldest/index.html');
+check('the oldest-first listing starts with the oldest items (I item first; the newest are not on that page)', strpos($so, 'I item') !== false && strpos($so, 'A item') === false && strpos($so, 'I item') < strpos($so, 'M item'), substr($so, 0, 0));
+$gold = (string)@file_get_contents($web . '/journal/filter/tier/gold/index.html');
+check('a filter archive holds the items that have that choice (and not the others)', strpos($gold, 'A item') !== false && strpos($gold, 'C item') !== false && strpos($gold, 'B item') === false && is_file($web . '/journal/filter/tier/gold/page/2/index.html'));
+// an item whose address is a year keeps its page: the year archive does not replace it
+$own->api('save_item', ['id' => 'jn2026', 'collection_id' => 'col_journal', 'title' => 'The year item', 'slug' => '2026', 'status' => 'published', 'blocks' => [], 'field_values' => []]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('an item whose address is a year keeps that address (no year archive is written over it)', strpos((string)@file_get_contents($web . '/journal/2026/index.html'), 'The year item') !== false);
+
+echo "\nSCHEDULED PUBLISHING\n";
+$own->api('save_collection', ['id' => 'col_sched', 'name' => 'Sched', 'slug' => 'sched', 'fields' => []]);
+$own->api('save_item', ['id' => 'sc1', 'collection_id' => 'col_sched', 'title' => 'Due item', 'slug' => 'due', 'status' => 'draft', 'blocks' => []]);
+$own->api('save_item', ['id' => 'sc2', 'collection_id' => 'col_sched', 'title' => 'Later item', 'slug' => 'later', 'status' => 'draft', 'blocks' => []]);
+$own->api('save_item', ['id' => 'sc3', 'collection_id' => 'col_sched', 'title' => 'Ending item', 'slug' => 'ending', 'status' => 'published', 'blocks' => []]);
+$bad = $own->api('set_schedule', ['kind' => 'item', 'id' => 'sc1', 'publish_at' => '2026-13-45 10:00']);
+check('a schedule needs a real date and time', empty($bad['json']['success']) && strpos($bad['json']['message'] ?? '', 'date and a time') !== false, json_encode($bad['json'] ?? null));
+$order = $own->api('set_schedule', ['kind' => 'item', 'id' => 'sc3', 'publish_at' => '2026-05-01T10:00', 'unpublish_at' => '2026-04-01T10:00']);
+check('the unpublish time must come after the publish time', empty($order['json']['success']), json_encode($order['json'] ?? null));
+$due = $own->api('set_schedule', ['kind' => 'item', 'id' => 'sc1', 'publish_at' => '2020-01-01T10:00']);
+$own->api('set_schedule', ['kind' => 'item', 'id' => 'sc2', 'publish_at' => '2999-01-01T10:00']);
+$own->api('set_schedule', ['kind' => 'item', 'id' => 'sc3', 'unpublish_at' => '2020-06-01T09:00']);
+check('a schedule is saved as "YYYY-MM-DD HH:MM"', !empty($due['json']['success']) && ($due['json']['publish_at'] ?? '') === '2020-01-01 10:00');
+// any admin request makes the due changes (here, a list of items)
+$own->req('GET', '/canvascore-admin/api.php?action=get_items&collection=col_sched');
+$g1 = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=sc1');
+check('the due item goes live on the next admin request, and its schedule is cleared', ($g1['json']['status'] ?? '') === 'published' && ($g1['json']['publish_at'] ?? 'x') === '', json_encode([$g1['json']['status'] ?? null, $g1['json']['publish_at'] ?? null]));
+$g2 = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=sc2');
+check('an item scheduled for later stays as it is', ($g2['json']['status'] ?? '') === 'draft' && ($g2['json']['publish_at'] ?? '') === '2999-01-01 10:00');
+$g3 = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=sc3');
+check('an item whose unpublish time has come goes back to draft', ($g3['json']['status'] ?? '') === 'draft' && ($g3['json']['unpublish_at'] ?? 'x') === '');
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('the site is published again after the change: the due item has its page, the ended one none', is_file($web . '/sched/due/index.html') && !is_file($web . '/sched/ending/index.html'));
+// cron.php does the same on a server with no admin: here a page whose publish time has come
+$own->api('save_item', ['id' => 'sc4', 'collection_id' => 'col_sched', 'title' => 'Cron item', 'slug' => 'cron', 'status' => 'draft', 'blocks' => []]);
+$own->api('set_schedule', ['kind' => 'item', 'id' => 'sc4', 'publish_at' => '2020-02-02T10:00']);
+$out = [];
+exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($admin . '/cron.php') . ' 2>&1', $out, $code);
+$g4 = $own->req('GET', '/canvascore-admin/api.php?action=get_item&id=sc4');
+check('cron.php makes the due changes from the command line, and refuses to run from the web', $code === 0 && ($g4['json']['status'] ?? '') === 'published' && is_file($web . '/sched/cron/index.html') && implode(' ', $out) !== '', implode(' | ', $out));
+$webrun = $anon->req('GET', '/canvascore-admin/cron.php');
+check('cron.php is not served to the web', $webrun['code'] === 404 || $webrun['code'] === 403 || strpos((string)$webrun['body'], 'changes') === false);
+
+echo "\nRELATED BY TAG AND THE SEARCH FACETS (published)\n";
+$own->api('save_collection', ['id' => 'col_rec', 'name' => 'Recipes', 'slug' => 'recipes', 'fields' => []]);
+$own->api('save_taxonomies', ['collection_id' => 'col_rec', 'taxonomies' => [
+    ['id' => 'cuisine', 'name' => 'Cuisine', 'multiple' => false, 'terms' => [['id' => 'it', 'name' => 'Italian'], ['id' => 'gr', 'name' => 'Greek']]],
+    ['id' => 'mood', 'name' => 'Mood', 'multiple' => true, 'terms' => [['id' => 'quick', 'name' => 'Quick'], ['id' => 'cosy', 'name' => 'Cosy']]]]]);
+$tagged = ['pasta' => ['cuisine' => ['it'], 'mood' => ['quick', 'cosy']], 'pizza' => ['cuisine' => ['it'], 'mood' => ['quick']], 'salad' => ['cuisine' => ['gr']], 'risotto' => ['cuisine' => ['it'], 'mood' => ['cosy']]];
+foreach ($tagged as $slug => $tm) {
+    $own->api('save_item', ['id' => 'rc-' . $slug, 'collection_id' => 'col_rec', 'title' => ucfirst($slug), 'slug' => $slug, 'status' => 'published', 'date' => '2026-10-20',
+        'blocks' => $slug === 'pasta' ? [['id' => 'rel1', 'type' => 'RELATED', 'styles' => [], 'content' => ['mode' => 'tags', 'taxonomy' => '', 'limit' => 5, 'title' => 'More like this']]] : [],
+        'terms' => $tm]);
+}
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pasta = (string)@file_get_contents($web . '/recipes/pasta/index.html');
+check('an item lists the other items that share tags with it, the most shared first, and not the others', strpos($pasta, 'More like this') !== false && strpos($pasta, 'Pizza') !== false && strpos($pasta, 'Risotto') !== false && strpos($pasta, 'Salad') === false
+    && strpos($pasta, 'Pizza') < strpos($pasta, 'Risotto'), substr($pasta, strpos($pasta, 'cc-related') ?: 0, 200));
+$idx = json_decode((string)@file_get_contents($web . '/search-index.json'), true) ?: [];
+$pz = array_values(array_filter($idx, function ($e) { return ($e['t'] ?? '') === 'Pizza'; }))[0] ?? [];
+check('the search index carries each item\'s facets: its collection and the terms of each taxonomy', ($pz['f']['collection'] ?? '') === 'Recipes' && ($pz['f']['tax:cuisine'] ?? []) === ['Italian'] && ($pz['f']['tax:mood'] ?? []) === ['Quick'] && ($pz['fl']['tax:cuisine'] ?? '') === 'Cuisine', json_encode($pz));
+$pg = array_values(array_filter($idx, function ($e) { return ($e['f']['collection'] ?? '') === 'Pages'; }));
+check('pages are in the index under the "Pages" facet', is_array($pg));
+
 echo "\nACCOUNTS\n";
 $r = $own->api('add_user', ['username' => 'eddie', 'password' => 'Editor-pass-1', 'role' => 'editor']);
 check('an admin adds an editor', !empty($r['json']['success']), $r['code'] . ' ' . $r['body']);

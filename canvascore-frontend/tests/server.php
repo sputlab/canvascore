@@ -3,6 +3,7 @@
 // code kept on editors' saves, re-linking after a slug change, client address behind a proxy,
 // SVG upload check, sanitizer, numbers, slider arrows and empty-text fallbacks.
 require __DIR__ . '/../../canvascore-admin/compiler.php';
+require_once __DIR__ . '/../../canvascore-admin/publish.php';
 $fails = 0; $total = 0;
 function check($name, $ok, $extra = '') { global $fails, $total; $total++; if ($ok) echo "  ✓ $name\n"; else { $fails++; echo "  ✗ $name" . ($extra !== '' ? "  → $extra" : '') . "\n"; } }
 
@@ -183,6 +184,52 @@ check('dynamic values: fields, item and reference tokens become the item\'s valu
 check('dynamic values: outside an item they are removed (a visitor never sees a placeholder)', cc_bind_deep($btpl, null) === 'Hi ,  on .  /  /  /   |    ');
 check('dynamic values: every string of a block\'s content is bound, keys kept', json_encode(cc_bind_deep(['text' => '{{field:price}}', 'nested' => ['a' => '{{item:title}}'], 'n' => 3], $bctx)) === '{"text":"12.5","nested":{"a":"Ada &quot;L&quot;"},"n":3}');
 check('dynamic values: a page without tokens is left as it is', cc_bind_deep('plain text', $bctx) === 'plain text');
+
+echo "\nCATEGORIES AND TAGS\n";
+$tax = cc_taxonomies_clean([
+    ['id' => 'cat', 'name' => 'Category', 'slug' => 'Category', 'multiple' => false, 'terms' => [['id' => 'news', 'name' => 'News', 'slug' => '', 'description' => '<b>x</b>'], ['id' => 'news2', 'name' => 'News!', 'slug' => 'news'], ['id' => 'feed', 'name' => 'Feed', 'slug' => 'feed']]],
+    ['name' => 'Tags', 'terms' => [['id' => 'red', 'name' => 'Red']]],
+    ['name' => 'Feed', 'slug' => 'feed'],
+    ['name' => 'category', 'slug' => 'category'],
+]);
+check('taxonomies: names and addresses are tidy and unique; a reserved address is refused; several terms are the default', count($tax) === 2 && $tax[0]['slug'] === 'category' && $tax[1]['multiple'] === true && $tax[0]['multiple'] === false, json_encode($tax));
+check('taxonomies: a term keeps its name; its address is made from the name when it is left out; a duplicate address is dropped', $tax[0]['terms'][0]['slug'] === 'news' && count($tax[0]['terms']) === 1 && $tax[0]['terms'][0]['description'] === 'x', json_encode($tax[0]['terms']));
+check('taxonomies: a term with a bad id gets a new one, and the term id is kept when it is good', $tax[0]['terms'][0]['id'] === 'news' && strlen($tax[1]['terms'][0]['id']) >= 1, json_encode($tax[1]['terms']));
+$tpdo = new PDO('sqlite::memory:');
+$tpdo->exec("CREATE TABLE collection_taxonomies (id TEXT PRIMARY KEY, collection_id TEXT, name TEXT, slug TEXT, multiple INTEGER, position INTEGER)");
+$tpdo->exec("CREATE TABLE collection_terms (id TEXT PRIMARY KEY, taxonomy_id TEXT, collection_id TEXT, name TEXT, slug TEXT, description TEXT, position INTEGER)");
+$tpdo->exec("INSERT INTO collection_taxonomies VALUES ('cat','blog','Category','category',0,0),('tags','blog','Tags','tags',1,1)");
+$tpdo->exec("INSERT INTO collection_terms VALUES ('news','cat','blog','News','news','',0),('tech','cat','blog','Tech','tech','',1),('red','tags','blog','Red','red','',0),('other','cat','shop','Other','other','',0)");
+check('item terms: only terms of its own collection, one term for a single-term taxonomy, and several for a multiple one', json_encode(cc_terms_clean(['cat' => ['news', 'tech'], 'tags' => ['red', 'other'], 'nope' => ['x']], $tpdo, 'blog')) === '{"cat":["news"],"tags":["red"]}', json_encode(cc_terms_clean(['cat' => ['news', 'tech'], 'tags' => ['red', 'other']], $tpdo, 'blog')));
+$tterms = ['news' => ['name' => 'News', 'slug' => 'news', 'tax_id' => 'cat', 'tax_name' => 'Category', 'tax_slug' => 'category', 'col_slug' => 'blog']];
+$tctx = ['item_terms' => ['cat' => ['news']], 'terms' => $tterms, 'item_archived' => false];
+cc_item_context($tctx);
+$tblock = cc_render_item_terms(['type' => 'ITEM_TERMS', 'content' => ['taxonomy' => '', 'separator' => ' | ']]);
+check('the Categories & tags block links each term to its listing page, with the taxonomy named', strpos($tblock, 'href="{{BASE_URL}}blog/category/news/"') !== false && strpos($tblock, 'Category: ') !== false, $tblock);
+cc_item_context(array_merge($tctx, ['item_archived' => true]));
+check('…an archived item shows its terms without links', strpos(cc_render_item_terms(['type' => 'ITEM_TERMS', 'content' => []]), '<a') === false);
+cc_item_context(null);
+check('…and nothing outside an item', cc_render_item_terms(['type' => 'ITEM_TERMS', 'content' => []]) === '');
+$tcard = cc_term_page_inner('Category', 'News <b>', 'About news', '<a>card</a>');
+check('a term page names its taxonomy and term (escaped) and holds the cards', strpos($tcard, 'News &lt;b&gt;') !== false && strpos($tcard, '<a>card</a>') !== false && strpos($tcard, '<b>') === false);
+check('a taxonomy page lists its terms with their counts', strpos(cc_taxonomy_index_inner('Category', [['name' => 'News', 'description' => '', 'count' => 3, 'href' => '/blog/category/news/']]), '(3)') !== false);
+
+echo "\nLISTING AND ARCHIVE SETTINGS\n";
+check('archive settings: the page size is kept within 3 to 50, and every archive is on by default', cc_archive_clean([]) === ['perPage' => 12, 'years' => true, 'filters' => true, 'sorts' => true]
+    && cc_archive_clean(['perPage' => 1])['perPage'] === 3 && cc_archive_clean(['perPage' => 999])['perPage'] === 50 && cc_archive_clean(['perPage' => 'x'])['perPage'] === 12);
+check('archive settings: an archive that is switched off stays off', cc_archive_clean(['years' => false, 'sorts' => 0])['years'] === false && cc_archive_clean(['years' => false, 'sorts' => 0])['sorts'] === false && cc_archive_clean(['filters' => false])['filters'] === false);
+check('pagination: the first page is the address, the next ones are in page/N/; the links go to the page before and after', cc_archive_nav('blog/', 1, 1) === '' && strpos(cc_archive_nav('blog/', 2, 3), 'href="{{BASE_URL}}blog/"') !== false && strpos(cc_archive_nav('blog/', 2, 3), 'href="{{BASE_URL}}blog/page/3/"') !== false && strpos(cc_archive_nav('blog/', 2, 3), 'Page 2 of 3') !== false);
+check('the browse links group the sorts, years and filters, and nothing is empty', strpos(cc_archive_browse_html([['Years', [['2026', 'blog/2026/']]], ['Sort', []]]), 'blog/2026/') !== false && strpos(cc_archive_browse_html([['Sort', []]]), 'cc-archive-browse') === false);
+check('an archive page carries its kind, title and description (escaped), and its cards', strpos(cc_archive_page_inner('Year', 'A <b>', 'Desc', '<a>card</a>', '', ''), 'A &lt;b&gt;') !== false && strpos(cc_archive_page_inner('Year', 'T', '', '<a>card</a>', '', ''), '<a>card</a>') !== false);
+
+echo "\nSCHEDULED PUBLISHING: TIMES\n";
+check('a schedule time takes the editor\'s value, or a stored one, and nothing else', cc_schedule_clean('2026-11-03T09:30') === '2026-11-03 09:30' && cc_schedule_clean('2026-11-03 09:30') === '2026-11-03 09:30' && cc_schedule_clean('') === '');
+check('…an impossible date or time is refused', cc_schedule_clean('2026-02-30T10:00') === false && cc_schedule_clean('2026-11-03T25:00') === false && cc_schedule_clean('tomorrow') === false && cc_schedule_clean('2026-11-03T09:60') === false);
+
+echo "\nFACETED SEARCH AND RELATED BY TAG (renderer)\n";
+$sh = render_block(['type' => 'SEARCH', 'id' => 'sr1', 'content' => ['facets' => ['collection', 'tax:cat-1', 'tax:<script>', 'nope']]]);
+check('the search block offers the facets it is given, and drops anything that is not a facet', strpos($sh, ' data-facets="[&quot;collection&quot;,&quot;tax:cat-1&quot;]"') !== false, substr($sh, 0, 300));
+check('…and without facets the search block is as it was (no facets attribute)', strpos(render_block(['type' => 'SEARCH', 'id' => 'sr2', 'content' => []]), ' data-facets="') === false);
 
 echo "\nUPDATING AN EXISTING SITE (migration 8)\n";
 require_once __DIR__ . '/../../canvascore-admin/migrations.php';
