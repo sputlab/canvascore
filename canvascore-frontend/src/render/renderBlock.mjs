@@ -135,17 +135,6 @@ function ccStr(v) { if (v === null || v === undefined || typeof v === 'object') 
 function ccEsc(v) { return escapeHtml(ccStr(v)); }
 function ccEnc(s) { return encodeURIComponent(String(s ?? '')).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase()); }
 
-// Share Bar networks, in the order they are shown: [id, label, glyph, brand color]. The glyph is a short badge text
-// (social networks) or an inline icon. Twin of CC_SHARE_NETS in compiler.php.
-const SHARE_ICON = (paths) => `<svg class="cc-share-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-const SHARE_NETS = [
-  ['facebook', 'Facebook', 'f', '#1877f2'], ['x', 'X', 'X', '#000000'], ['linkedin', 'LinkedIn', 'in', '#0a66c2'],
-  ['whatsapp', 'WhatsApp', 'W', '#25d366'], ['telegram', 'Telegram', 'T', '#229ed9'],
-  ['email', 'Email', SHARE_ICON('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>'), '#475569'],
-  ['copy', 'Copy link', SHARE_ICON('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'), '#475569'],
-  ['print', 'Print', SHARE_ICON('<path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>'), '#475569'],
-  ['share', 'Share', SHARE_ICON('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>'), '#475569'],
-];
 // Multi-step Form field types: the Form block's, plus choices. Twin of CC_WIZARD_TYPES in compiler.php.
 const WIZARD_TYPES = ['text', 'email', 'textarea', 'number', 'tel', 'url', 'date', 'select', 'radio', 'checkboxes', 'consent'];
 const WZ_INPUT = 'width:100%; padding:12px; border:1px solid var(--cc-field-border, #cbd5e1); border-radius:var(--cc-field-radius, 8px); font:inherit; background:var(--cc-field-bg, #fff); color:#0f172a; box-sizing:border-box;';
@@ -162,6 +151,7 @@ const CODE_LANGS = [['html', 'HTML'], ['css', 'CSS'], ['js', 'JavaScript'], ['js
 
 // A media file address (audio, video): http(s) or a path on this site; any other scheme (javascript:, data:…) -> ''.
 // Twin of cc_media_src() in compiler.php.
+export { ccMediaSrc as ccMediaSrcValue };
 function ccMediaSrc(u) {
   const t = String(u ?? '').trim();
   // eslint-disable-next-line no-control-regex -- browsers ignore control characters in a URL scheme
@@ -377,40 +367,6 @@ function renderBlockBody(block, opts = {}) {
       return customCss + `<section id="${innerId}" class="cc-hero${animClass}${innerClass}" style="${styleAttr} ${bg} min-height:${minHeight}; display:flex; flex-direction:column; justify-content:center;">\n<div>\n${opts.fields ? `<div${field('title', 'Title')}>${title}</div>` : title}\n<div style="margin:20px 0;"${field('subtitle', 'Subtitle')}>${subtitle}</div>\n${buttonsHtml}\n</div>\n</section>\n`;
     }
 
-    case 'SLIDER': {
-      const effect = content.effect ?? 'slide';
-      const isFade = effect === 'fade';
-      const fit = escapeHtml(content.objectFit ?? 'cover');
-      const opos = escapeHtml(content.objectPosition ?? 'center');
-      const ar = escapeHtml(content.aspectRatio ?? '16 / 9');
-      const hasHeight = styles.height && styles.height !== 'auto';
-      const boxSize = hasHeight ? '' : ` aspect-ratio:${ar};`;
-      html = `<div id="${innerId}" class="cc-slider${animClass}${innerClass}" style="${styleAttr} position:relative; overflow:hidden; border-radius:inherit;${boxSize}">\n`;
-      html += `  <div class="cc-slides" style="display:flex; position:relative; height:100%; ${isFade ? '' : 'overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; -ms-overflow-style:none;'}">\n`;
-      if (Array.isArray(content.images)) {
-        content.images.forEach((img, idx) => {
-          const src = escapeHtml(img.src ?? '');
-          const alt = escapeHtml(img.alt ?? '');
-          if (isFade) {
-            const opacity = idx === 0 ? 1 : 0;
-            const pos = idx === 0 ? 'relative' : 'absolute';
-            html += `    <img src="${src}" alt="${alt}" style="position:${pos}; top:0; left:0; width:100%; height:100%; object-fit:${fit}; object-position:${opos}; opacity:${opacity}; transition:opacity 0.8s ease; border-radius:inherit;" class="cc-slide">\n`;
-          } else {
-            html += `    <img src="${src}" alt="${alt}" style="flex:0 0 100%; width:100%; height:100%; scroll-snap-align:start; object-fit:${fit}; object-position:${opos}; border-radius:inherit;" class="cc-slide">\n`;
-          }
-        });
-      }
-      html += `  </div>\n`;
-      // Previous / next arrows (also the only way through a fading slider without autoplay)
-      if (Array.isArray(content.images) && content.images.length > 1) {
-        html += `  <button type="button" class="cc-slider-prev" aria-label="Previous slide" style="position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border:none; border-radius:50%; background:rgba(15,23,42,0.55); color:#fff; font-size:24px; line-height:1; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; padding:0; left:10px;">&#8249;</button>\n`;
-        html += `  <button type="button" class="cc-slider-next" aria-label="Next slide" style="position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border:none; border-radius:50%; background:rgba(15,23,42,0.55); color:#fff; font-size:24px; line-height:1; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; padding:0; right:10px;">&#8250;</button>\n`;
-      }
-      html += `</div>\n`;
-      // note: the compiler's <style>/<script> (arrows, autoplay) does not affect structure/styles
-      return customCss + html;
-    }
-
     case 'FORM': {
       const btnText = escapeHtml(content.btnText || 'Send Message');
       const successMsg = escapeHtml(content.successMsg || 'Sent!');
@@ -476,55 +432,6 @@ function renderBlockBody(block, opts = {}) {
       return customCss + `<div id="${innerId}" class="cc-table-block${animClass}${innerClass}" style="${styleAttr}">\n<div class="cc-table-wrap" style="${wrap}">${table}</div>\n</div>\n`;
     }
 
-    case 'COUNTDOWN': {
-      const c = content;
-      let dt = String(c.datetime ?? '').trim();
-      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dt)) dt = '2030-01-01T00:00';
-      let tz = String(c.utcOffset ?? 'local');
-      if (tz !== 'local' && !/^[+-]\d{2}:\d{2}$/.test(tz)) tz = 'local';
-      const target = tz === 'local' ? dt : dt + ':00' + tz;
-      const dateText = dt.replace('T', ' ') + (tz === 'local' ? '' : ' UTC' + tz);
-      const end = (c.endAction ?? 'message') === 'hide' ? 'hide' : 'message';
-      const endMsg = escapeHtml(c.endMessage ?? '');
-      const showSeconds = (c.showSeconds ?? true) !== false;
-      const showDate = (c.showDate ?? true) !== false;
-      const units = [['days', 'labelDays', 'Days'], ['hours', 'labelHours', 'Hours'], ['minutes', 'labelMinutes', 'Minutes']];
-      if (showSeconds) units.push(['seconds', 'labelSeconds', 'Seconds']);
-      let cells = '';
-      for (const u of units) {
-        cells += `<div class="cc-cd-unit" style="text-align:center; min-width:72px;"><span class="cc-cd-num" data-unit="${u[0]}" style="display:block; font-size:42px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; color:var(--brand-color, #3b82f6);">00</span>`
-          + `<span class="cc-cd-label" style="display:block; font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;">${escapeHtml(c[u[1]] ?? u[2])}</span></div>`;
-      }
-      let h = `<div id="${innerId}" class="cc-countdown${animClass}${innerClass}" data-target="${escapeHtml(target)}" data-end="${end}" role="timer" style="${styleAttr}">\n`;
-      h += `<div class="cc-cd-units" style="display:flex; justify-content:center; gap:16px; flex-wrap:wrap;">${cells}</div>\n`;
-      if (showDate) h += `<div class="cc-cd-date" style="text-align:center; font-size:13px; color:#94a3b8; margin-top:12px;"><time datetime="${escapeHtml(target)}">${escapeHtml(dateText)}</time></div>\n`;
-      h += `<div class="cc-cd-done" hidden style="text-align:center; font-size:22px; font-weight:700;">${endMsg}</div>\n`;
-      h += `</div>\n`;
-      return customCss + h;
-    }
-    case 'BEFORE_AFTER': {
-      const c = content;
-      const b = (c.before && typeof c.before === 'object') ? c.before : {};
-      const a = (c.after && typeof c.after === 'object') ? c.after : {};
-      const start = Math.round(ccNum(c.startPosition ?? 50, 0, 100, 50));
-      const ar = escapeHtml(c.aspectRatio ?? '16 / 9');
-      const showLabels = (c.showLabels ?? true) !== false;
-      const img = 'width:100%; height:100%; object-fit:cover; display:block;';
-      const chip = 'position:absolute; top:12px; background:rgba(15,23,42,0.7); color:#fff; font-size:12px; padding:3px 9px; border-radius:6px;';
-      let h = `<style>#${innerId}:focus-within .cc-ba-knob{outline:2px solid var(--brand-color, #3b82f6); outline-offset:2px}</style>`;
-      h += `<div id="${innerId}" class="cc-ba${animClass}${innerClass}" style="${styleAttr} --pos:${start}%; position:relative; overflow:hidden; aspect-ratio:${ar}; user-select:none;">\n`;
-      h += `<img class="cc-ba-after" src="${escapeHtml(a.src ?? '')}" alt="${escapeHtml(a.alt ?? '')}" loading="lazy" style="position:absolute; top:0; left:0; ${img}">`;
-      h += `<div class="cc-ba-before" style="position:absolute; top:0; left:0; width:100%; height:100%; clip-path:inset(0 calc(100% - var(--pos)) 0 0);"><img src="${escapeHtml(b.src ?? '')}" alt="${escapeHtml(b.alt ?? '')}" loading="lazy" style="${img}"></div>`;
-      if (showLabels) {
-        h += `<span class="cc-ba-label cc-ba-label-before" style="${chip} left:12px;">${escapeHtml(b.label ?? 'Before')}</span>`;
-        h += `<span class="cc-ba-label cc-ba-label-after" style="${chip} right:12px;">${escapeHtml(a.label ?? 'After')}</span>`;
-      }
-      h += `<div class="cc-ba-handle" aria-hidden="true" style="position:absolute; top:0; bottom:0; left:var(--pos); width:2px; margin-left:-1px; background:#fff; pointer-events:none;"><span class="cc-ba-knob" style="position:absolute; top:50%; left:50%; width:36px; height:36px; margin:-18px 0 0 -18px; border-radius:50%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; font-size:14px; color:#0f172a;">&#8596;</span></div>`;
-      h += `<input type="range" class="cc-ba-range" min="0" max="100" step="0.1" value="${start}" aria-label="Comparison slider" style="position:absolute; top:0; left:0; width:100%; height:100%; margin:0; opacity:0; cursor:ew-resize;">\n`;
-      h += `</div>\n`;
-      return customCss + h;
-    }
-
     case 'BUSINESS': {
       const c = content;
       const types = ['LocalBusiness', 'Restaurant', 'Store', 'CafeOrCoffeeShop', 'Dentist', 'HairSalon', 'HealthAndBeautyBusiness', 'ProfessionalService', 'LegalService', 'AutoRepair', 'Hotel', 'Organization'];
@@ -586,129 +493,6 @@ function renderBlockBody(block, opts = {}) {
       html += `<button type="submit" style="padding:12px 20px; border:none; border-radius:8px; background:var(--brand-color, #3b82f6); color:#fff; font:inherit; font-weight:600; cursor:pointer;">${btn}</button>\n`;
       html += `</form>\n<div class="cc-search-results" aria-live="polite" style="margin-top:16px;"></div>\n</div>\n`;
       return customCss + html;
-    }
-
-    case 'SCROLLYTELLING': {
-      const c = content;
-      const steps = (Array.isArray(c.steps) ? c.steps : []).filter((st) => st && typeof st === 'object').slice(0, 12);
-      const right = c.side === 'right';
-      const ratio = ['4 / 3', '1 / 1', '3 / 4', '16 / 9', '3 / 2'].includes(c.ratio) ? c.ratio : '4 / 3';
-      const top = ccInt(c.stickyTop, 80, 0, 300);
-      const stepH = ccInt(c.stepHeight, 70, 40, 120);
-      const gap = ccInt(c.gap, 48, 0, 120);
-      let imgs = '', items = '', rules = '';
-      steps.forEach((st, i) => {
-        const img = ccImgUrl(ccStr(st.image));
-        const title = ccEsc(st.title);
-        const text = ccBr(ccStr(st.text));
-        imgs += img !== ''
-          ? `<img class="cc-story-img" data-i="${i}" src="${escapeHtml(img)}" alt="${ccEsc(st.alt)}" loading="lazy" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">`
-          : `<div class="cc-story-img cc-story-ph" data-i="${i}" aria-hidden="true" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:56px; font-weight:800; color:#94a3b8;">${i + 1}</div>`;
-        items += `<li class="cc-story-step" data-i="${i}" style="min-height:${stepH}vh; display:flex; flex-direction:column; justify-content:center; padding:24px 0;">`
-          + (title !== '' ? `<h3 class="cc-story-title" style="margin:0 0 10px 0; font-size:26px; line-height:1.25;">${title}</h3>` : '')
-          + (text !== '' ? `<p class="cc-story-text" style="margin:0; font-size:16px; line-height:1.7; color:#475569;">${text}</p>` : '')
-          + `</li>`;
-        rules += `#${innerId}[data-active="${i}"] .cc-story-img[data-i="${i}"]{opacity:1}#${innerId}.cc-story-on[data-active="${i}"] .cc-story-step[data-i="${i}"]{opacity:1}`;
-      });
-      return customCss + `<style>#${innerId} .cc-story-img{opacity:0;transition:opacity .5s ease}#${innerId}.cc-story-on .cc-story-step{opacity:.35;transition:opacity .4s ease}${rules}`
-        + `@media(max-width:768px){#${innerId} .cc-story-grid{grid-template-columns:1fr !important;gap:16px !important}#${innerId} .cc-story-media{order:0 !important;top:0 !important;z-index:2}#${innerId} .cc-story-frame{aspect-ratio:16 / 9 !important;max-height:36vh}#${innerId} .cc-story-step{min-height:55vh !important}}`
-        + `@media(prefers-reduced-motion:reduce){#${innerId} .cc-story-img,#${innerId}.cc-story-on .cc-story-step{transition:none !important}}</style>`
-        + `<div id="${innerId}" class="cc-story cc-story-${right ? 'right' : 'left'}${animClass}${innerClass}" data-active="0" style="${styleAttr}">\n`
-        + `<div class="cc-story-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:${gap}px; align-items:start;">`
-        + `<div class="cc-story-media" style="position:sticky; top:${top}px; align-self:start;${right ? ' order:2;' : ''}"><div class="cc-story-frame" style="position:relative; aspect-ratio:${ratio}; border-radius:16px; overflow:hidden; background:#e2e8f0;">${imgs}</div></div>`
-        + `<ol class="cc-story-steps" style="list-style:none; margin:0; padding:0;">${items}</ol>`
-        + `</div>\n</div>\n`;
-    }
-
-    case 'HOTSPOTS': {
-      const c = content;
-      const pins = (Array.isArray(c.pins) ? c.pins : []).filter((p) => p && typeof p === 'object').slice(0, 20);
-      const img = ccImgUrl(ccStr(c.image));
-      const ratio = ['16 / 9', '4 / 3', '3 / 2', '1 / 1', '21 / 9'].includes(c.ratio) ? c.ratio : '16 / 9';
-      const color = ccColor(c.pinColor, '#3b82f6');
-      const textColor = ccColor(c.pinTextColor, '#ffffff');
-      const radius = ccInt(c.radius, 12, 0, 40);
-      const pulse = c.pulse !== false;
-      let cells = '';
-      pins.forEach((p, i) => {
-        const x = ccNum(p.x, 0, 100, 50);
-        const y = ccNum(p.y, 0, 100, 50);
-        const v = y > 55 ? 'above' : 'below';
-        const h = x < 25 ? 'left' : (x > 75 ? 'right' : 'center');
-        const title = ccEsc(p.title);
-        const text = ccBr(ccStr(p.text));
-        const linkText = ccEsc(p.linkText);
-        cells += `<div class="cc-hs-pin cc-hs-${v} cc-hs-${h}" style="position:absolute; left:${ccFmtNum(x, 1)}%; top:${ccFmtNum(y, 1)}%; transform:translate(-50%, -50%);">`
-          + `<button type="button" class="cc-hs-btn" aria-describedby="${innerId}-p${i}" aria-label="${title !== '' ? title : 'Hotspot ' + (i + 1)}" style="position:relative; width:30px; height:30px; padding:0; border-radius:50%; border:2px solid #fff; background:${color}; color:${textColor}; font:700 13px/1 inherit; cursor:pointer; box-shadow:0 2px 8px rgba(15,23,42,0.35);">`
-          + (pulse ? `<span class="cc-hs-ring" aria-hidden="true" style="position:absolute; inset:-2px; border-radius:50%; background:${color}; pointer-events:none;"></span>` : '')
-          + `<span class="cc-hs-num" style="position:relative;">${i + 1}</span></button>`
-          + `<div class="cc-hs-pop" id="${innerId}-p${i}" role="tooltip" style="position:absolute; width:240px; max-width:70vw; padding:14px 16px; background:#fff; color:#0f172a; border-radius:10px; box-shadow:0 12px 32px rgba(15,23,42,0.22); font-size:14px; line-height:1.5; text-align:left;">`
-          + (title !== '' ? `<strong class="cc-hs-title" style="display:block; margin-bottom:4px;">${title}</strong>` : '')
-          + (text !== '' ? `<span class="cc-hs-text" style="display:block; color:#475569;">${text}</span>` : '')
-          + (linkText !== '' ? `<a class="cc-hs-link" href="${escapeHtml(resolveBlockUrl(ccStr(p.href)))}" style="display:inline-block; margin-top:8px; font-weight:700; color:var(--brand-color, #3b82f6); text-decoration:none;">${linkText} &rarr;</a>` : '')
-          + `</div></div>`;
-      });
-      const id = '#' + innerId;
-      return customCss + `<style>${id} .cc-hs-pop{opacity:0;visibility:hidden;transition:opacity .15s ease}${id} .cc-hs-pin:hover,${id} .cc-hs-pin:focus-within,${id} .cc-hs-pin.is-open{z-index:3}`
-        + `${id} .cc-hs-pin:hover .cc-hs-pop,${id} .cc-hs-pin:focus-within .cc-hs-pop,${id} .cc-hs-pin.is-open .cc-hs-pop{opacity:1;visibility:visible}`
-        + `${id} .cc-hs-below .cc-hs-pop{top:calc(100% + 10px)}${id} .cc-hs-above .cc-hs-pop{bottom:calc(100% + 10px)}`
-        + `${id} .cc-hs-center .cc-hs-pop{left:50%;transform:translateX(-50%)}${id} .cc-hs-left .cc-hs-pop{left:0}${id} .cc-hs-right .cc-hs-pop{right:0}`
-        + `@keyframes ccHsRing_${innerId}{0%{transform:scale(1);opacity:.5}100%{transform:scale(2.3);opacity:0}}${id} .cc-hs-ring{animation:ccHsRing_${innerId} 2s ease-out infinite}`
-        + `@media(prefers-reduced-motion:reduce){${id} .cc-hs-ring{animation:none;display:none}${id} .cc-hs-pop{transition:none}}</style>`
-        + `<div id="${innerId}" class="cc-hotspots${animClass}${innerClass}" style="${styleAttr}">\n`
-        + `<div class="cc-hs-stage" style="position:relative;">`
-        + (img !== ''
-          ? `<img class="cc-hs-img" src="${escapeHtml(img)}" alt="${ccEsc(c.alt)}" loading="lazy" style="display:block; width:100%; height:auto; border-radius:${radius}px;">`
-          : `<div class="cc-hs-img cc-hs-ph" aria-hidden="true" style="aspect-ratio:${ratio}; background:#e2e8f0; border-radius:${radius}px;"></div>`)
-        + cells + `</div>\n</div>\n`;
-    }
-
-    case 'TABLE_OF_CONTENTS': {
-      const c = content;
-      const title = ccEsc(c.title);
-      const levels = c.levels === 'h2h3' ? 'h2h3' : 'h2';
-      const sticky = c.sticky === true;
-      const top = ccInt(c.stickyTop, 90, 0, 300);
-      const offset = ccInt(c.offset, 80, 0, 300);
-      const card = c.layout !== 'plain';
-      const accent = ccColor(c.accent, 'var(--brand-color, #3b82f6)');
-      const id = '#' + innerId;
-      return customCss + `<style>${id} a{color:inherit;text-decoration:none}${id} a:hover{color:${accent}}${id} .cc-toc-item{margin:0;padding:4px 0}${id} .cc-toc-l3{padding-left:16px;font-size:.93em;opacity:.9}${id} .is-active>a{color:${accent};font-weight:700}${id} .cc-toc-num{opacity:.7}</style>`
-        + `<nav id="${innerId}" class="cc-toc cc-toc-${card ? 'card' : 'plain'}${animClass}${innerClass}" hidden data-levels="${levels}" data-numbered="${c.numbered === true ? '1' : '0'}" data-highlight="${c.highlight !== false ? '1' : '0'}" data-offset="${offset}" aria-label="${title !== '' ? title : 'Table of contents'}" style="${styleAttr}${sticky ? ` position:sticky; top:${top}px;` : ''}">\n`
-        + `<div class="cc-toc-box" style="${card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:20px 22px;' : 'padding:0;'}">`
-        + (title !== '' ? `<div class="cc-toc-title" style="font-weight:700; font-size:15px; margin-bottom:10px; color:#0f172a;">${title}</div>` : '')
-        + `<ol class="cc-toc-list" style="list-style:none; margin:0; padding:0; font-size:14px; line-height:1.4; color:#475569;"></ol>`
-        + `<p class="cc-toc-empty" hidden style="margin:0; font-size:13px; color:#94a3b8;">The headings of this page appear here.</p>`
-        + `</div>\n</nav>\n`;
-    }
-
-    case 'SHARE_BAR': {
-      const c = content;
-      const title = ccEsc(c.title);
-      const chosen = Array.isArray(c.networks) ? c.networks.filter((n) => typeof n === 'string') : [];
-      const icons = c.style === 'icons';
-      const radius = c.shape === 'square' ? '0' : (c.shape === 'rounded' ? '8px' : '999px');
-      const colors = ['mono', 'dark'].includes(c.colors) ? c.colors : 'brand';
-      const size = ccInt(c.size, 40, 28, 64);
-      const align = c.align === 'center' ? 'center' : (c.align === 'right' ? 'flex-end' : 'flex-start');
-      const textAlign = c.align === 'center' ? 'center' : (c.align === 'right' ? 'right' : 'left');
-      let btns = '';
-      for (const [net, label, glyph, brand] of SHARE_NETS) {
-        if (!chosen.includes(net)) continue;
-        const link = ['facebook', 'x', 'linkedin', 'whatsapp', 'telegram', 'email'].includes(net);
-        const paint = colors === 'brand' ? `background:${brand}; color:#ffffff; border:1px solid ${brand};` : (colors === 'dark' ? 'background:#0f172a; color:#ffffff; border:1px solid #0f172a;' : 'background:#ffffff; color:#0f172a; border:1px solid #cbd5e1;');
-        const inner = (glyph.startsWith('<svg') ? glyph : `<span class="cc-share-badge" aria-hidden="true" style="font-weight:800; font-size:14px; line-height:1;">${glyph}</span>`)
-          + (icons ? '' : `<span class="cc-share-label">${label}</span>`);
-        const aria = link && net !== 'email' ? `Share on ${label}` : (net === 'email' ? 'Share by email' : label);
-        const st = `display:inline-flex; align-items:center; justify-content:center; gap:8px; height:${size}px; min-width:${size}px; padding:0 ${icons ? 0 : 16}px; box-sizing:border-box; border-radius:${radius}; font:600 14px/1 inherit; text-decoration:none; cursor:pointer; ${paint}`;
-        btns += link
-          ? `<a class="cc-share-btn cc-share-${net}" data-net="${net}" href="#" target="_blank" rel="noopener noreferrer" aria-label="${aria}" style="${st}">${inner}</a>`
-          : `<button type="button" class="cc-share-btn cc-share-${net}" data-act="${net}" aria-label="${aria}" style="${st}">${inner}</button>`;
-      }
-      return customCss + `<style>#${innerId}[hidden],#${innerId} [hidden]{display:none !important}#${innerId} .cc-share-btn:hover{filter:brightness(.92)}#${innerId} .cc-share-btn:focus-visible{outline:2px solid var(--brand-color, #3b82f6);outline-offset:2px}</style>`
-        + `<div id="${innerId}" class="cc-share${animClass}${innerClass}" hidden data-msg="${ccEsc(c.message)}" style="${styleAttr}">\n`
-        + (title !== '' ? `<div class="cc-share-title" style="font-weight:700; font-size:15px; color:#0f172a; margin-bottom:10px; text-align:${textAlign};">${title}</div>` : '')
-        + `<div class="cc-share-list" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:${align};">${btns}</div>\n</div>\n`;
     }
 
     case 'CODE_SNIPPET': {
@@ -925,41 +709,6 @@ function renderBlockBody(block, opts = {}) {
         + `</div>`
         + (sources.length && c.showPause !== false ? `<button type="button" class="cc-vh-toggle" hidden aria-label="Pause the background video" style="position:absolute; right:16px; bottom:16px; width:40px; height:40px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.55); color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">${icon('cc-vh-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', false)}${icon('cc-vh-i-play', '<path d="M8 5v14l11-7z"/>', true)}</button>` : '')
         + `</section>\n`;
-    }
-
-    case 'AUDIO_PLAYER': {
-      const c = content;
-      const src = ccMediaSrc(ccStr(c.src));
-      const cover = ccImgUrl(ccStr(c.cover));
-      const title = ccEsc(c.title);
-      const artist = ccEsc(c.artist);
-      const accent = ccColor(c.accent, 'var(--brand-color, #3b82f6)');
-      const card = c.layout !== 'plain';
-      const skip = c.skip !== false;
-      const speed = c.speed !== false;
-      const ico = (cls, d, hidden) => `<svg class="${cls}"${hidden ? ' style="display:none"' : ''} aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">${d}</svg>`;
-      const sBtn = 'min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;';
-      return customCss + `<style>#${innerId} button:hover{filter:brightness(.95)}#${innerId} button:focus-visible,#${innerId} input:focus-visible{outline:2px solid ${accent};outline-offset:2px}</style>`
-        + `<div id="${innerId}" class="cc-audio${animClass}${innerClass}" data-skip="15" style="${styleAttr}">\n`
-        + `<div class="cc-au-card" style="${card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;'}">`
-        + (title !== '' || artist !== '' || cover !== ''
-          ? `<div class="cc-au-head" style="display:flex; align-items:center; gap:16px; margin-bottom:14px;">`
-            + (cover !== '' ? `<img class="cc-au-cover" src="${escapeHtml(cover)}" alt="" loading="lazy" style="width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0;">` : '')
-            + `<div class="cc-au-meta" style="min-width:0;">`
-            + (title !== '' ? `<div class="cc-au-title" style="font-weight:700; font-size:17px; color:#0f172a;">${title}</div>` : '')
-            + (artist !== '' ? `<div class="cc-au-artist" style="font-size:14px; color:#64748b; margin-top:2px;">${artist}</div>` : '')
-            + `</div></div>` : '')
-        + `<audio class="cc-au-el" controls preload="none"${src !== '' ? ` src="${escapeHtml(src)}"` : ''} style="display:block; width:100%;"></audio>`
-        + `<div class="cc-au-ui" hidden>`
-        + `<div class="cc-au-bar" style="display:flex; align-items:center; gap:10px;"><span class="cc-au-cur" style="min-width:40px; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;">0:00</span>`
-        + `<input type="range" class="cc-au-seek" min="0" max="0" step="0.1" value="0" aria-label="Seek" style="flex:1; min-width:0; accent-color:${accent};">`
-        + `<span class="cc-au-dur" style="min-width:40px; text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;">0:00</span></div>`
-        + `<div class="cc-au-controls" style="display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px;">`
-        + (skip ? `<button type="button" class="cc-au-back" aria-label="Back 15 seconds" style="${sBtn}">-15s</button>` : '')
-        + `<button type="button" class="cc-au-play" aria-label="Play" style="width:52px; height:52px; padding:0; border-radius:50%; border:none; background:${accent}; color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;">${ico('cc-au-i-play', '<path d="M8 5v14l11-7z"/>', false)}${ico('cc-au-i-pause', '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>', true)}</button>`
-        + (skip ? `<button type="button" class="cc-au-fwd" aria-label="Forward 15 seconds" style="${sBtn}">+15s</button>` : '')
-        + (speed ? `<button type="button" class="cc-au-speed" aria-label="Playback speed" style="${sBtn}">1&times;</button>` : '')
-        + `</div></div>\n</div>\n</div>\n`;
     }
 
     case 'ANNOUNCEMENT_BAR':

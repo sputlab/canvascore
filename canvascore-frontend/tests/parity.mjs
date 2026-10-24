@@ -342,7 +342,7 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   const onDisk = files.map((f) => JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks/' + f, import.meta.url)), 'utf-8')).type).sort();
   if (JSON.stringify(listed) !== JSON.stringify(onDisk)) { failures++; console.error(`✗ BLOCK_DEFS (blockDef.mjs) and the files in blocks/ differ: ${listed} / ${onDisk}`); }
   else console.log(`✓ every definition file is listed in blockDef.mjs (${files.length})`);
-  const noScript = (h) => h.replace(/<script>[\s\S]*?<\/script>\n/g, '');
+  const noScript = (h) => h.replace(/[ \t]*<script>[\s\S]*?<\/script>\n/g, '');   // site-only behaviour scripts (with their indentation)
   const H = `a'b"c<d>&e`;
   const extra = { customId: 'my id!', customClass: `x"y z`, customCss: '__THIS__{color:red}', animDelay: 300, hoverEffect: 'lift' };
   const st = { padding: '10px', textAlign: 'right', animation: 'fade-up', textPreset: 'h2', color: 'red;}x{' };
@@ -413,6 +413,12 @@ console.log('\nSHARED BLOCK DEFINITIONS');
       r: { type: 'number', parse: 'int', key: 'rr', default: 3, transform: 'repeat', text: '&#9733;' },
       br: { type: 'text', transform: 'br' }, u: { type: 'text', transform: 'contactUrl' }, v: { type: 'text', key: 'vv', transform: 'contactUrl' } },
       { o: { b: 'red;}' }, p: 'junk', l: ['junk', 7, null, ['list'], { k: 'a', n: 1 }, { k: '', n: 50 }, { k: 'b', n: 2 }], rr: '2', br: ' one \n\n  two<3 \r\n', u: 'me@site.com', vv: 'site.com/x' }),
+    T('{{#c}}[{{value}}:{{{d}}}]{{/c}}|{{#hi}}H{{/hi}}{{#lo}}L{{/lo}}{{#mid}}M{{/mid}}|{{#t0}}a{{/t0}}{{#t1}}b{{/t1}}{{#t2}}c{{/t2}}{{#t3}}d{{/t3}}|{{r}}|{{m1}}|{{m2}}', {
+      c: { type: 'choices', options: [{ value: 'x', data: { d: '<i>X</i>' } }, { value: 'y', data: { d: 'Y' } }, { value: 'z', data: { d: 'Z' } }] },
+      n: { type: 'number' }, hi: { type: 'flag', when: { n: { gt: 55 } } }, lo: { type: 'flag', when: { n: { lt: 25 } } }, mid: { type: 'flag', when: { n: { gt: 25, lt: 75 } } },
+      t0: { type: 'bool', default: true, phpTruthy: true }, t1: { type: 'bool', default: true, phpTruthy: true }, t2: { type: 'bool', default: true, phpTruthy: true }, t3: { type: 'bool', default: false, phpTruthy: true },
+      r: { type: 'text', transform: 'replace', from: 'T', to: ' ' }, m1: { type: 'text', transform: 'mediaSrc' }, m2: { type: 'text', transform: 'mediaSrc' } },
+      { c: ['z', 'x', 7, 'nope', 'x'], n: 60, t1: 0, t2: 'no', r: '2030-01-01T10:00', m1: ' /media/a.mp3 ', m2: 'data:audio/mp3;base64,AA' }),
     T('{{i}}|{{m}}|{{x}}|{{e}}', { i: { type: 'text', transform: 'initials' }, m: { type: 'text', transform: 'mailto' }, x: { type: 'text', key: 'm', transform: 'mailto' }, e: { type: 'text', transform: 'extUrl' } },
       { i: '  émile   zola  rossi', m: 'bad@address', e: '//linkedin.com/in/x' }),
   );
@@ -447,7 +453,8 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   expect(22, '.x{y}');
   expect(23, '[hi]S|3 2|AY');
   expect(24, '<A|#000>P|[a:33.3333333333:33][b:66.6666666667:67]|86.0|&#9733;&#9733;|one<br>two&lt;3|mailto:me@site.com|https://site.com/x');
-  expect(25, 'éz|||https://linkedin.com/in/x');
+  expect(25, '[x:<i>X</i>][z:Z]|HM|ac|2030-01-01 10:00|/media/a.mp3|');
+  expect(26, 'éz|||https://linkedin.com/in/x');
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

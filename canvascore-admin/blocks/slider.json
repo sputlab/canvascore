@@ -1,0 +1,92 @@
+{
+  "type": "SLIDER",
+  "script": "slider",
+  "settings": {
+    "images": {
+      "type": "list",
+      "count": {
+        "as": "n"
+      },
+      "item": {
+        "src": {
+          "type": "image",
+          "default": ""
+        },
+        "alt": {
+          "type": "text",
+          "default": ""
+        }
+      }
+    },
+    "effect": {
+      "type": "text",
+      "default": "slide"
+    },
+    "autoplay": {
+      "type": "bool",
+      "default": true,
+      "phpTruthy": true
+    },
+    "delay": {
+      "type": "number",
+      "parse": "int",
+      "default": 3000
+    },
+    "objectFit": {
+      "type": "text",
+      "default": "cover",
+      "pattern": "^[a-z-]{1,20}$"
+    },
+    "objectPosition": {
+      "type": "text",
+      "default": "center",
+      "pattern": "^[a-z0-9 .%-]{1,40}$"
+    },
+    "aspectRatio": {
+      "type": "text",
+      "default": "16 / 9",
+      "pattern": "^(|auto|[0-9]{1,4}(\\.[0-9]{1,3})? ?/ ?[0-9]{1,4}(\\.[0-9]{1,3})?)$"
+    },
+    "height": {
+      "type": "text",
+      "default": "",
+      "from": "styles"
+    },
+    "heightCheck": {
+      "type": "text",
+      "default": "",
+      "from": "styles",
+      "key": "height"
+    },
+    "fixedHeight": {
+      "type": "flag",
+      "when": {
+        "height": true,
+        "heightCheck": {
+          "not": [
+            "auto"
+          ]
+        }
+      }
+    },
+    "many": {
+      "type": "flag",
+      "when": {
+        "n": {
+          "gt": 1
+        }
+      }
+    }
+  },
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-slider{{_classes}}\" style=\"{{{_style}}} position:relative; overflow:hidden; border-radius:inherit;{{^fixedHeight}} aspect-ratio:{{aspectRatio}};{{/fixedHeight}}\">\n",
+    "  <div class=\"cc-slides\" style=\"display:flex; position:relative; height:100%; {{^effect=fade}}overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; -ms-overflow-style:none;{{/effect=fade}}\">\n",
+    "{{#images}}{{#effect=fade}}    <img src=\"{{src}}\" alt=\"{{alt}}\" style=\"position:{{#@first}}relative{{/@first}}{{^@first}}absolute{{/@first}}; top:0; left:0; width:100%; height:100%; object-fit:{{objectFit}}; object-position:{{objectPosition}}; opacity:{{#@first}}1{{/@first}}{{^@first}}0{{/@first}}; transition:opacity 0.8s ease; border-radius:inherit;\" class=\"cc-slide\">\n{{/effect=fade}}",
+    "{{^effect=fade}}    <img src=\"{{src}}\" alt=\"{{alt}}\" style=\"flex:0 0 100%; width:100%; height:100%; scroll-snap-align:start; object-fit:{{objectFit}}; object-position:{{objectPosition}}; border-radius:inherit;\" class=\"cc-slide\">\n{{/effect=fade}}{{/images}}",
+    "  </div>\n",
+    "{{#many}}  <button type=\"button\" class=\"cc-slider-prev\" aria-label=\"Previous slide\" style=\"position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border:none; border-radius:50%; background:rgba(15,23,42,0.55); color:#fff; font-size:24px; line-height:1; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; padding:0; left:10px;\">&#8249;</button>\n",
+    "  <button type=\"button\" class=\"cc-slider-next\" aria-label=\"Next slide\" style=\"position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; border:none; border-radius:50%; background:rgba(15,23,42,0.55); color:#fff; font-size:24px; line-height:1; cursor:pointer; z-index:2; display:flex; align-items:center; justify-content:center; padding:0; right:10px;\">&#8250;</button>\n{{/many}}",
+    "{{^effect=fade}}  <style>#{{_id}} .cc-slides::-webkit-scrollbar { display: none; }</style>\n{{/effect=fade}}",
+    "{{#many}}{{{_script}}}{{/many}}</div>\n"
+  ]
+}

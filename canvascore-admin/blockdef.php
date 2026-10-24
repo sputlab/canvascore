@@ -73,6 +73,7 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
             elseif (isset($s['round'])) $n = cc_tpl_round((float)$n, (int)$s['round']);
             return $n;
         case 'bool':
+            if (!empty($s['phpTruthy'])) return $missing ? (bool)($def ?? false) : !empty($raw);
             if (!empty($s['strict'])) return !$missing && $raw === true;
             return ($def === true) ? ($missing || $raw !== false) : !$missing && !empty($raw);
         case 'enum':
@@ -87,6 +88,7 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
             return new CcTrusted($missing ? cc_tpl_str($def ?? '') : cc_tpl_str($raw));
         case 'list':
             $items = (is_array($raw) && array_is_list($raw)) ? $raw : [];
+            if (!empty($s['skipNonObjects'])) $items = array_values(array_filter($items, 'is_array'));
             if (!empty($s['max'])) $items = array_slice($items, 0, (int)$s['max']);
             $out = [];
             if (isset($s['of'])) {
@@ -96,7 +98,6 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
                 }
                 return $out;
             }
-            if (!empty($s['skipNonObjects'])) $items = array_values(array_filter($items, 'is_array'));
             foreach ($items as $it) $out[] = cc_tpl_clean_settings($s['item'] ?? [], cc_tpl_is_obj($it) ? $it : [], []);
             if (!empty($s['keepIf'])) $out = array_values(array_filter($out, function ($it) use ($s) { return cc_tpl_cond($s['keepIf'], $it, false); }));
             if (!empty($s['share'])) {   // each item's share of the list's total, in % (0 when the total is 0)
@@ -111,6 +112,16 @@ function cc_tpl_clean_value(array $s, $raw, $missing) {
             return $out;
         case 'object':
             return cc_tpl_clean_settings($s['item'] ?? [], cc_tpl_is_obj($raw) ? $raw : [], []);
+        case 'choices':
+            $picked = is_array($raw) ? array_values(array_filter($raw, 'is_string')) : [];
+            $out = [];
+            foreach ($s['options'] ?? [] as $o) {
+                if (!in_array($o['value'] ?? null, $picked, true)) continue;
+                $it = ['value' => $o['value']];
+                foreach (($o['data'] ?? []) as $dk => $dv) $it[$dk] = new CcTrusted($dv);
+                $out[] = $it;
+            }
+            return $out;
         case 'calc':
         case 'flag':
             return 0;
@@ -148,6 +159,7 @@ function cc_tpl_cond(array $when, array $vals, $any) {
         $v = $vals[$k] ?? null;
         if ($want === true || $want === false) $ok = cc_tpl_truthy($v) === $want;
         elseif (is_array($want) && array_is_list($want)) $ok = in_array(cc_tpl_text($v), $want, true);
+        elseif (isset($want['gt']) || isset($want['lt'])) { $n = (is_int($v) || is_float($v)) ? $v : 0; $ok = (!isset($want['gt']) || $n > $want['gt']) && (!isset($want['lt']) || $n < $want['lt']); }
         else $ok = !in_array(cc_tpl_text($v), $want['not'] ?? [], true);
         if ($ok) $hits++;
         if ($any && $ok) return true;
@@ -162,7 +174,10 @@ const CC_TPL_TRANSFORMS = [
     'lines2br' => 'cc_tpl_tf_lines2br', 'videoEmbed' => 'cc_tpl_tf_video', 'fmtNum' => 'cc_tpl_tf_fmt_num',
     'extUrl' => 'cc_tpl_tf_ext_url', 'initials' => 'cc_tpl_tf_initials', 'mailto' => 'cc_tpl_tf_mailto',
     'contactUrl' => 'cc_tpl_tf_contact_url', 'br' => 'cc_tpl_tf_br', 'repeat' => 'cc_tpl_tf_repeat',
+    'mediaSrc' => 'cc_tpl_tf_media_src', 'replace' => 'cc_tpl_tf_replace',
 ];
+function cc_tpl_tf_media_src($v) { return cc_media_src(cc_tpl_text($v)); }
+function cc_tpl_tf_replace($v, $s) { return str_replace((string)($s['from'] ?? ''), (string)($s['to'] ?? ''), cc_tpl_text($v)); }
 function cc_tpl_tf_contact_url($v) { $t = cc_tpl_text($v); return preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $t) ? 'mailto:' . $t : cc_ext_url($t); }
 function cc_tpl_tf_br($v) { return new CcTrusted(cc_br(cc_tpl_text($v))); }
 function cc_tpl_tf_repeat($v, $s) { return new CcTrusted(str_repeat((string)($s['text'] ?? ''), max(0, (int)((is_int($v) || is_float($v)) ? $v : 0)))); }
@@ -251,10 +266,20 @@ function cc_tpl_render(array $nodes, array $scopes) {
 
 // Behaviour scripts of the blocks (site only): the definition's "script" names one
 // (each gets the block's id and its clean values, and gives the whole <script> element)
-const CC_TPL_SCRIPTS = ['progress' => 'cc_tpl_script_progress', 'counters' => 'cc_tpl_script_counters', 'gallery' => 'cc_tpl_script_gallery', 'logos' => 'cc_tpl_script_logos'];
+const CC_TPL_SCRIPTS = ['progress' => 'cc_tpl_script_progress', 'counters' => 'cc_tpl_script_counters', 'gallery' => 'cc_tpl_script_gallery', 'logos' => 'cc_tpl_script_logos',
+    'slider' => 'cc_tpl_script_slider', 'countdown' => 'cc_tpl_script_countdown', 'beforeafter' => 'cc_tpl_script_beforeafter', 'toc' => 'cc_tpl_script_toc',
+    'share' => 'cc_tpl_script_share', 'audio' => 'cc_tpl_script_audio', 'story' => 'cc_tpl_script_story', 'hotspots' => 'cc_tpl_script_hotspots'];
 function cc_tpl_script_progress($id, $v) { return "<script>\n" . cc_script_progress($id) . "\n</script>\n"; }
 function cc_tpl_script_counters($id, $v) { return "<script>\n" . cc_script_counters($id, $v['duration'] ?? 1800) . "\n</script>\n"; }
 function cc_tpl_script_gallery($id, $v) { return "<script>\n" . cc_script_gallery($id) . "\n</script>\n"; }
+function cc_tpl_script_slider($id, $v) { return cc_script_slider($id, !empty($v['autoplay']) ? 'true' : 'false', ($v['effect'] ?? '') === 'fade' ? 'true' : 'false', max(500, (int)($v['delay'] ?? 3000))); }
+function cc_tpl_script_countdown($id, $v) { return "<script>\n" . cc_script_countdown($id) . "\n</script>\n"; }
+function cc_tpl_script_beforeafter($id, $v) { return "<script>\n" . cc_script_beforeafter($id) . "\n</script>\n"; }
+function cc_tpl_script_toc($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_TOC_SCRIPT) . "</script>\n"; }
+function cc_tpl_script_share($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_SHARE_SCRIPT) . "</script>\n"; }
+function cc_tpl_script_audio($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_AUDIO_SCRIPT) . "</script>\n"; }
+function cc_tpl_script_story($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_STORY_SCRIPT) . "</script>\n"; }
+function cc_tpl_script_hotspots($id, $v) { return '<script>' . str_replace('%ID%', $id, CC_HOTSPOTS_SCRIPT) . "</script>\n"; }
 function cc_tpl_script_logos($id, $v) { return '<script>' . str_replace(['%ID%', '%SPEED%'], [$id, (string)($v['speed'] ?? 30)], CC_LOGOS_SCRIPT) . "</script>\n"; }
 
 // The HTML of a block that has a definition (cc_render_block_body adds the custom CSS, render_block the device rules)
