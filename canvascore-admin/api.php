@@ -6,6 +6,7 @@ require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/publish.php';
 require_once __DIR__ . '/media.php';
 require_once __DIR__ . '/backup.php';
+require_once __DIR__ . '/update.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
 cc_security_headers();
@@ -45,6 +46,9 @@ if (!cc_meta_get($pdo, 'svg_recheck_v1')) {
 }
 
 $action = (string)($_GET['action'] ?? '');
+
+// One-click updates: the update calls the new version once (one-time token) to check it starts and has migrated the database
+if ($action === 'update_health') cc_update_health_answer($pdo);
 
 // Until the setup wizard has run there are no accounts: everything except the public answers points to install.php
 if (!cc_is_installed($pdo) && !in_array($action, ['branding', 'session_status', 'check_auth'], true)) {
@@ -182,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
-if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions']) && !$is_admin) {
+if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install']) && !$is_admin) {
     echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
@@ -1237,6 +1241,29 @@ if (($action === 'backup_restore' || $action === 'backup_restore_saved') && $_SE
     $res = cc_backup_restore($pdo, $src);
     $res['safety'] = $safety;
     $res['backups'] = cc_backup_list();
+    echo json_encode($res); exit;
+}
+
+// ---------------------------------------------------------------------------
+// One-click updates (admin): the latest GitHub release, checked, signed, backed up, installed; rolled back if a check fails
+// ---------------------------------------------------------------------------
+if ($action === 'update_info') {
+    echo json_encode(['success' => true, 'current' => cc_version()['app'], 'requirements' => cc_update_requirements(), 'last_check' => cc_update_last_check(),
+        'history' => cc_update_history(), 'demo' => cc_demo_on()]); exit;
+}
+if ($action === 'update_check') {
+    try { echo json_encode(['success' => true, 'release' => cc_update_check()]); }
+    catch (Throwable $e) { echo json_encode(['success' => false, 'message' => 'Could not check for updates: ' . $e->getMessage()]); }
+    exit;
+}
+if ($action === 'update_install' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    session_write_close();   // the update takes a while: the other requests of this session go on
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Updates are turned off in the demo.']); exit; }
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $want = cc_update_version($data['version'] ?? '');
+    if ($want === null) { echo json_encode(['success' => false, 'message' => 'Which version? Check for updates first.']); exit; }
+    $res = cc_update_install($pdo, $want, (string)($account['username'] ?? ''));
+    $res['history'] = cc_update_history();
     echo json_encode($res); exit;
 }
 

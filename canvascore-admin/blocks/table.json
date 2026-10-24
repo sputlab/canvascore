@@ -1,0 +1,98 @@
+{
+  "type": "TABLE",
+  "settings": {
+    "t": {
+      "type": "text",
+      "default": "",
+      "key": "data",
+      "transform": "tableData",
+      "headerFrom": "headerRow",
+      "label": "Data \u2014 one row per line, cells separated by | or Tab",
+      "control": "code",
+      "rows": 9,
+      "placeholder": "Name | Role | City\nAnna | CEO | Rome",
+      "hint": "Tip: you can paste straight from Excel or Google Sheets (cells arrive separated by Tab)."
+    },
+    "headerRow": {
+      "type": "bool",
+      "default": true,
+      "label": "First row is the header"
+    },
+    "striped": {
+      "type": "bool",
+      "default": true,
+      "label": "Striped rows"
+    },
+    "bordered": {
+      "type": "bool",
+      "default": false,
+      "label": "Cell borders"
+    },
+    "compact": {
+      "type": "bool",
+      "default": false,
+      "label": "Compact"
+    },
+    "rowHeaders": {
+      "type": "bool",
+      "default": false,
+      "label": "First column is a header (row labels)"
+    },
+    "stickyHeader": {
+      "type": "bool",
+      "default": false,
+      "label": "Sticky header (scrolls inside)"
+    },
+    "maxHeight": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 1200,
+      "int": true,
+      "label": "Max height px",
+      "showIf": {
+        "stickyHeader": true
+      }
+    },
+    "caption": {
+      "type": "text",
+      "default": "",
+      "label": "Caption (optional)"
+    }
+  },
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-table-block{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-table-wrap\" style=\"overflow-x:auto;{{#stickyHeader}}{{#maxHeight?}} max-height:{{maxHeight}}px; overflow-y:auto;{{/maxHeight?}}{{/stickyHeader}}\">",
+    "{{#t.ncols?}}<table class=\"cc-table\" style=\"width:100%; border-collapse:collapse; font-size:14px; text-align:left;\">",
+    "{{^caption=}}<caption style=\"caption-side:top; text-align:left; font-weight:700; padding:0 0 10px 0;\">{{caption}}</caption>{{/caption=}}",
+    "{{#t.head?}}<thead><tr>{{#t.head}}<th scope=\"col\" style=\"padding:{{#compact}}6px 10px{{/compact}}{{^compact}}12px 14px{{/compact}}; background:#f1f5f9; border-bottom:2px solid #cbd5e1; font-weight:700;{{#stickyHeader}} position:sticky; top:0;{{/stickyHeader}}{{#bordered}} border:1px solid #cbd5e1;{{/bordered}}\">{{.}}</th>{{/t.head}}</tr></thead>{{/t.head?}}",
+    "<tbody>{{#t.rows}}<tr{{#striped}}{{#odd}} style=\"background:#f8fafc;\"{{/odd}}{{/striped}}>{{#cells}}",
+    "{{#@first}}{{#rowHeaders}}<th scope=\"row\" style=\"padding:{{#compact}}6px 10px{{/compact}}{{^compact}}12px 14px{{/compact}}; {{#bordered}}border:1px solid #e2e8f0;{{/bordered}}{{^bordered}}border-bottom:1px solid #e2e8f0;{{/bordered}} font-weight:600;\">{{.}}</th>{{/rowHeaders}}{{^rowHeaders}}<td style=\"padding:{{#compact}}6px 10px{{/compact}}{{^compact}}12px 14px{{/compact}}; {{#bordered}}border:1px solid #e2e8f0;{{/bordered}}{{^bordered}}border-bottom:1px solid #e2e8f0;{{/bordered}}\">{{.}}</td>{{/rowHeaders}}{{/@first}}",
+    "{{^@first}}<td style=\"padding:{{#compact}}6px 10px{{/compact}}{{^compact}}12px 14px{{/compact}}; {{#bordered}}border:1px solid #e2e8f0;{{/bordered}}{{^bordered}}border-bottom:1px solid #e2e8f0;{{/bordered}}\">{{.}}</td>{{/@first}}",
+    "{{/cells}}</tr>{{/t.rows}}</tbody></table>{{/t.ncols?}}</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Data Table",
+      "icon": "Table2",
+      "open": true,
+      "keys": [
+        "t",
+        "caption"
+      ]
+    },
+    {
+      "title": "Table Options",
+      "icon": "Sliders",
+      "keys": [
+        "headerRow",
+        "rowHeaders",
+        "striped",
+        "bordered",
+        "compact",
+        "stickyHeader",
+        "maxHeight"
+      ]
+    }
+  ]
+}

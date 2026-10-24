@@ -1,0 +1,172 @@
+{
+  "type": "CASE_STUDY",
+  "settings": {
+    "accent": {
+      "type": "color",
+      "default": "var(--brand-color, #3b82f6)",
+      "label": "Accent color (empty = brand color)"
+    },
+    "layout": {
+      "type": "text",
+      "default": "",
+      "label": "Layout",
+      "control": "select",
+      "choices": [
+        [
+          "horizontal",
+          "Image beside text"
+        ],
+        [
+          "vertical",
+          "Image above text"
+        ]
+      ]
+    },
+    "image": {
+      "type": "image",
+      "default": "",
+      "label": "Image (empty = none)",
+      "altKey": "alt"
+    },
+    "logo": {
+      "type": "image",
+      "default": "",
+      "label": "Client logo (optional)"
+    },
+    "alt": {
+      "type": "text",
+      "default": "",
+      "label": "Image alt text",
+      "showIf": {
+        "image": {
+          "not": [
+            ""
+          ]
+        }
+      }
+    },
+    "client": {
+      "type": "text",
+      "default": "",
+      "label": "Client"
+    },
+    "metric": {
+      "type": "text",
+      "default": "",
+      "label": "Headline metric",
+      "placeholder": "+240%"
+    },
+    "metricLabel": {
+      "type": "text",
+      "default": "",
+      "label": "Metric label"
+    },
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Title"
+    },
+    "text": {
+      "type": "text",
+      "default": "",
+      "label": "Story",
+      "control": "textarea",
+      "rows": 3
+    },
+    "quote": {
+      "type": "text",
+      "default": "",
+      "label": "Quote (empty = none)",
+      "control": "textarea",
+      "rows": 2
+    },
+    "quoteAuthor": {
+      "type": "text",
+      "default": "",
+      "label": "Quote author"
+    },
+    "linkText": {
+      "type": "text",
+      "default": "",
+      "label": "Link text (empty = no link)"
+    },
+    "linkUrl": {
+      "type": "text",
+      "default": "",
+      "transform": "blockUrl",
+      "label": "Link",
+      "placeholder": "/page or https://\u2026"
+    },
+    "hasClient": {
+      "type": "flag",
+      "any": true,
+      "when": {
+        "logo": {
+          "not": [
+            ""
+          ]
+        },
+        "client": {
+          "not": [
+            ""
+          ]
+        }
+      }
+    }
+  },
+  "template": [
+    "<style>@media(max-width:768px){#{{_id}} .cc-case-card{flex-direction:column !important}#{{_id}} .cc-case-media{flex:0 0 220px !important}}</style>",
+    "<article id=\"{{_id}}\" class=\"cc-case{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-case-card\" style=\"display:flex; flex-direction:{{#layout=vertical}}column{{/layout=vertical}}{{^layout=vertical}}row{{/layout=vertical}}; background:#fff; border:1px solid #e2e8f0; border-radius:16px; overflow:hidden; box-shadow:0 4px 18px rgba(15,23,42,0.06);\">",
+    "{{^image=}}<div class=\"cc-case-media\" style=\"flex:{{#layout=vertical}}0 0 240px{{/layout=vertical}}{{^layout=vertical}}0 0 42%{{/layout=vertical}}; position:relative; min-height:220px; background:#e2e8f0;\"><img src=\"{{image}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"position:absolute; inset:0; width:100%; height:100%; object-fit:cover;\"></div>{{/image=}}",
+    "<div class=\"cc-case-body\" style=\"flex:1; min-width:0; padding:32px; display:flex; flex-direction:column; gap:14px;\">",
+    "{{#hasClient}}<div class=\"cc-case-client\" style=\"display:flex; align-items:center; gap:10px; font-size:13px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#64748b;\">{{^logo=}}<img src=\"{{logo}}\" alt=\"\" loading=\"lazy\" style=\"height:28px; width:auto; display:block;\">{{/logo=}}{{client}}</div>{{/hasClient}}",
+    "{{^metric=}}<div class=\"cc-case-metric\"><div class=\"cc-case-metric-value\" style=\"font-size:44px; font-weight:800; line-height:1; color:{{accent}};\">{{metric}}</div>{{^metricLabel=}}<div class=\"cc-case-metric-label\" style=\"margin-top:4px; font-size:14px; color:#475569;\">{{metricLabel}}</div>{{/metricLabel=}}</div>{{/metric=}}",
+    "{{^title=}}<h3 class=\"cc-case-title\" style=\"margin:0; font-size:22px; line-height:1.3; color:#0f172a;\">{{title}}</h3>{{/title=}}",
+    "{{^text=}}<p class=\"cc-case-text\" style=\"margin:0; font-size:15px; line-height:1.6; color:#475569;\">{{text}}</p>{{/text=}}",
+    "{{^quote=}}<blockquote class=\"cc-case-quote\" style=\"margin:0; padding-left:14px; border-left:3px solid {{accent}}; font-style:italic; color:#334155; font-size:15px; line-height:1.55;\">{{quote}}{{^quoteAuthor=}}<cite class=\"cc-case-quote-author\" style=\"display:block; margin-top:6px; font-style:normal; font-weight:600; font-size:13px; color:#64748b;\">&mdash; {{quoteAuthor}}</cite>{{/quoteAuthor=}}</blockquote>{{/quote=}}",
+    "{{^linkText=}}<a class=\"cc-case-link\" href=\"{{linkUrl}}\" style=\"margin-top:auto; color:{{accent}}; font-weight:700; text-decoration:none;\">{{linkText}} &rarr;</a>{{/linkText=}}",
+    "</div></div>\n</article>\n"
+  ],
+  "panel": [
+    {
+      "title": "Case Study",
+      "icon": "TrendingUp",
+      "open": true,
+      "keys": [
+        "client",
+        "metric",
+        "metricLabel",
+        "title",
+        "text",
+        "linkText",
+        "linkUrl"
+      ]
+    },
+    {
+      "title": "Case Study Quote",
+      "icon": "Quote",
+      "keys": [
+        "quote",
+        "quoteAuthor"
+      ]
+    },
+    {
+      "title": "Case Study Images",
+      "icon": "Image",
+      "keys": [
+        "image",
+        "alt",
+        "logo"
+      ]
+    },
+    {
+      "title": "Case Study Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "accent"
+      ]
+    }
+  ]
+}

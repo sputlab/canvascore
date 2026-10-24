@@ -1,0 +1,256 @@
+{
+  "type": "LOGOS",
+  "script": "logos",
+  "settings": {
+    "logos": {
+      "type": "list",
+      "item": {
+        "src": {
+          "type": "image",
+          "default": "",
+          "label": "Image",
+          "altKey": "alt"
+        },
+        "alt": {
+          "type": "text",
+          "default": "",
+          "label": "Name (alt text)"
+        },
+        "href": {
+          "type": "text",
+          "default": "",
+          "trim": true,
+          "label": "Link (optional)",
+          "placeholder": "https://\u2026"
+        },
+        "link": {
+          "type": "text",
+          "default": "",
+          "key": "href",
+          "transform": "blockUrl"
+        },
+        "isLink": {
+          "type": "flag",
+          "when": {
+            "href": {
+              "not": [
+                ""
+              ]
+            },
+            "link": {
+              "not": [
+                "#"
+              ]
+            }
+          }
+        }
+      },
+      "itemTitle": "Logo {n}",
+      "itemKeys": [
+        "src",
+        "alt",
+        "href"
+      ],
+      "addFromMedia": {
+        "label": "+ Add logo from media",
+        "key": "src",
+        "alt": "alt"
+      },
+      "addLabel": "+ Add empty slot (paste URL)",
+      "newItem": {
+        "src": "",
+        "alt": "",
+        "href": ""
+      }
+    },
+    "layout": {
+      "type": "enum",
+      "default": "grid",
+      "options": [
+        {
+          "value": "grid",
+          "label": "Grid"
+        },
+        {
+          "value": "marquee",
+          "label": "Scrolling strip"
+        }
+      ],
+      "label": "Layout"
+    },
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Heading (optional)",
+      "placeholder": "Trusted by"
+    },
+    "columns": {
+      "type": "number",
+      "default": 5,
+      "min": 1,
+      "max": 8,
+      "int": true,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          1,
+          "1"
+        ],
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ],
+        [
+          5,
+          "5"
+        ],
+        [
+          6,
+          "6"
+        ],
+        [
+          7,
+          "7"
+        ],
+        [
+          8,
+          "8"
+        ]
+      ],
+      "showIf": {
+        "layout": [
+          "grid"
+        ]
+      }
+    },
+    "height": {
+      "type": "number",
+      "default": 48,
+      "min": 20,
+      "max": 120,
+      "int": true,
+      "label": "Logo height px (20\u2013120)"
+    },
+    "gap": {
+      "type": "number",
+      "default": 40,
+      "min": 8,
+      "max": 80,
+      "int": true,
+      "label": "Gap px (8\u201380)"
+    },
+    "grayscale": {
+      "type": "bool",
+      "default": true,
+      "label": "Grayscale (color on hover)"
+    },
+    "speed": {
+      "type": "number",
+      "default": 30,
+      "min": 10,
+      "max": 120,
+      "int": true,
+      "label": "Loop duration in seconds",
+      "control": "range",
+      "valueLabel": "Speed: one loop every {v} s",
+      "rangeMin": 10,
+      "rangeMax": 120,
+      "step": 5,
+      "rtl": true,
+      "showIf": {
+        "layout": [
+          "marquee"
+        ]
+      }
+    },
+    "direction": {
+      "type": "text",
+      "default": "",
+      "label": "Direction",
+      "control": "select",
+      "choices": [
+        [
+          "left",
+          "Right to left"
+        ],
+        [
+          "right",
+          "Left to right"
+        ]
+      ],
+      "showIf": {
+        "layout": [
+          "marquee"
+        ]
+      }
+    },
+    "fade": {
+      "type": "bool",
+      "strict": true,
+      "default": false,
+      "label": "Fade the edges",
+      "showIf": {
+        "layout": [
+          "marquee"
+        ]
+      }
+    },
+    "mobileColumns": {
+      "type": "calc",
+      "of": "columns",
+      "max": 3
+    }
+  },
+  "template": [
+    "<style>{{#grayscale}}#{{_id}} .cc-logo-item:hover img,#{{_id}} .cc-logo-item:focus-visible img{filter:none !important; opacity:1 !important}{{/grayscale}}",
+    "{{#layout=marquee}}@keyframes ccMq_{{_id}}{from{transform:translateX(0)}to{transform:translateX(-50%)}}#{{_id}} .cc-logos-track{animation:ccMq_{{_id}} {{speed}}s linear infinite{{#direction=right}} reverse{{/direction=right}}}#{{_id}} .cc-logos-marquee:hover .cc-logos-track{animation-play-state:paused}",
+    "{{#fade}}#{{_id}} .cc-logos-marquee{-webkit-mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);mask-image:linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)}{{/fade}}",
+    "@media(prefers-reduced-motion:reduce){#{{_id}} .cc-logos-track{animation:none; flex-wrap:wrap; width:auto !important}#{{_id}} .cc-logos-set[aria-hidden=\"true\"]{display:none}{{#fade}}#{{_id}} .cc-logos-marquee{-webkit-mask-image:none;mask-image:none}{{/fade}}}{{/layout=marquee}}",
+    "{{^layout=marquee}}@media(max-width:768px){#{{_id}} .cc-logos-grid{grid-template-columns:repeat({{mobileColumns}}, 1fr) !important}}{{/layout=marquee}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-logos{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "{{^title=}}<div class=\"cc-logos-title\" style=\"text-align:center; font-size:14px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:24px;\">{{title}}</div>{{/title=}}",
+    "{{#layout=marquee}}<div class=\"cc-logos-marquee\" style=\"overflow:hidden; contain:inline-size;\"><div class=\"cc-logos-track\" style=\"display:flex; width:max-content;\"><div class=\"cc-logos-set\" style=\"display:flex; align-items:center; gap:{{gap}}px; padding-right:{{gap}}px;\">{{#logos}}{{#isLink}}<a href=\"{{link}}\" class=\"cc-logo-item\" rel=\"noopener\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></a>{{/isLink}}{{^isLink}}<div class=\"cc-logo-item\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></div>{{/isLink}}{{/logos}}</div><div class=\"cc-logos-set\" aria-hidden=\"true\" style=\"display:flex; align-items:center; gap:{{gap}}px; padding-right:{{gap}}px;\">{{#logos}}{{#isLink}}<a href=\"{{link}}\" class=\"cc-logo-item\" rel=\"noopener\" tabindex=\"-1\" aria-hidden=\"true\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></a>{{/isLink}}{{^isLink}}<div class=\"cc-logo-item\" aria-hidden=\"true\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></div>{{/isLink}}{{/logos}}</div></div></div>{{/layout=marquee}}",
+    "{{^layout=marquee}}<div class=\"cc-logos-grid\" style=\"display:grid; grid-template-columns:repeat({{columns}}, 1fr); gap:{{gap}}px; align-items:center; justify-items:center;\">{{#logos}}{{#isLink}}<a href=\"{{link}}\" class=\"cc-logo-item\" rel=\"noopener\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></a>{{/isLink}}{{^isLink}}<div class=\"cc-logo-item\" style=\"display:flex; align-items:center; justify-content:center;\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"height:{{height}}px; width:auto; max-width:100%; object-fit:contain; display:block;{{#grayscale}} filter:grayscale(1); opacity:0.7; transition:filter 0.2s, opacity 0.2s;{{/grayscale}}\"></div>{{/isLink}}{{/logos}}</div>{{/layout=marquee}}",
+    "\n{{#layout=marquee}}{{#logos?}}{{{_script}}}{{/logos?}}{{/layout=marquee}}</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Logos",
+      "icon": "Building2",
+      "open": true,
+      "keys": [
+        "title",
+        "logos"
+      ]
+    },
+    {
+      "title": "Logos Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "columns",
+        "speed",
+        "direction",
+        "fade",
+        "height",
+        "gap",
+        "grayscale"
+      ],
+      "hint": "Pauses on hover; static for visitors who prefer reduced motion.",
+      "hintIf": {
+        "layout": [
+          "marquee"
+        ]
+      }
+    }
+  ]
+}

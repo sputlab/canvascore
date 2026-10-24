@@ -1,0 +1,125 @@
+{
+  "type": "TABLE_OF_CONTENTS",
+  "script": "toc",
+  "settings": {
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Title (empty = none)"
+    },
+    "ariaLabel": {
+      "type": "text",
+      "default": "Table of contents",
+      "key": "title",
+      "fallbackWhenEmpty": true
+    },
+    "levels": {
+      "type": "text",
+      "default": "",
+      "label": "Headings to list",
+      "control": "select",
+      "choices": [
+        [
+          "h2",
+          "Main headings (H2)"
+        ],
+        [
+          "h2h3",
+          "Main and sub-headings (H2 + H3)"
+        ]
+      ]
+    },
+    "sticky": {
+      "type": "bool",
+      "default": false,
+      "strict": true,
+      "label": "Stay in view while scrolling (sticky)"
+    },
+    "top": {
+      "type": "number",
+      "parse": "int",
+      "default": 90,
+      "key": "stickyTop",
+      "min": 0,
+      "max": 300,
+      "label": "Distance from the top px",
+      "showIf": {
+        "sticky": true
+      }
+    },
+    "offset": {
+      "type": "number",
+      "parse": "int",
+      "default": 80,
+      "min": 0,
+      "max": 300,
+      "label": "Space above a heading when jumping to it px"
+    },
+    "layout": {
+      "type": "text",
+      "default": "",
+      "label": "Style",
+      "control": "select",
+      "choices": [
+        [
+          "card",
+          "Card"
+        ],
+        [
+          "plain",
+          "Plain"
+        ]
+      ]
+    },
+    "accent": {
+      "type": "color",
+      "default": "var(--brand-color, #3b82f6)",
+      "label": "Accent color (empty = brand color)"
+    },
+    "numbered": {
+      "type": "bool",
+      "default": false,
+      "strict": true,
+      "label": "Number the entries"
+    },
+    "highlight": {
+      "type": "bool",
+      "default": true,
+      "label": "Highlight the section being read"
+    }
+  },
+  "template": [
+    "<style>#{{_id}} a{color:inherit;text-decoration:none}#{{_id}} a:hover{color:{{accent}}}#{{_id}} .cc-toc-item{margin:0;padding:4px 0}#{{_id}} .cc-toc-l3{padding-left:16px;font-size:.93em;opacity:.9}#{{_id}} .is-active>a{color:{{accent}};font-weight:700}#{{_id}} .cc-toc-num{opacity:.7}</style>",
+    "<nav id=\"{{_id}}\" class=\"cc-toc cc-toc-{{#layout=plain}}plain{{/layout=plain}}{{^layout=plain}}card{{/layout=plain}}{{_classes}}\" hidden data-levels=\"{{#levels=h2h3}}h2h3{{/levels=h2h3}}{{^levels=h2h3}}h2{{/levels=h2h3}}\" data-numbered=\"{{#numbered}}1{{/numbered}}{{^numbered}}0{{/numbered}}\" data-highlight=\"{{#highlight}}1{{/highlight}}{{^highlight}}0{{/highlight}}\" data-offset=\"{{offset}}\" aria-label=\"{{ariaLabel}}\" style=\"{{{_style}}}{{#sticky}} position:sticky; top:{{top}}px;{{/sticky}}\">\n",
+    "<div class=\"cc-toc-box\" style=\"{{^layout=plain}}background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:20px 22px;{{/layout=plain}}{{#layout=plain}}padding:0;{{/layout=plain}}\">",
+    "{{^title=}}<div class=\"cc-toc-title\" style=\"font-weight:700; font-size:15px; margin-bottom:10px; color:#0f172a;\">{{title}}</div>{{/title=}}",
+    "<ol class=\"cc-toc-list\" style=\"list-style:none; margin:0; padding:0; font-size:14px; line-height:1.4; color:#475569;\"></ol>",
+    "<p class=\"cc-toc-empty\" hidden style=\"margin:0; font-size:13px; color:#94a3b8;\">The headings of this page appear here.</p>",
+    "</div>\n</nav>\n{{{_script}}}"
+  ],
+  "panel": [
+    {
+      "title": "Table of Contents",
+      "icon": "TableOfContents",
+      "open": true,
+      "keys": [
+        "title",
+        "levels",
+        "numbered",
+        "highlight"
+      ],
+      "hint": "Lists the headings of the page automatically: set the style of a Text block to Heading 2 or 3. With no headings the block is hidden on the published page."
+    },
+    {
+      "title": "Contents Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "accent",
+        "sticky",
+        "top",
+        "offset"
+      ]
+    }
+  ]
+}

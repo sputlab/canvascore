@@ -49,6 +49,13 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('media_usage')) return new Response(JSON.stringify({ success: true, usage: { 'sky.jpg': ['Page: Home'] } }));
   if (u.includes('delete_media')) { const b = JSON.parse(init.body); return new Response(JSON.stringify({ success: true, deleted: b.names.length, message: `${b.names.length} images deleted.` })); }
   if (u.includes('upload_media')) return new Response(JSON.stringify({ success: true, url: '/uploads/123_new-icon.png' }));
+  if (u.includes('update_info')) return new Response(JSON.stringify({ success: true, current: '0.21.0', demo: false, last_check: null,
+    requirements: [{ id: 'sodium', label: 'Signature check (PHP sodium extension)', ok: true }, { id: 'zip', label: 'ZIP packages (PHP zip extension)', ok: true }],
+    history: [{ at: 1791900000, from: '0.20.0', to: '0.21.0', by: 'ann', result: 'updated', message: 'ok' }] }));
+  if (u.includes('update_check')) return new Response(JSON.stringify({ success: true, release: { current: '0.21.0', latest: '0.22.0', available: true, package: true, size: 3 * 1048576, notes: '## New\n- Faster publishing', published_at: '2026-11-01T10:00:00Z', url: 'https://github.com/sputlab/CanvasCore/releases/tag/v0.22.0', checked_at: 1792000000 } }));
+  if (u.includes('update_install')) { UPDATE_INSTALLS.push(JSON.parse(init.body)); return new Response(JSON.stringify({ success: false, rolled_back: true, message: 'The update was rolled back, nothing changed: The new version did not start (the server answered 500).',
+    steps: [['Signature verified.', true], ['New version in place.', true], ['The new version did not start (the server answered 500).', false], ['Rolled back: the previous version 0.21.0 and its database are back in place.', true]],
+    history: [{ at: 1792000100, from: '0.21.0', to: '0.22.0', by: 'ann', result: 'rolled_back', message: 'The update was rolled back' }] })); }
   if (u.includes('backup_info')) return new Response(JSON.stringify({ success: true, zip: true, max_upload: 300 * 1024, backups: BACKUPS }));
   if (u.includes('backup_create')) { const b = JSON.parse(init.body); BACKUP_OPTS.push(b); return new Response(JSON.stringify({ success: true, name: b.temp ? 'download-20261013-101500-ab12.zip' : 'backup-20261013-101600-cd34.zip', backups: b.temp ? BACKUPS : [{ ...BACKUPS[1], name: 'backup-20261013-101600-cd34.zip', created: 1791900000 }, ...BACKUPS] })); }
   if (u.includes('backup_upload_chunk')) { CHUNKS.push({ id: init.body.get('id'), index: init.body.get('index'), size: init.body.get('chunk').size }); return new Response(JSON.stringify({ success: true })); }
@@ -104,6 +111,7 @@ const BACKUPS = [
   { name: 'backup-20261011-090000-bb22.zip', kind: 'saved', bytes: 3 * 1048576, created: 1791709200, site_name: 'Acme', app: '0.13.0', counts: { pages: 1 }, uploads: { files: 1 } },
 ];
 const BACKUP_OPTS = [];
+const UPDATE_INSTALLS = [];
 const LONG_COL = 'Recipes and seasonal stories from our kitchen, collected over many many years';
 const COLS = [{ id: 'c1', name: 'Blog', slug: 'blog' }, { id: 'c2', name: LONG_COL, slug: 'recipes' }];
 const ITEMS = [
@@ -150,7 +158,7 @@ try {
   mount(React.createElement(AdminLayout, null, React.createElement('p', null, 'child')));
   const nav = await waitFor(() => $('nav.ui-nav'));
   check('sections: Pages, Collections, Templates, Media, Menu, Global Options', ['Pages', 'Collections', 'Templates', 'Media', 'Menu', 'Global Options'].every((l) => btn(l, nav)));
-  check('admins also see Submissions, Accounts and Backup', ['Submissions', 'Accounts', 'Backup'].every((l) => btn(l, nav)));
+  check('admins also see Submissions, Accounts, Backup and Updates', ['Submissions', 'Accounts', 'Backup', 'Updates'].every((l) => btn(l, nav)));
   check('the current section is marked (aria-current)', btn('Pages', nav).getAttribute('aria-current') === 'page');
   click(btn('Media', nav));
   check('clicking a section opens it', st().currentView === 'media');
@@ -160,7 +168,7 @@ try {
   check('user, logout and version in the sidebar', /ann/.test($('.ui-sidebar__foot').textContent) && !!$('[aria-label="Log out"]') && !!$('[aria-label="Change your password"]') && /CanvasCore v/.test($('.ui-sidebar__foot').textContent));
   useStore.setState({ userRole: 'editor' });
   await sleep(30);
-  check('editors do not see the administration group', !btn('Accounts', $('nav.ui-nav')) && !btn('Backup', $('nav.ui-nav')));
+  check('editors do not see the administration group', !btn('Accounts', $('nav.ui-nav')) && !btn('Backup', $('nav.ui-nav')) && !btn('Updates', $('nav.ui-nav')));
 
   console.log('\nPAGES');
   useStore.setState({ currentView: 'manager', userRole: 'admin', pages: PAGES });
@@ -338,8 +346,9 @@ try {
   {
     const key = (el, k, extra = {}) => el.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
     useStore.setState({ currentView: 'manager', userRole: 'admin', pages: PAGES.map((p) => ({ ...p })) });
-    mount(React.createElement(AdminLayout, null, React.createElement(PageManager))); await sleep(60);
+    mount(React.createElement(AdminLayout, null, React.createElement(PageManager)));
     const delBtn = () => $('[aria-label="Delete Contact"]');
+    await waitFor(delBtn);
     click(delBtn());
     let dlg = await waitFor(() => $('[role="alertdialog"]'));
     check('deleting a page asks in an in-app dialog (no browser confirm)', !!dlg && /Delete the page "Contact"\?/.test(dlg.textContent) && dlg.getAttribute('aria-modal') === 'true');
@@ -711,6 +720,28 @@ try {
     await waitFor(() => calls.some((c) => c.u.includes('backup_delete')), 2000);
     check('…then deletes it', calls.some((c) => c.u.includes('backup_delete')));
     w.HTMLAnchorElement.prototype.click = origClick;
+  }
+
+  console.log('\nUPDATES');
+  {
+    useStore.setState({ currentView: 'updates', userRole: 'admin' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/Updates.jsx')).default)));
+    const reqs = await waitFor(() => $('[aria-label="Server requirements"]'));
+    check('the page shows the installed version and what the server needs', !!reqs && /Installed: version 0\.21\.0/.test(doc.body.textContent) && $$('li[data-ok="true"]', reqs).length === 2);
+    check('…and the update history', /0\.20\.0 → 0\.21\.0/.test($('[aria-label="Update history"]').textContent) && /Updated/.test($('[aria-label="Update history"]').textContent));
+    check('nothing can be installed before a check', !btnHas('Update to'));
+    click(btnHas('Check for updates'));
+    const notes = await waitFor(() => $('[aria-label="Release notes"]'));
+    check('a check shows the new version, its size, release page and notes (as plain text)', !!notes && /Version 0\.22\.0 is available/.test(doc.body.textContent) && /3\.0 MB/.test(doc.body.textContent)
+      && notes.textContent.includes('## New') && !notes.querySelector('*') && $$('a').some((a) => a.getAttribute('href') === 'https://github.com/sputlab/CanvasCore/releases/tag/v0.22.0' && /noopener/.test(a.getAttribute('rel'))));
+    click(btnHas('Update to 0.22.0'));
+    const dlg = await waitFor(() => $('[role="alertdialog"]'));
+    check('updating asks first, saying a backup is taken and what happens if a check fails', !!dlg && /backup is taken first/.test(dlg.textContent) && /current version is put back/.test(dlg.textContent));
+    click(btn('Update to 0.22.0', dlg));
+    const res = await waitFor(() => $('.cc-backup-result'), 3000);
+    check('…then installs the version that was shown', UPDATE_INSTALLS.length === 1 && UPDATE_INSTALLS[0].version === '0.22.0', JSON.stringify(UPDATE_INSTALLS));
+    check('a rolled-back update shows what happened, step by step', !!res && /rolled back/.test(res.textContent) && $$('li[data-ok="false"]', res).length === 1 && $$('li', res).length === 4 && !btnHas('Reload the editor'), res && res.textContent);
+    check('…and the history records it', /Rolled back/.test($('[aria-label="Update history"]').textContent));
   }
 
   console.log('\nSTYLES PER DEVICE');
@@ -1175,7 +1206,7 @@ try {
 
   console.log('\nFACETED SEARCH AND RELATED BY TAG (editor)');
   {
-    const SP = (await vite.ssrLoadModule('/src/components/panel/blocks/SearchPanel.jsx')).default;
+    const SP = (await vite.ssrLoadModule('/src/components/panel/widgets.jsx')).SearchFacets;   // the Site Search panel's filters widget
     const RP = (await vite.ssrLoadModule('/src/components/panel/blocks/RelatedPanel.jsx')).default;
     const sets = [];
     let sc = { facets: [] };

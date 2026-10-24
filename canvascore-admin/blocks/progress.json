@@ -1,0 +1,81 @@
+{
+  "type": "PROGRESS",
+  "script": "progress",
+  "settings": {
+    "items": {
+      "type": "list",
+      "itemTitle": "Bar {n}",
+      "addLabel": "+ Add bar",
+      "newItem": {
+        "label": "New skill",
+        "value": 50,
+        "color": ""
+      },
+      "item": {
+        "label": {
+          "type": "text",
+          "default": "",
+          "label": "Label"
+        },
+        "value": {
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "max": 100,
+          "round": 1,
+          "label": "Value % (0\u2013100)"
+        },
+        "color": {
+          "type": "color",
+          "default": "var(--brand-color, #3b82f6)",
+          "label": "Color (empty = brand color)",
+          "placeholder": "brand color"
+        }
+      }
+    },
+    "height": {
+      "type": "number",
+      "default": 10,
+      "min": 4,
+      "max": 30,
+      "int": true,
+      "label": "Bar height px (4\u201330)"
+    },
+    "showValue": {
+      "type": "bool",
+      "default": true,
+      "label": "Show percentage"
+    },
+    "animate": {
+      "type": "bool",
+      "default": true,
+      "label": "Fill when scrolled into view"
+    }
+  },
+  "panel": [
+    {
+      "title": "Progress Bars",
+      "icon": "BarChart3",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "title": "Progress Settings",
+      "icon": "Sliders",
+      "keys": [
+        "height",
+        "showValue",
+        "animate"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-progress{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "{{#items}}<div class=\"cc-progress-item\" style=\"margin-bottom:18px;\"><div class=\"cc-progress-head\" style=\"display:flex; justify-content:space-between; font-size:14px; font-weight:600; margin-bottom:6px;\"><span class=\"cc-progress-label\">{{label}}</span>",
+    "{{#showValue}}<span class=\"cc-progress-value\">{{value}}%</span>{{/showValue}}</div>",
+    "<div class=\"cc-progress-track\" role=\"progressbar\" aria-label=\"{{label}}\" aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"{{value}}\" style=\"height:{{height}}px; background:#e2e8f0; border-radius:999px; overflow:hidden;\"><div class=\"cc-progress-fill\" data-w=\"{{value}}\" style=\"width:{{value}}%; height:100%; background:{{color}}; border-radius:999px;\"></div></div></div>{{/items}}\n",
+    "{{#animate}}{{#items?}}{{{_script}}}{{/items?}}{{/animate}}</div>\n"
+  ]
+}

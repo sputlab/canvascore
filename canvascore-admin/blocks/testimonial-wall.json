@@ -1,0 +1,216 @@
+{
+  "type": "TESTIMONIAL_WALL",
+  "settings": {
+    "items": {
+      "type": "list",
+      "skipNonObjects": true,
+      "item": {
+        "name": {
+          "type": "text",
+          "default": "",
+          "label": "Name"
+        },
+        "role": {
+          "type": "text",
+          "default": "",
+          "label": "Role or company"
+        },
+        "quote": {
+          "type": "text",
+          "default": "",
+          "transform": "br",
+          "label": "Quote",
+          "control": "textarea",
+          "rows": 3
+        },
+        "avatar": {
+          "type": "image",
+          "default": "",
+          "label": "Photo (empty = initials)"
+        },
+        "initials": {
+          "type": "text",
+          "default": "",
+          "key": "name",
+          "transform": "initials"
+        },
+        "rating": {
+          "type": "number",
+          "parse": "int",
+          "default": 0,
+          "min": 0,
+          "max": 5,
+          "label": "Stars",
+          "control": "select",
+          "choices": [
+            [
+              0,
+              "None"
+            ],
+            [
+              5,
+              "5"
+            ],
+            [
+              4,
+              "4"
+            ],
+            [
+              3,
+              "3"
+            ],
+            [
+              2,
+              "2"
+            ],
+            [
+              1,
+              "1"
+            ]
+          ]
+        },
+        "stars": {
+          "type": "number",
+          "parse": "int",
+          "key": "rating",
+          "default": 0,
+          "min": 0,
+          "max": 5,
+          "transform": "repeat",
+          "text": "&#9733;"
+        },
+        "missing": {
+          "type": "calc",
+          "of": "rating",
+          "mul": -1,
+          "add": 5
+        },
+        "emptyStars": {
+          "type": "calc",
+          "of": "rating",
+          "mul": -1,
+          "add": 5,
+          "transform": "repeat",
+          "text": "&#9733;"
+        }
+      },
+      "itemTitle": "Testimonial {n}",
+      "itemTitleKey": "name",
+      "itemKeys": [
+        "quote",
+        "name",
+        "role",
+        "rating",
+        "avatar"
+      ],
+      "addLabel": "+ Add testimonial",
+      "newItem": {
+        "quote": "",
+        "name": "New customer",
+        "role": "",
+        "avatar": "",
+        "rating": 5
+      }
+    },
+    "columns": {
+      "type": "number",
+      "parse": "int",
+      "default": 3,
+      "min": 1,
+      "max": 4,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          1,
+          "1"
+        ],
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ]
+      ]
+    },
+    "gap": {
+      "type": "number",
+      "parse": "int",
+      "default": 20,
+      "min": 0,
+      "max": 48,
+      "label": "Gap px"
+    },
+    "cardStyle": {
+      "type": "text",
+      "default": "",
+      "label": "Style",
+      "control": "select",
+      "choices": [
+        [
+          "card",
+          "Cards"
+        ],
+        [
+          "minimal",
+          "Minimal"
+        ]
+      ]
+    },
+    "showRatings": {
+      "type": "bool",
+      "default": true,
+      "label": "Show star ratings"
+    },
+    "starColor": {
+      "type": "color",
+      "default": "#f59e0b",
+      "label": "Star color"
+    },
+    "mobileColumns": {
+      "type": "calc",
+      "of": "columns",
+      "max": 2
+    }
+  },
+  "template": [
+    "<style>@media(max-width:768px){#{{_id}} .cc-tw-grid{column-count:{{mobileColumns}} !important}}@media(max-width:480px){#{{_id}} .cc-tw-grid{column-count:1 !important}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-testimonial-wall{{_classes}}\" style=\"{{{_style}}}\">\n<div class=\"cc-tw-grid\" style=\"column-count:{{columns}}; column-gap:{{gap}}px;\">",
+    "{{#items}}<figure class=\"cc-tw-card\" style=\"break-inside:avoid; display:inline-block; width:100%; box-sizing:border-box; margin:0 0 {{gap}}px 0; {{#cardStyle=minimal}}padding:8px 0;{{/cardStyle=minimal}}{{^cardStyle=minimal}}background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:22px; box-shadow:0 2px 8px rgba(15,23,42,0.04);{{/cardStyle=minimal}}\">",
+    "{{#showRatings}}{{#rating?}}<div class=\"cc-tw-rating\" role=\"img\" aria-label=\"{{rating}} out of 5 stars\" style=\"color:{{starColor}}; font-size:16px; letter-spacing:2px; margin-bottom:10px;\">{{{stars}}}{{#missing?}}<span style=\"color:#e2e8f0;\">{{{emptyStars}}}</span>{{/missing?}}</div>{{/rating?}}{{/showRatings}}",
+    "<blockquote class=\"cc-tw-quote\" style=\"margin:0; font-size:15px; line-height:1.6; color:#334155;\">{{{quote}}}</blockquote>",
+    "<figcaption class=\"cc-tw-author\" style=\"display:flex; align-items:center; gap:10px; margin-top:16px;\">",
+    "{{^avatar=}}<img class=\"cc-tw-avatar\" src=\"{{avatar}}\" alt=\"\" loading=\"lazy\" style=\"width:40px; height:40px; border-radius:50%; flex-shrink:0; object-fit:cover; display:block;\">{{/avatar=}}",
+    "{{#avatar=}}<span class=\"cc-tw-initials\" aria-hidden=\"true\" style=\"width:40px; height:40px; border-radius:50%; flex-shrink:0; background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; text-transform:uppercase;\">{{initials}}</span>{{/avatar=}}",
+    "<span style=\"min-width:0;\"><span class=\"cc-tw-name\" style=\"display:block; font-weight:700; font-size:14px; color:#0f172a;\">{{name}}</span>",
+    "{{^role=}}<span class=\"cc-tw-role\" style=\"display:block; font-size:13px; color:#64748b;\">{{role}}</span>{{/role=}}",
+    "</span></figcaption></figure>{{/items}}</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Testimonials",
+      "icon": "MessagesSquare",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "title": "Wall Layout",
+      "icon": "Sliders",
+      "keys": [
+        "columns",
+        "gap",
+        "cardStyle",
+        "showRatings",
+        "starColor"
+      ]
+    }
+  ]
+}

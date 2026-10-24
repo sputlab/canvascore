@@ -22,7 +22,8 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
   publishing (a page or item goes live and comes down at a time; `cron.php` for sites nobody edits), and images
   optimised to WebP with responsive sizes.
 - **Running it**: accounts with admin and editor roles, drafts and version history, whole-site backups, forms with
-  submissions, and a cookie banner.
+  submissions, a cookie banner, and **one-click updates**: the admin checks GitHub releases, verifies the package
+  signature, takes a backup, updates, and rolls back if a check fails.
 
 ## Manuals
 
@@ -40,6 +41,11 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 │   ├── api.php            Editor JSON API (auth, pages, media, menu, users…)
 │   ├── compiler.php       PHP block renderer → HTML
 │   ├── rebuild_all.php    Publishes the whole site into the parent folder
+│   ├── publish.php        The publish itself and scheduled publishing (also used by cron.php)
+│   ├── update.php         One-click updates: signed release, backup, swap, rollback
+│   ├── update-keys.php    Public keys the releases are signed with
+│   ├── blockdef.php       Engine of the shared block definitions (PHP twin of src/render/blockDef.mjs)
+│   ├── blocks/            One definition per block (settings, template, panel), read by PHP and the editor
 │   ├── submit_form.php    Public endpoint for form submissions
 │   ├── install.php        Setup wizard with setup key (delete after use)
 │   ├── config.php         Session, CSRF, data dir, security headers, HTML/SVG sanitizers
@@ -58,8 +64,8 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 ## Requirements
 
 - Node.js ≥ 20 (developed with 24) and npm
-- PHP ≥ 8 with `pdo_sqlite` and `dom` (`zip` for backups); the PHP CLI is also needed for the tests
-  (`test:security` also needs `curl`)
+- PHP ≥ 8 with `pdo_sqlite` and `dom` (`zip` for backups; `sodium`, `zip` and `curl` for one-click updates); the PHP CLI
+  is also needed for the tests (`test:security` also needs `curl` and `sodium`)
 
 ## Development
 
@@ -88,6 +94,11 @@ npm run build      # build into dist/ (increments the build in canvascore-admin/
    file locks itself anyway.
 
 There is no default account: until the wizard has run, the editor's sign-in screen points to `install.php`.
+
+**Updating.** From 0.21.0 on, an admin updates from the editor: **Administration › Updates** checks the latest GitHub
+release and installs it (signed package, backup first, rollback if a check fails). Earlier versions, and servers that
+lack the requirements the page lists, update by hand: repeat steps 1–3 over the existing files and keep the data
+folder (see the [Administrator Guide](docs/manuals/ADMIN-GUIDE.md#5-updating-to-a-new-version)).
 
 The published site is written to the folder **above** `canvascore-admin/`
 (`index.html`, one folder per slug, `sitemap.xml`, `robots.txt`, `404.html`, `uploads/`).

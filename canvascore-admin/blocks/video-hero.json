@@ -1,0 +1,254 @@
+{
+  "type": "VIDEO_HERO",
+  "script": "video",
+  "settings": {
+    "video": {
+      "type": "text",
+      "default": "",
+      "transform": "mediaSrc",
+      "label": "Video file (MP4 or WebM)",
+      "control": "file",
+      "fileKind": "video"
+    },
+    "video2": {
+      "type": "text",
+      "default": "",
+      "transform": "mediaSrc",
+      "label": "Second format (optional, e.g. WebM)",
+      "control": "file",
+      "fileKind": "video"
+    },
+    "mime1": {
+      "type": "text",
+      "default": "",
+      "key": "video",
+      "transform": "mediaMime"
+    },
+    "mime2": {
+      "type": "text",
+      "default": "",
+      "key": "video2",
+      "transform": "mediaMime"
+    },
+    "hasVideo": {
+      "type": "flag",
+      "any": true,
+      "when": {
+        "video": {
+          "not": [
+            ""
+          ]
+        },
+        "video2": {
+          "not": [
+            ""
+          ]
+        }
+      }
+    },
+    "poster": {
+      "type": "image",
+      "default": "",
+      "label": "Poster image (shown while loading, on phones and when motion is reduced)"
+    },
+    "posterCss": {
+      "type": "image",
+      "key": "poster",
+      "default": "",
+      "transform": "cssUrl"
+    },
+    "overlay": {
+      "type": "color",
+      "default": "#0f172a",
+      "label": "Overlay color"
+    },
+    "overlayOpacity": {
+      "type": "number",
+      "parse": "int",
+      "default": 55,
+      "min": 0,
+      "max": 90,
+      "label": "Overlay strength % (0\u201390)"
+    },
+    "opacity": {
+      "type": "calc",
+      "of": "overlayOpacity",
+      "div": 100,
+      "transform": "plain"
+    },
+    "height": {
+      "type": "number",
+      "parse": "int",
+      "default": 560,
+      "min": 280,
+      "max": 1000,
+      "label": "Height px (280\u20131000)",
+      "step": 20
+    },
+    "align": {
+      "type": "text",
+      "default": "",
+      "label": "Text alignment",
+      "control": "select",
+      "choices": [
+        [
+          "center",
+          "Centered"
+        ],
+        [
+          "left",
+          "Left"
+        ]
+      ]
+    },
+    "textColor": {
+      "type": "color",
+      "default": "#ffffff",
+      "label": "Text color"
+    },
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Title"
+    },
+    "subtitle": {
+      "type": "text",
+      "default": "",
+      "transform": "br",
+      "label": "Subtitle",
+      "control": "textarea",
+      "rows": 2
+    },
+    "buttons": {
+      "type": "list",
+      "skipNonObjects": true,
+      "max": 2,
+      "keepIf": {
+        "textTrim": {
+          "not": [
+            ""
+          ]
+        }
+      },
+      "item": {
+        "text": {
+          "type": "text",
+          "default": "",
+          "label": "Text"
+        },
+        "textTrim": {
+          "type": "text",
+          "default": "",
+          "key": "text",
+          "trim": true
+        },
+        "style": {
+          "type": "text",
+          "default": "",
+          "label": "Style",
+          "control": "select",
+          "choices": [
+            [
+              "primary",
+              "Solid white"
+            ],
+            [
+              "secondary",
+              "Outline"
+            ]
+          ]
+        },
+        "url": {
+          "type": "text",
+          "default": "",
+          "transform": "blockUrl",
+          "label": "Link",
+          "placeholder": "/page or https://\u2026"
+        }
+      },
+      "itemTitle": "Button {n}",
+      "itemTitleKey": "text",
+      "itemKeys": [
+        "text",
+        "url",
+        "style"
+      ],
+      "maxItems": 2,
+      "addLabel": "+ Add button",
+      "newItem": {
+        "text": "New button",
+        "url": "",
+        "style": "primary"
+      }
+    },
+    "mobileVideo": {
+      "type": "bool",
+      "default": false,
+      "strict": true,
+      "label": "Also play the video on phones (uses mobile data)"
+    },
+    "showPause": {
+      "type": "bool",
+      "default": true,
+      "label": "Show a pause button"
+    }
+  },
+  "template": [
+    "<style>#{{_id}} [hidden]{display:none !important}</style>",
+    "<section id=\"{{_id}}\" class=\"cc-vhero{{_classes}}\" data-mobile=\"{{#mobileVideo}}1{{/mobileVideo}}{{^mobileVideo}}0{{/mobileVideo}}\" style=\"{{{_style}}} position:relative; overflow:hidden; min-height:{{height}}px; display:flex; align-items:center; justify-content:center; background:#0f172a; color:{{textColor}};\">\n",
+    "{{^poster=}}<div class=\"cc-vh-poster\" aria-hidden=\"true\" style=\"position:absolute; inset:0; background-image:url('{{posterCss}}'); background-size:cover; background-position:center;\"></div>{{/poster=}}",
+    "{{#hasVideo}}<video class=\"cc-vh-video\" muted loop playsinline preload=\"none\" aria-hidden=\"true\"{{^poster=}} poster=\"{{poster}}\"{{/poster=}} style=\"position:absolute; inset:0; width:100%; height:100%; object-fit:cover;\">",
+    "{{^video=}}<source src=\"{{video}}\"{{^mime1=}} type=\"{{mime1}}\"{{/mime1=}}>{{/video=}}{{^video2=}}<source src=\"{{video2}}\"{{^mime2=}} type=\"{{mime2}}\"{{/mime2=}}>{{/video2=}}</video>{{/hasVideo}}",
+    "<div class=\"cc-vh-overlay\" aria-hidden=\"true\" style=\"position:absolute; inset:0; background:{{overlay}}; opacity:{{opacity}};\"></div>",
+    "<div class=\"cc-vh-inner\" style=\"position:relative; width:100%; max-width:900px; padding:64px 24px; box-sizing:border-box; text-align:{{#align=left}}left{{/align=left}}{{^align=left}}center{{/align=left}}; {{#align=left}}margin-right:auto;{{/align=left}}{{^align=left}}margin:0 auto;{{/align=left}}\">",
+    "{{^title=}}<h2 class=\"cc-vh-title\" style=\"margin:0; font-size:clamp(32px, 5vw, 56px); line-height:1.1; font-weight:800; color:inherit;\">{{title}}</h2>{{/title=}}",
+    "{{^subtitle=}}<p class=\"cc-vh-subtitle\" style=\"margin:16px 0 0 0; font-size:clamp(16px, 2vw, 20px); line-height:1.6; opacity:0.92;\">{{{subtitle}}}</p>{{/subtitle=}}",
+    "{{#buttons?}}<div class=\"cc-vh-buttons\" style=\"display:flex; gap:12px; flex-wrap:wrap; justify-content:{{#align=left}}flex-start{{/align=left}}{{^align=left}}center{{/align=left}}; margin-top:28px;\">",
+    "{{#buttons}}<a class=\"cc-vh-btn cc-vh-btn-{{#style=secondary}}secondary{{/style=secondary}}{{^style=secondary}}primary{{/style=secondary}}\" href=\"{{url}}\" style=\"padding:14px 28px; border-radius:10px; font-weight:700; text-decoration:none; {{#style=secondary}}border:2px solid rgba(255,255,255,0.85); color:#ffffff;{{/style=secondary}}{{^style=secondary}}background:#ffffff; color:#0f172a;{{/style=secondary}}\">{{text}}</a>{{/buttons}}</div>{{/buttons?}}",
+    "</div>",
+    "{{#hasVideo}}{{#showPause}}<button type=\"button\" class=\"cc-vh-toggle\" hidden aria-label=\"Pause the background video\" style=\"position:absolute; right:16px; bottom:16px; width:40px; height:40px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.55); color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;\"><svg class=\"cc-vh-i-pause\" aria-hidden=\"true\" focusable=\"false\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><rect x=\"6\" y=\"5\" width=\"4\" height=\"14\" rx=\"1\"/><rect x=\"14\" y=\"5\" width=\"4\" height=\"14\" rx=\"1\"/></svg><svg class=\"cc-vh-i-play\" style=\"display:none\" aria-hidden=\"true\" focusable=\"false\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg></button>{{/showPause}}{{/hasVideo}}",
+    "</section>\n{{#hasVideo}}{{{_script}}}{{/hasVideo}}"
+  ],
+  "panel": [
+    {
+      "title": "Background Video",
+      "icon": "Film",
+      "open": true,
+      "keys": [
+        "video",
+        "video2",
+        "poster",
+        "showPause",
+        "mobileVideo"
+      ],
+      "hint": "The video plays muted and loops. Keep it short and light (a few MB): a heavy video slows the page. Visitors who prefer reduced motion see the poster and can press play. In the editor the poster is shown."
+    },
+    {
+      "title": "Hero Text",
+      "icon": "Type",
+      "open": true,
+      "keys": [
+        "title",
+        "subtitle"
+      ]
+    },
+    {
+      "title": "Hero Buttons",
+      "icon": "MousePointerClick",
+      "keys": [
+        "buttons"
+      ]
+    },
+    {
+      "title": "Hero Layout",
+      "icon": "Sliders",
+      "keys": [
+        "height",
+        "align",
+        "overlay",
+        "overlayOpacity",
+        "textColor"
+      ]
+    }
+  ]
+}

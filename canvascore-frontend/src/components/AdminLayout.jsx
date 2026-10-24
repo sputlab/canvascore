@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
   FileText, LayoutTemplate, Library, Image as ImageIcon, ListTree, Palette, Inbox, Users, LogOut, Globe,
-  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink,
+  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink, CircleArrowUp,
 } from 'lucide-react';
 import { Button } from '../ui/kit';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -27,6 +27,7 @@ const NAV = [
     { view: 'submissions', label: 'Submissions', icon: Inbox },
     { view: 'users', label: 'Accounts', icon: Users },
     { view: 'backup', label: 'Backup', icon: DatabaseBackup },
+    { view: 'updates', label: 'Updates', icon: CircleArrowUp },
   ] },
 ];
 

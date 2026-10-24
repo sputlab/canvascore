@@ -1,0 +1,152 @@
+{
+  "type": "AUTHOR_BIO",
+  "settings": {
+    "layout": {
+      "type": "text",
+      "default": "",
+      "label": "Layout",
+      "control": "select",
+      "choices": [
+        [
+          "horizontal",
+          "Photo beside text"
+        ],
+        [
+          "centered",
+          "Centered"
+        ]
+      ]
+    },
+    "boxed": {
+      "type": "bool",
+      "default": true,
+      "label": "Show as a card"
+    },
+    "name": {
+      "type": "text",
+      "default": "",
+      "label": "Name"
+    },
+    "role": {
+      "type": "text",
+      "default": "",
+      "label": "Role"
+    },
+    "label": {
+      "type": "text",
+      "default": "",
+      "label": "Label (empty = none)",
+      "placeholder": "About the author"
+    },
+    "bio": {
+      "type": "text",
+      "default": "",
+      "transform": "br",
+      "label": "Bio",
+      "control": "textarea",
+      "rows": 3
+    },
+    "photo": {
+      "type": "image",
+      "default": "",
+      "label": "Photo (empty = initials)"
+    },
+    "initials": {
+      "type": "text",
+      "default": "",
+      "key": "name",
+      "transform": "initials"
+    },
+    "links": {
+      "type": "list",
+      "skipNonObjects": true,
+      "keepIf": {
+        "url": {
+          "not": [
+            ""
+          ]
+        },
+        "label": {
+          "not": [
+            ""
+          ]
+        }
+      },
+      "item": {
+        "url": {
+          "type": "text",
+          "default": "",
+          "trim": true,
+          "label": "Address or email",
+          "placeholder": "example.com or name@example.com"
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "label": "Label"
+        },
+        "href": {
+          "type": "text",
+          "default": "",
+          "key": "url",
+          "trim": true,
+          "transform": "contactUrl"
+        }
+      },
+      "itemTitle": "Link {n}",
+      "itemTitleKey": "label",
+      "itemKeys": [
+        "label",
+        "url"
+      ],
+      "addLabel": "+ Add link",
+      "newItem": {
+        "label": "New link",
+        "url": ""
+      }
+    }
+  },
+  "template": [
+    "<style>@media(max-width:600px){#{{_id}} .cc-author-card{flex-direction:column !important;align-items:center !important;text-align:center}#{{_id}} .cc-author-links{justify-content:center !important}}</style>",
+    "<aside id=\"{{_id}}\" class=\"cc-author{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-author-card\" style=\"display:flex; flex-direction:{{#layout=centered}}column{{/layout=centered}}{{^layout=centered}}row{{/layout=centered}}; align-items:{{#layout=centered}}center{{/layout=centered}}{{^layout=centered}}flex-start{{/layout=centered}}; gap:20px; {{#layout=centered}}text-align:center; {{/layout=centered}}{{#boxed}}background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:24px; {{/boxed}}\">",
+    "{{^photo=}}<img class=\"cc-author-photo\" src=\"{{photo}}\" alt=\"{{name}}\" loading=\"lazy\" style=\"width:88px; height:88px; border-radius:50%; flex-shrink:0; object-fit:cover; display:block;\">{{/photo=}}",
+    "{{#photo=}}<div class=\"cc-author-initials\" aria-hidden=\"true\" style=\"width:88px; height:88px; border-radius:50%; flex-shrink:0; background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:700; text-transform:uppercase;\">{{initials}}</div>{{/photo=}}",
+    "<div class=\"cc-author-body\" style=\"min-width:0;\">",
+    "{{^label=}}<div class=\"cc-author-label\" style=\"font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--brand-color, #3b82f6);\">{{label}}</div>{{/label=}}",
+    "<div class=\"cc-author-name\" style=\"font-size:20px; font-weight:700; color:#0f172a; margin-top:4px;\">{{name}}</div>",
+    "{{^role=}}<div class=\"cc-author-role\" style=\"font-size:14px; color:#64748b;\">{{role}}</div>{{/role=}}",
+    "{{^bio=}}<p class=\"cc-author-bio\" style=\"margin:10px 0 0 0; font-size:15px; line-height:1.6; color:#334155;\">{{{bio}}}</p>{{/bio=}}",
+    "{{#links?}}<div class=\"cc-author-links\" style=\"display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:14px; justify-content:{{#layout=centered}}center{{/layout=centered}}{{^layout=centered}}flex-start{{/layout=centered}};\">{{#links}}<a href=\"{{href}}\" class=\"cc-author-link\" rel=\"noopener\" style=\"color:var(--brand-color, #3b82f6); font-weight:600; text-decoration:none;\">{{label}}</a>{{/links}}</div>{{/links?}}",
+    "</div></div>\n</aside>\n"
+  ],
+  "panel": [
+    {
+      "title": "Author",
+      "icon": "CircleUserRound",
+      "open": true,
+      "keys": [
+        "label",
+        "name",
+        "role",
+        "bio",
+        "photo"
+      ]
+    },
+    {
+      "title": "Author Links",
+      "icon": "Link2",
+      "keys": [
+        "links"
+      ]
+    },
+    {
+      "title": "Author Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "boxed"
+      ]
+    }
+  ]
+}

@@ -103,7 +103,10 @@ export default function PropertyPanel() {
       } else if (t.type === 'logo_add') {
         lstAdd('logos', { src: url, alt, href: '' });
       } else if (t.type === 'into') {
-        if (t.list) lstPatch(t.list, t.index, { [t.key]: url, ...(t.alt ? withAlt(lstOf(t.list)[t.index], t.alt) : {}) });
+        // add: a new item of the list with the image (and its alt text); obj: into an object of the content
+        if (t.add) lstAdd(t.list, { ...(t.item || {}), [t.key]: url, ...(t.alt ? { [t.alt]: alt } : {}) });
+        else if (t.obj) { const cur = liveContent()[t.obj] || {}; handleContentChange(t.obj, { ...cur, [t.key]: url, ...(t.alt ? withAlt(cur, t.alt) : {}) }); }
+        else if (t.list) lstPatch(t.list, t.index, { [t.key]: url, ...(t.alt ? withAlt(lstOf(t.list)[t.index], t.alt) : {}) });
         else patchContent({ [t.key]: url, ...(t.alt ? withAlt(liveContent(), t.alt) : {}) });
       } else if (t.type === 'team_photo') {
         lstPatch('members', t.index, { photo: url });
@@ -170,8 +173,9 @@ export default function PropertyPanel() {
   const ctx = {
     selectedBlock: shownBlock, device: viewport, c, set: handleContentChange, handleContentChange, patchContent, handleStyleChange, patchStyles, updateBlock, setMediaPickerTarget,
     pick: (type, index) => () => setMediaPickerTarget(index === undefined ? { type } : { type, index }),
-    // Generic picker target for new blocks: the image goes into content[key], or into item `index` of the list
-    // content[list]; `alt` names the alt-text field that the library's alt text fills while it is empty.
+    // Generic picker target for new blocks: the image goes into content[key], into item `index` of the list
+    // content[list], into the object content[obj], or (add) into a new item of the list; `alt` names the alt-text
+    // field that the library's alt text fills while it is empty.
     pickTo: (target) => () => setMediaPickerTarget({ type: 'into', ...target }),
     ARS: [['16 / 9', '16:9'], ['4 / 3', '4:3'], ['3 / 2', '3:2'], ['1 / 1', '1:1'], ['21 / 9', '21:9']],
     pages, collections, lstOf, lstPatch, lstRemove, lstAdd, lstMove, userRole,

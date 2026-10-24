@@ -1,0 +1,132 @@
+{
+  "type": "IMAGE",
+  "settings": {
+    "src": {
+      "type": "image",
+      "default": "",
+      "label": "Image URL",
+      "altKey": "alt"
+    },
+    "alt": {
+      "type": "text",
+      "default": "",
+      "label": "Alt Text (SEO)"
+    },
+    "objectFit": {
+      "type": "enum",
+      "default": "cover",
+      "label": "Object-Fit Mode",
+      "options": [
+        {
+          "value": "cover",
+          "label": "Cover (Fill and crop)"
+        },
+        {
+          "value": "contain",
+          "label": "Contain (Show full without crop)"
+        },
+        {
+          "value": "fill",
+          "label": "Fill (Stretch to fit)"
+        }
+      ]
+    },
+    "aspectRatio": {
+      "type": "text",
+      "default": "auto",
+      "pattern": "^(auto|[0-9]{1,4}(\\.[0-9]{1,3})? ?/ ?[0-9]{1,4}(\\.[0-9]{1,3})?)$",
+      "label": "Aspect Ratio",
+      "control": "select",
+      "choices": [
+        [
+          "auto",
+          "Auto (original)"
+        ],
+        [
+          "1 / 1",
+          "1:1 (Square)"
+        ],
+        [
+          "4 / 3",
+          "4:3"
+        ],
+        [
+          "3 / 2",
+          "3:2"
+        ],
+        [
+          "16 / 9",
+          "16:9 (Wide)"
+        ],
+        [
+          "21 / 9",
+          "21:9 (Ultra-wide)"
+        ],
+        [
+          "2 / 3",
+          "2:3 (Portrait)"
+        ]
+      ]
+    },
+    "objectPosition": {
+      "type": "text",
+      "default": "center",
+      "pattern": "^[a-z0-9 .%-]{1,40}$",
+      "label": "Focus / Object Position",
+      "control": "select",
+      "choices": [
+        [
+          "center",
+          "Center"
+        ],
+        [
+          "top",
+          "Top"
+        ],
+        [
+          "bottom",
+          "Bottom"
+        ],
+        [
+          "left",
+          "Left"
+        ],
+        [
+          "right",
+          "Right"
+        ]
+      ]
+    },
+    "scale": {
+      "type": "number",
+      "default": 1,
+      "min": 0.1,
+      "max": 5,
+      "round": 2,
+      "label": "Zoom (Scale)",
+      "control": "range",
+      "rangeMin": 0.5,
+      "rangeMax": 2,
+      "step": 0.1
+    }
+  },
+  "panel": [
+    {
+      "title": "Image Settings",
+      "icon": "Image",
+      "open": true,
+      "keys": [
+        "src",
+        "alt",
+        "objectFit",
+        "aspectRatio",
+        "objectPosition",
+        "scale"
+      ]
+    }
+  ],
+  "template": [
+    "<figure id=\"{{_id}}\" class=\"cc-image{{_classes}}\" style=\"{{{_style}}} margin:0; overflow:hidden;{{#aspectRatio?}}{{^aspectRatio=auto}} aspect-ratio:{{aspectRatio}};{{/aspectRatio=auto}}{{/aspectRatio?}}\">",
+    "<img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"width:100%; height:100%; object-fit:{{objectFit}}; object-position:{{objectPosition}}; transform:scale({{scale}}); display:block; border-radius:inherit;\"></figure>\n"
+  ]
+}

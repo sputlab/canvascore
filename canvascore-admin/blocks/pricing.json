@@ -1,0 +1,170 @@
+{
+  "type": "PRICING",
+  "settings": {
+    "plans": {
+      "type": "list",
+      "count": {
+        "as": "autoColumns",
+        "min": 1,
+        "max": 4
+      },
+      "item": {
+        "name": {
+          "type": "text",
+          "default": "",
+          "label": "Plan name",
+          "placeholder": "Plan name"
+        },
+        "price": {
+          "type": "text",
+          "default": "",
+          "label": "Price",
+          "placeholder": "Price ($19)",
+          "half": true
+        },
+        "period": {
+          "type": "text",
+          "default": "",
+          "label": "Period",
+          "placeholder": "/month",
+          "half": true
+        },
+        "description": {
+          "type": "text",
+          "default": "",
+          "label": "Short description",
+          "placeholder": "Short description"
+        },
+        "badge": {
+          "type": "text",
+          "default": "",
+          "label": "Badge",
+          "placeholder": "Badge (e.g. Most popular) \u2014 empty = none"
+        },
+        "buttonText": {
+          "type": "text",
+          "default": "",
+          "label": "Button text",
+          "placeholder": "Button text"
+        },
+        "buttonUrl": {
+          "type": "text",
+          "default": "#",
+          "transform": "blockUrl",
+          "label": "Button link",
+          "control": "link",
+          "placeholder": "URL or mailto:"
+        },
+        "highlighted": {
+          "type": "bool",
+          "default": false,
+          "label": "Highlight this plan"
+        },
+        "features": {
+          "type": "list",
+          "of": {
+            "type": "text",
+            "default": "",
+            "trim": true
+          },
+          "skipEmpty": true,
+          "label": "Features \u2014 one per line",
+          "control": "lines",
+          "rows": 4
+        }
+      },
+      "itemTitle": "Plan {n}",
+      "itemMark": {
+        "key": "highlighted",
+        "text": " \u2605"
+      },
+      "addLabel": "+ Add plan",
+      "itemKeys": [
+        "name",
+        "price",
+        "period",
+        "description",
+        "features",
+        "buttonText",
+        "buttonUrl",
+        "highlighted",
+        "badge"
+      ],
+      "newItem": {
+        "name": "New plan",
+        "price": "$0",
+        "period": "/month",
+        "description": "",
+        "features": [
+          "Feature one"
+        ],
+        "buttonText": "Choose",
+        "buttonUrl": "#",
+        "highlighted": false,
+        "badge": ""
+      }
+    },
+    "columns": {
+      "type": "number",
+      "parse": "int",
+      "default": 0,
+      "min": 0,
+      "max": 4,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          0,
+          "Auto (one per plan)"
+        ],
+        [
+          1,
+          "1"
+        ],
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ]
+      ]
+    }
+  },
+  "template": [
+    "<style>@media(max-width:900px){#{{_id}} .cc-pricing-grid{grid-template-columns:1fr !important}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-pricing{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-pricing-grid\" style=\"display:grid; grid-template-columns:repeat({{#columns?}}{{columns}}{{/columns?}}{{^columns?}}{{autoColumns}}{{/columns?}}, 1fr); gap:24px; align-items:stretch; padding-top:12px;\">",
+    "{{#plans}}<div class=\"cc-plan{{#highlighted}} cc-plan-hl{{/highlighted}}\" style=\"position:relative; display:flex; flex-direction:column; padding:28px 24px; border-radius:14px; background:#fff; box-sizing:border-box; {{#highlighted}}border:2px solid var(--brand-color, #3b82f6); box-shadow:0 10px 30px rgba(15,23,42,0.12);{{/highlighted}}{{^highlighted}}border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(15,23,42,0.04);{{/highlighted}}\">",
+    "{{^badge=}}<div class=\"cc-plan-badge\" style=\"position:absolute; top:-12px; left:50%; transform:translateX(-50%); background:var(--brand-color, #3b82f6); color:#fff; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:4px 12px; border-radius:999px; white-space:nowrap;\">{{badge}}</div>{{/badge=}}",
+    "<h3 class=\"cc-plan-name\" style=\"margin:0; font-size:18px; color:#0f172a;\">{{name}}</h3>",
+    "<div class=\"cc-plan-price\" style=\"margin-top:14px; display:flex; align-items:baseline;\"><span class=\"cc-plan-amount\" style=\"font-size:38px; font-weight:800; color:#0f172a; line-height:1;\">{{price}}</span>{{^period=}}<span class=\"cc-plan-period\" style=\"font-size:14px; color:#64748b; margin-left:4px;\">{{period}}</span>{{/period=}}</div>",
+    "{{^description=}}<p class=\"cc-plan-desc\" style=\"margin:10px 0 0 0; font-size:14px; color:#64748b; line-height:1.5;\">{{description}}</p>{{/description=}}",
+    "<ul class=\"cc-plan-features\" style=\"list-style:none; padding:0; margin:20px 0 24px 0;\">{{#features}}<li style=\"display:flex; gap:10px; align-items:flex-start; margin:0 0 10px 0; font-size:14px; color:#334155;\"><span aria-hidden=\"true\" style=\"color:var(--brand-color, #3b82f6); font-weight:700;\">&#10003;</span><span>{{.}}</span></li>{{/features}}</ul>",
+    "{{^buttonText=}}<a href=\"{{buttonUrl}}\" class=\"cc-plan-btn\" style=\"display:block; text-align:center; text-decoration:none; font-weight:700; padding:12px 18px; border-radius:8px; margin-top:auto; box-sizing:border-box; {{#highlighted}}background:var(--brand-color, #3b82f6); color:#fff;{{/highlighted}}{{^highlighted}}background:#f1f5f9; color:#0f172a;{{/highlighted}}\">{{buttonText}}</a>{{/buttonText=}}",
+    "</div>{{/plans}}</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Pricing Plans",
+      "icon": "CreditCard",
+      "open": true,
+      "keys": [
+        "plans"
+      ]
+    },
+    {
+      "title": "Pricing Layout",
+      "icon": "Sliders",
+      "keys": [
+        "columns"
+      ],
+      "hint": "The highlighted plan uses the brand color. On small screens plans stack in one column."
+    }
+  ]
+}

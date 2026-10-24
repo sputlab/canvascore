@@ -1,0 +1,41 @@
+{
+  "type": "TESTIMONIAL",
+  "settings": {
+    "quote": {
+      "type": "text",
+      "default": "",
+      "label": "Quote",
+      "control": "textarea",
+      "rows": 3
+    },
+    "author": {
+      "type": "text",
+      "default": "",
+      "label": "Author"
+    },
+    "role": {
+      "type": "text",
+      "default": "",
+      "label": "Role"
+    }
+  },
+  "panel": [
+    {
+      "title": "Testimonial",
+      "icon": "MessageSquareQuote",
+      "open": true,
+      "keys": [
+        "quote",
+        "author",
+        "role"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-testimonial{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<p style=\"font-size:16px; font-style:italic; margin:0 0 20px 0; line-height:1.6;\">&ldquo;{{quote}}&rdquo;</p>\n",
+    "<div style=\"font-weight:700; font-size:14px;\">{{author}}</div>\n",
+    "<div style=\"font-size:12px; opacity:0.6;\">{{role}}</div>\n",
+    "</div>\n"
+  ]
+}

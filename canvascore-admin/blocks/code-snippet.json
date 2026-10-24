@@ -1,0 +1,210 @@
+{
+  "type": "CODE_SNIPPET",
+  "script": "code",
+  "settings": {
+    "language": {
+      "type": "enum",
+      "default": "text",
+      "options": [
+        {
+          "value": "html",
+          "data": {
+            "label": "HTML"
+          },
+          "label": "HTML"
+        },
+        {
+          "value": "css",
+          "data": {
+            "label": "CSS"
+          },
+          "label": "CSS"
+        },
+        {
+          "value": "js",
+          "data": {
+            "label": "JavaScript"
+          },
+          "label": "JavaScript"
+        },
+        {
+          "value": "json",
+          "data": {
+            "label": "JSON"
+          },
+          "label": "JSON"
+        },
+        {
+          "value": "php",
+          "data": {
+            "label": "PHP"
+          },
+          "label": "PHP"
+        },
+        {
+          "value": "shell",
+          "data": {
+            "label": "Shell"
+          },
+          "label": "Shell"
+        },
+        {
+          "value": "text",
+          "data": {
+            "label": ""
+          },
+          "label": "Plain text (no colors)"
+        }
+      ],
+      "label": "Language"
+    },
+    "code": {
+      "type": "text",
+      "default": "",
+      "transform": "code",
+      "label": "Code",
+      "control": "code",
+      "rows": 10
+    },
+    "gutter": {
+      "type": "text",
+      "default": "",
+      "key": "code",
+      "transform": "lineNumbers"
+    },
+    "filename": {
+      "type": "text",
+      "default": "",
+      "label": "File name (optional)",
+      "placeholder": "app.js"
+    },
+    "theme": {
+      "type": "enum",
+      "default": "dark",
+      "options": [
+        {
+          "value": "dark",
+          "data": {
+            "p0": "#0f172a",
+            "p1": "#e2e8f0",
+            "p2": "#1e293b",
+            "p3": "#111c33",
+            "p4": "#94a3b8",
+            "c": "#7c8aa5",
+            "s": "#86efac",
+            "k": "#c4b5fd",
+            "n": "#fdba74",
+            "f": "#7dd3fc",
+            "v": "#fca5a5",
+            "t": "#f472b6",
+            "a": "#fcd34d"
+          },
+          "label": "Dark"
+        },
+        {
+          "value": "light",
+          "data": {
+            "p0": "#f8fafc",
+            "p1": "#0f172a",
+            "p2": "#e2e8f0",
+            "p3": "#f1f5f9",
+            "p4": "#64748b",
+            "c": "#64748b",
+            "s": "#15803d",
+            "k": "#7c3aed",
+            "n": "#c2410c",
+            "f": "#0369a1",
+            "v": "#b91c1c",
+            "t": "#be185d",
+            "a": "#b45309"
+          },
+          "label": "Light"
+        }
+      ],
+      "label": "Theme"
+    },
+    "fontSize": {
+      "type": "number",
+      "parse": "int",
+      "default": 14,
+      "min": 11,
+      "max": 20,
+      "label": "Text size px"
+    },
+    "maxHeight": {
+      "type": "number",
+      "parse": "int",
+      "default": 0,
+      "min": 0,
+      "max": 1200,
+      "label": "Maximum height px (0 = show everything)",
+      "step": 20
+    },
+    "copyButton": {
+      "type": "bool",
+      "default": true,
+      "label": "Copy button"
+    },
+    "lineNumbers": {
+      "type": "bool",
+      "default": false,
+      "strict": true,
+      "label": "Line numbers"
+    },
+    "showBar": {
+      "type": "flag",
+      "any": true,
+      "when": {
+        "filename": {
+          "not": [
+            ""
+          ]
+        },
+        "opt.language.label": {
+          "not": [
+            ""
+          ]
+        },
+        "copyButton": true
+      }
+    }
+  },
+  "template": [
+    "<style>#{{_id}} .cc-tk-c{color:{{{opt.theme.c}}};font-style:italic}#{{_id}} .cc-tk-s{color:{{{opt.theme.s}}}}#{{_id}} .cc-tk-k{color:{{{opt.theme.k}}}}#{{_id}} .cc-tk-n{color:{{{opt.theme.n}}}}#{{_id}} .cc-tk-f{color:{{{opt.theme.f}}}}#{{_id}} .cc-tk-v{color:{{{opt.theme.v}}}}#{{_id}} .cc-tk-t{color:{{{opt.theme.t}}}}#{{_id}} .cc-tk-a{color:{{{opt.theme.a}}}}#{{_id}} .cc-code-copy:hover{filter:brightness(1.2)}</style>",
+    "<figure id=\"{{_id}}\" class=\"cc-code cc-code-{{theme}}{{_classes}}\" data-lang=\"{{language}}\" style=\"{{{_style}}} margin:0; border-radius:12px; overflow:hidden; background:{{{opt.theme.p0}}}; color:{{{opt.theme.p1}}}; border:1px solid {{{opt.theme.p2}}};\">\n",
+    "{{#showBar}}<div class=\"cc-code-bar\" style=\"display:flex; align-items:center; gap:10px; padding:8px 14px; background:{{{opt.theme.p3}}}; border-bottom:1px solid {{{opt.theme.p2}}}; font:600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:{{{opt.theme.p4}}};\">",
+    "<span class=\"cc-code-file\" style=\"flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;\">{{^filename=}}{{filename}}{{/filename=}}{{#filename=}}{{{opt.language.label}}}{{/filename=}}</span>",
+    "{{^filename=}}{{#opt.language.label?}}<span class=\"cc-code-lang\">{{{opt.language.label}}}</span>{{/opt.language.label?}}{{/filename=}}",
+    "{{#copyButton}}<button type=\"button\" class=\"cc-code-copy\" hidden aria-label=\"Copy the code\" style=\"padding:5px 10px; border-radius:6px; border:1px solid {{{opt.theme.p2}}}; background:transparent; color:inherit; font:600 12px/1 inherit; cursor:pointer;\">Copy</button>{{/copyButton}}",
+    "</div>{{/showBar}}",
+    "<div class=\"cc-code-scroll\" style=\"overflow:auto;{{#maxHeight?}} max-height:{{maxHeight}}px;{{/maxHeight?}}\">",
+    "<div class=\"cc-code-wrap\" style=\"display:flex; min-width:max-content; font:{{fontSize}}px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\">",
+    "{{#lineNumbers}}<span class=\"cc-code-gutter\" aria-hidden=\"true\" style=\"flex:0 0 auto; padding:16px 12px 16px 16px; text-align:right; white-space:pre; user-select:none; color:{{{opt.theme.p4}}};\">{{gutter}}</span>{{/lineNumbers}}",
+    "<pre class=\"cc-code-pre\" style=\"flex:1; margin:0; padding:16px; white-space:pre; tab-size:2; font:inherit;\"><code class=\"cc-code-code\" style=\"font:inherit;\">{{code}}</code></pre>",
+    "</div></div>\n</figure>\n{{{_script}}}"
+  ],
+  "panel": [
+    {
+      "title": "Code",
+      "icon": "Code2",
+      "open": true,
+      "keys": [
+        "language",
+        "filename",
+        "code"
+      ],
+      "hint": "The code is shown as text, never run. Colors are added in the visitor's browser."
+    },
+    {
+      "title": "Code Display",
+      "icon": "Sliders",
+      "keys": [
+        "theme",
+        "fontSize",
+        "maxHeight",
+        "lineNumbers",
+        "copyButton"
+      ]
+    }
+  ]
+}

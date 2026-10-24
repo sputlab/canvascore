@@ -1,0 +1,78 @@
+{
+  "type": "TIMELINE",
+  "settings": {
+    "items": {
+      "type": "list",
+      "label": "Event",
+      "itemTitle": "Event {n}",
+      "addLabel": "+ Add event",
+      "newItem": {
+        "date": "",
+        "title": "New event",
+        "text": ""
+      },
+      "item": {
+        "date": {
+          "type": "text",
+          "default": "",
+          "label": "Date / period",
+          "placeholder": "2024"
+        },
+        "title": {
+          "type": "text",
+          "default": "",
+          "label": "Title"
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "label": "Text",
+          "control": "textarea",
+          "rows": 2
+        }
+      }
+    },
+    "layout": {
+      "type": "enum",
+      "default": "left",
+      "label": "Layout",
+      "options": [
+        {
+          "value": "left",
+          "label": "Line on the left"
+        },
+        {
+          "value": "alternate",
+          "label": "Alternating (desktop)"
+        }
+      ]
+    }
+  },
+  "panel": [
+    {
+      "title": "Timeline",
+      "icon": "History",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "title": "Timeline Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout"
+      ]
+    }
+  ],
+  "template": [
+    "<style>#{{_id}}::before{content:\"\"; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:#e2e8f0}#{{_id}} .cc-tl-item{position:relative; margin-bottom:28px}#{{_id}} .cc-tl-item:last-child{margin-bottom:0}#{{_id}} .cc-tl-dot{position:absolute; left:-34px; top:4px; width:20px; height:20px; border-radius:50%; background:var(--brand-color, #3b82f6); border:4px solid #fff; box-shadow:0 0 0 2px #e2e8f0; box-sizing:border-box}",
+    "{{#layout=alternate}}@media(min-width:769px){#{{_id}}{padding-left:0 !important}#{{_id}}::before{left:50%; margin-left:-1px}#{{_id}} .cc-tl-item{width:50%; box-sizing:border-box; padding-right:36px; text-align:right}#{{_id}} .cc-tl-item:nth-child(even){margin-left:50%; padding-right:0; padding-left:36px; text-align:left}#{{_id}} .cc-tl-dot{left:auto; right:-46px}#{{_id}} .cc-tl-item:nth-child(even) .cc-tl-dot{right:auto; left:-46px}}{{/layout=alternate}}</style>",
+    "<ol id=\"{{_id}}\" class=\"cc-timeline cc-timeline-{{layout}}{{_classes}}\" style=\"{{{_style}}} list-style:none; margin:0; padding:0 0 0 34px; position:relative;\">",
+    "{{#items}}<li class=\"cc-tl-item\"><span class=\"cc-tl-dot\" aria-hidden=\"true\"></span>",
+    "{{^date=}}<div class=\"cc-tl-date\" style=\"font-size:13px; font-weight:700; color:var(--brand-color, #3b82f6); margin-bottom:4px;\">{{date}}</div>{{/date=}}",
+    "<h3 class=\"cc-tl-title\" style=\"margin:0 0 6px 0; font-size:18px;\">{{title}}</h3>",
+    "{{^text=}}<p class=\"cc-tl-text\" style=\"margin:0; font-size:14px; color:#64748b; line-height:1.55;\">{{text}}</p>{{/text=}}",
+    "</li>{{/items}}</ol>\n"
+  ]
+}

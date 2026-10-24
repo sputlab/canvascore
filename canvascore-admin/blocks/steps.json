@@ -1,0 +1,76 @@
+{
+  "type": "STEPS",
+  "settings": {
+    "items": {
+      "type": "list",
+      "count": {
+        "as": "columns",
+        "min": 1,
+        "max": 4
+      },
+      "itemTitle": "Step {n}",
+      "addLabel": "+ Add step",
+      "newItem": {
+        "title": "New step",
+        "text": ""
+      },
+      "item": {
+        "title": {
+          "type": "text",
+          "default": "",
+          "label": "Title"
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "label": "Text",
+          "control": "textarea",
+          "rows": 2
+        }
+      }
+    },
+    "layout": {
+      "type": "enum",
+      "default": "horizontal",
+      "label": "Layout",
+      "options": [
+        {
+          "value": "horizontal",
+          "label": "Horizontal (columns)"
+        },
+        {
+          "value": "vertical",
+          "label": "Vertical (list)"
+        }
+      ]
+    }
+  },
+  "panel": [
+    {
+      "title": "Steps",
+      "icon": "ListOrdered",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "title": "Steps Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout"
+      ],
+      "hint": "The horizontal layout becomes vertical on small screens."
+    }
+  ],
+  "template": [
+    "<style>",
+    "{{#layout=vertical}}#{{_id}} .cc-step{position:relative; padding-left:60px; padding-bottom:28px}#{{_id}} .cc-step:last-child{padding-bottom:0}#{{_id}} .cc-step:not(:last-child)::after{content:\"\"; position:absolute; left:19px; top:44px; bottom:4px; width:2px; background:#e2e8f0}{{/layout=vertical}}",
+    "{{#layout=horizontal}}#{{_id}} .cc-step{position:relative; text-align:center}#{{_id}} .cc-step:not(:last-child)::after{content:\"\"; position:absolute; top:19px; left:calc(50% + 28px); width:calc(100% - 32px); height:2px; background:#e2e8f0}@media(max-width:768px){#{{_id}}.cc-steps-horizontal{grid-template-columns:1fr !important}#{{_id}} .cc-step:not(:last-child)::after{display:none}}{{/layout=horizontal}}",
+    "</style><ol id=\"{{_id}}\" class=\"cc-steps cc-steps-{{layout}}{{_classes}}\" style=\"{{{_style}}} list-style:none; margin:0; padding:0;{{#layout=horizontal}} display:grid; grid-template-columns:repeat({{columns}}, 1fr); gap:24px;{{/layout=horizontal}}\">",
+    "{{#items}}<li class=\"cc-step\"><div class=\"cc-step-num\" style=\"{{#layout=vertical}}position:absolute; left:0; top:0; {{/layout=vertical}}{{#layout=horizontal}}margin:0 auto 14px; {{/layout=horizontal}}display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; background:var(--brand-color, #3b82f6); color:#fff; font-weight:700;\">{{@number}}</div>",
+    "<h3 class=\"cc-step-title\" style=\"margin:0 0 6px 0; font-size:17px;\">{{title}}</h3>",
+    "{{^text=}}<p class=\"cc-step-text\" style=\"margin:0; font-size:14px; color:#64748b; line-height:1.55;\">{{text}}</p>{{/text=}}",
+    "</li>{{/items}}</ol>\n"
+  ]
+}

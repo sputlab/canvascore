@@ -1,0 +1,123 @@
+{
+  "type": "AUDIO_PLAYER",
+  "script": "audio",
+  "settings": {
+    "src": {
+      "type": "text",
+      "default": "",
+      "transform": "mediaSrc",
+      "label": "Audio file (MP3, M4A, OGG or WAV)",
+      "control": "file",
+      "fileKind": "audio"
+    },
+    "cover": {
+      "type": "image",
+      "default": "",
+      "label": "Cover image (optional)"
+    },
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Title (empty = none)"
+    },
+    "artist": {
+      "type": "text",
+      "default": "",
+      "label": "Artist or show (empty = none)"
+    },
+    "accent": {
+      "type": "color",
+      "default": "var(--brand-color, #3b82f6)",
+      "label": "Accent color (empty = brand color)"
+    },
+    "layout": {
+      "type": "text",
+      "default": "",
+      "label": "Style",
+      "control": "select",
+      "choices": [
+        [
+          "card",
+          "Card"
+        ],
+        [
+          "plain",
+          "Plain"
+        ]
+      ]
+    },
+    "skip": {
+      "type": "bool",
+      "default": true,
+      "label": "Skip back / forward 15 seconds"
+    },
+    "speed": {
+      "type": "bool",
+      "default": true,
+      "label": "Playback speed button"
+    },
+    "hasHead": {
+      "type": "flag",
+      "any": true,
+      "when": {
+        "title": {
+          "not": [
+            ""
+          ]
+        },
+        "artist": {
+          "not": [
+            ""
+          ]
+        },
+        "cover": {
+          "not": [
+            ""
+          ]
+        }
+      }
+    }
+  },
+  "template": [
+    "<style>#{{_id}} button:hover{filter:brightness(.95)}#{{_id}} button:focus-visible,#{{_id}} input:focus-visible{outline:2px solid {{accent}};outline-offset:2px}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-audio{{_classes}}\" data-skip=\"15\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-au-card\" style=\"{{^layout=plain}}background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 4px 18px rgba(15,23,42,0.06);{{/layout=plain}}{{#layout=plain}}padding:0;{{/layout=plain}}\">",
+    "{{#hasHead}}<div class=\"cc-au-head\" style=\"display:flex; align-items:center; gap:16px; margin-bottom:14px;\">{{^cover=}}<img class=\"cc-au-cover\" src=\"{{cover}}\" alt=\"\" loading=\"lazy\" style=\"width:64px; height:64px; border-radius:10px; object-fit:cover; flex-shrink:0;\">{{/cover=}}",
+    "<div class=\"cc-au-meta\" style=\"min-width:0;\">{{^title=}}<div class=\"cc-au-title\" style=\"font-weight:700; font-size:17px; color:#0f172a;\">{{title}}</div>{{/title=}}{{^artist=}}<div class=\"cc-au-artist\" style=\"font-size:14px; color:#64748b; margin-top:2px;\">{{artist}}</div>{{/artist=}}</div></div>{{/hasHead}}",
+    "<audio class=\"cc-au-el\" controls preload=\"none\"{{^src=}} src=\"{{src}}\"{{/src=}} style=\"display:block; width:100%;\"></audio>",
+    "<div class=\"cc-au-ui\" hidden>",
+    "<div class=\"cc-au-bar\" style=\"display:flex; align-items:center; gap:10px;\"><span class=\"cc-au-cur\" style=\"min-width:40px; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;\">0:00</span>",
+    "<input type=\"range\" class=\"cc-au-seek\" min=\"0\" max=\"0\" step=\"0.1\" value=\"0\" aria-label=\"Seek\" style=\"flex:1; min-width:0; accent-color:{{accent}};\">",
+    "<span class=\"cc-au-dur\" style=\"min-width:40px; text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:#64748b;\">0:00</span></div>",
+    "<div class=\"cc-au-controls\" style=\"display:flex; align-items:center; justify-content:center; gap:12px; margin-top:12px;\">",
+    "{{#skip}}<button type=\"button\" class=\"cc-au-back\" aria-label=\"Back 15 seconds\" style=\"min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;\">-15s</button>{{/skip}}",
+    "<button type=\"button\" class=\"cc-au-play\" aria-label=\"Play\" style=\"width:52px; height:52px; padding:0; border-radius:50%; border:none; background:{{accent}}; color:#ffffff; cursor:pointer; display:flex; align-items:center; justify-content:center;\"><svg class=\"cc-au-i-play\" aria-hidden=\"true\" focusable=\"false\" viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\"><path d=\"M8 5v14l11-7z\"/></svg><svg class=\"cc-au-i-pause\" style=\"display:none\" aria-hidden=\"true\" focusable=\"false\" viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\"><rect x=\"6\" y=\"5\" width=\"4\" height=\"14\" rx=\"1\"/><rect x=\"14\" y=\"5\" width=\"4\" height=\"14\" rx=\"1\"/></svg></button>",
+    "{{#skip}}<button type=\"button\" class=\"cc-au-fwd\" aria-label=\"Forward 15 seconds\" style=\"min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;\">+15s</button>{{/skip}}",
+    "{{#speed}}<button type=\"button\" class=\"cc-au-speed\" aria-label=\"Playback speed\" style=\"min-width:44px; height:36px; padding:0 10px; border-radius:999px; border:1px solid #cbd5e1; background:#ffffff; color:#0f172a; font:600 13px/1 inherit; cursor:pointer;\">1&times;</button>{{/speed}}",
+    "</div></div>\n</div>\n</div>\n{{{_script}}}"
+  ],
+  "panel": [
+    {
+      "title": "Audio",
+      "icon": "Headphones",
+      "open": true,
+      "keys": [
+        "src",
+        "title",
+        "artist",
+        "cover"
+      ],
+      "hint": "The file is only downloaded when a visitor presses play. Without JavaScript the browser's own player is used."
+    },
+    {
+      "title": "Player Style",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "accent",
+        "skip",
+        "speed"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "type": "COUNTDOWN",
+  "script": "countdown",
+  "settings": {
+    "datetime": {
+      "type": "text",
+      "default": "2030-01-01T00:00",
+      "trim": true,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$",
+      "label": "Target date & time",
+      "control": "datetime"
+    },
+    "dateText": {
+      "type": "text",
+      "default": "2030-01-01T00:00",
+      "key": "datetime",
+      "trim": true,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$",
+      "transform": "replace",
+      "from": "T",
+      "to": " "
+    },
+    "utcOffset": {
+      "type": "text",
+      "default": "local",
+      "pattern": "^(local|[+-][0-9]{2}:[0-9]{2})$",
+      "label": "Time zone",
+      "control": "select",
+      "choicesFrom": "utcOffsets",
+      "hint": "A fixed UTC offset does not follow daylight-saving changes: pick the offset that applies on the target date."
+    },
+    "endAction": {
+      "type": "text",
+      "default": "",
+      "label": "When it ends",
+      "control": "select",
+      "choices": [
+        [
+          "message",
+          "Show a message"
+        ],
+        [
+          "hide",
+          "Hide the block"
+        ]
+      ]
+    },
+    "endMessage": {
+      "type": "text",
+      "default": "",
+      "label": "Message",
+      "placeholder": "It's here!",
+      "showIf": {
+        "endAction": {
+          "not": [
+            "hide"
+          ]
+        }
+      }
+    },
+    "showSeconds": {
+      "type": "bool",
+      "default": true,
+      "label": "Show seconds"
+    },
+    "showDate": {
+      "type": "bool",
+      "default": true,
+      "label": "Show the date under the numbers"
+    },
+    "labelDays": {
+      "type": "text",
+      "default": "Days",
+      "label": "Days label",
+      "placeholder": "Days",
+      "half": true
+    },
+    "labelHours": {
+      "type": "text",
+      "default": "Hours",
+      "label": "Hours label",
+      "placeholder": "Hours",
+      "half": true
+    },
+    "labelMinutes": {
+      "type": "text",
+      "default": "Minutes",
+      "label": "Minutes label",
+      "placeholder": "Minutes",
+      "half": true
+    },
+    "labelSeconds": {
+      "type": "text",
+      "default": "Seconds",
+      "label": "Seconds label",
+      "placeholder": "Seconds",
+      "half": true
+    }
+  },
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-countdown{{_classes}}\" data-target=\"{{datetime}}{{^utcOffset=local}}:00{{utcOffset}}{{/utcOffset=local}}\" data-end=\"{{#endAction=hide}}hide{{/endAction=hide}}{{^endAction=hide}}message{{/endAction=hide}}\" role=\"timer\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-cd-units\" style=\"display:flex; justify-content:center; gap:16px; flex-wrap:wrap;\"><div class=\"cc-cd-unit\" style=\"text-align:center; min-width:72px;\"><span class=\"cc-cd-num\" data-unit=\"days\" style=\"display:block; font-size:42px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; color:var(--brand-color, #3b82f6);\">00</span><span class=\"cc-cd-label\" style=\"display:block; font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;\">{{labelDays}}</span></div><div class=\"cc-cd-unit\" style=\"text-align:center; min-width:72px;\"><span class=\"cc-cd-num\" data-unit=\"hours\" style=\"display:block; font-size:42px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; color:var(--brand-color, #3b82f6);\">00</span><span class=\"cc-cd-label\" style=\"display:block; font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;\">{{labelHours}}</span></div><div class=\"cc-cd-unit\" style=\"text-align:center; min-width:72px;\"><span class=\"cc-cd-num\" data-unit=\"minutes\" style=\"display:block; font-size:42px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; color:var(--brand-color, #3b82f6);\">00</span><span class=\"cc-cd-label\" style=\"display:block; font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;\">{{labelMinutes}}</span></div>{{#showSeconds}}<div class=\"cc-cd-unit\" style=\"text-align:center; min-width:72px;\"><span class=\"cc-cd-num\" data-unit=\"seconds\" style=\"display:block; font-size:42px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; color:var(--brand-color, #3b82f6);\">00</span><span class=\"cc-cd-label\" style=\"display:block; font-size:13px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;\">{{labelSeconds}}</span></div>{{/showSeconds}}</div>\n",
+    "{{#showDate}}<div class=\"cc-cd-date\" style=\"text-align:center; font-size:13px; color:#94a3b8; margin-top:12px;\"><time datetime=\"{{datetime}}{{^utcOffset=local}}:00{{utcOffset}}{{/utcOffset=local}}\">{{dateText}}{{^utcOffset=local}} UTC{{utcOffset}}{{/utcOffset=local}}</time></div>\n{{/showDate}}",
+    "<div class=\"cc-cd-done\" hidden style=\"text-align:center; font-size:22px; font-weight:700;\">{{endMessage}}</div>\n",
+    "{{{_script}}}</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Countdown",
+      "icon": "Timer",
+      "open": true,
+      "keys": [
+        "datetime",
+        "utcOffset",
+        "endAction",
+        "endMessage"
+      ]
+    },
+    {
+      "title": "Countdown Display",
+      "icon": "Sliders",
+      "keys": [
+        "showSeconds",
+        "showDate",
+        "labelDays",
+        "labelHours",
+        "labelMinutes",
+        "labelSeconds"
+      ]
+    }
+  ]
+}

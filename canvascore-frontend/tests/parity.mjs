@@ -13,8 +13,23 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { renderBlock } from '../src/render/renderBlock.mjs';
+import { BLOCK_DEFS, blockDef, renderDefBlock } from '../src/render/blockDef.mjs';
+import { readdirSync } from 'node:fs';
 
 const phpScript = fileURLToPath(new URL('./render_php.php', import.meta.url));
+// Every fixture is rendered by PHP in one process (render_php_list.php), the results kept by fixture
+const phpListScript = fileURLToPath(new URL('./render_php_list.php', import.meta.url));
+const PHP_HTML = new Map();
+const phpRender = (fx) => {
+  if (!PHP_HTML.has(fx)) PHP_HTML.set(fx, JSON.parse(execFileSync('php', [phpListScript], { input: JSON.stringify([fx]), maxBuffer: 1 << 28 }).toString())[0]);
+  return PHP_HTML.get(fx);
+};
+const phpRenderAll = (list) => {
+  const todo = list.filter((fx) => !PHP_HTML.has(fx));
+  if (!todo.length) return;
+  const out = JSON.parse(execFileSync('php', [phpListScript], { input: JSON.stringify(todo), maxBuffer: 1 << 28 }).toString());
+  todo.forEach((fx, i) => PHP_HTML.set(fx, out[i]));
+};
 
 // --- Fixtures: one representative block per type, with meaningful styles/content ---
 const fixtures = [
@@ -289,11 +304,13 @@ function styleTexts(html) {
 }
 
 let failures = 0;
+phpRenderAll(fixtures);
 for (const fx of fixtures) {
   const jsHtml = renderBlock(fx);
   let phpHtml;
   try {
-    phpHtml = execFileSync('php', [phpScript], { input: JSON.stringify(fx) }).toString();
+    phpHtml = phpRender(fx);
+    if (phpHtml.startsWith('PHP ERROR: ')) throw new Error(phpHtml);
   } catch (e) {
     console.error(`[${fx.type}] PHP error:`, e.message);
     failures++; continue;
@@ -330,6 +347,151 @@ for (const fx of deviceFixtures) {
   const hostile = /script|expression|body\{|nonsense|animation/i.test(js.join(''));
   if (JSON.stringify(js) !== JSON.stringify(php) || hostile) { failures++; console.error(`\n✗ DEVICE STYLES — ${fx.type} (${fx.id})\n   JS=${JSON.stringify(js)}\n   PHP=${JSON.stringify(php)}`); }
   else console.log(`✓ device styles: ${fx.type} (${fx.id})${js.length ? '' : ' — no rules'}`);
+}
+
+// --- Shared block definitions (canvascore-admin/blocks/): both engines must give the SAME HTML, byte for byte ---
+console.log('\nSHARED BLOCK DEFINITIONS');
+{
+  const files = readdirSync(fileURLToPath(new URL('../../canvascore-admin/blocks/', import.meta.url))).filter((f) => f.endsWith('.json')).sort();
+  const listed = BLOCK_DEFS.map((d) => d.type).sort();
+  const onDisk = files.map((f) => JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks/' + f, import.meta.url)), 'utf-8')).type).sort();
+  if (JSON.stringify(listed) !== JSON.stringify(onDisk)) { failures++; console.error(`✗ BLOCK_DEFS (blockDef.mjs) and the files in blocks/ differ: ${listed} / ${onDisk}`); }
+  else console.log(`✓ every definition file is listed in blockDef.mjs (${files.length})`);
+  const noScript = (h) => h.replace(/[ \t]*<script\b[^>]*>[\s\S]*?<\/script>\n/g, '');   // site-only behaviour scripts (with their indentation)
+  const H = `a'b"c<d>&e`;
+  const extra = { customId: 'my id!', customClass: `x"y z`, customCss: '__THIS__{color:red}', animDelay: 300, hoverEffect: 'lift' };
+  const st = { padding: '10px', textAlign: 'right', animation: 'fade-up', textPreset: 'h2', color: 'red;}x{' };
+  const hostile = [
+    { type: 'TEXT', content: { text: ['arr'], ...extra }, styles: st }, { type: 'TEXT', content: { text: 42 } },
+    { type: 'IMAGE', content: { src: 'javascript:alert(1)', alt: H, aspectRatio: '4 / 5', scale: '"x', objectFit: `a"b`, objectPosition: 'x;y', ...extra }, styles: st },
+    { type: 'IMAGE', content: { src: { o: 1 }, alt: ['x'], aspectRatio: '', scale: null } },
+    { type: 'ICON_BOX', content: { icon: ['x'], title: 7, description: null, ...extra }, styles: st },
+    { type: 'TESTIMONIAL', content: { quote: { o: 1 }, author: true, role: false, ...extra }, styles: st },
+    { type: 'CALLOUT', content: { variant: 'evil', title: '0', showIcon: false, ...extra }, styles: st }, { type: 'CALLOUT', content: { variant: ['info'], showIcon: 'no', title: ['t'] } },
+    { type: 'TIMELINE', content: { layout: 'alternate', items: ['junk', 7, null, { title: ['t'], date: { a: 1 }, text: H }], ...extra }, styles: st },
+    { type: 'STEPS', content: { items: Array.from({ length: 6 }, (_, i) => ({ title: 'S' + i, text: i % 2 ? H : '' })), ...extra }, styles: st },
+    { type: 'STEPS', content: { layout: 'vertical', items: { a: { title: 'object, not a list' } } } },
+    { type: 'PROGRESS', content: { height: '7px', items: ['junk', 9, { value: true, color: ['x'] }, { value: 33.333 }, { value: '66.66' }, { value: 12.25 }, { value: 0.05 }, { value: 150, color: 'url(x)' }, { value: -5 }] } },
+    { type: 'PROGRESS', content: { height: 999, showValue: false, animate: false, items: [{ value: 50, label: H }], ...extra }, styles: st },
+  ].map((b, i) => ({ id: 'h' + i, ...b }));
+  const defFixtures = [...fixtures.filter((f) => blockDef(f.type)), ...hostile];
+  phpRenderAll(defFixtures);
+  const phpHtml = defFixtures.map(phpRender);
+  let same = 0;
+  defFixtures.forEach((fx, i) => {
+    if (noScript(phpHtml[i]) === renderBlock(fx)) { same++; return; }
+    failures++; console.error(`✗ ${fx.type} (${fx.id}): the two engines differ\n   JS =${JSON.stringify(renderBlock(fx)).slice(0, 300)}\n   PHP=${JSON.stringify(noScript(phpHtml[i])).slice(0, 300)}`);
+  });
+  console.log(`✓ the same HTML from both engines: ${same} of ${defFixtures.length} blocks (hostile values included)`);
+  const typeMix = new Set(defFixtures.map((f) => f.type));
+  for (const d of BLOCK_DEFS) if (!typeMix.has(d.type)) { failures++; console.error(`✗ no fixture for ${d.type}`); }
+
+  // The template language and the value cleaning, on definitions made for the test
+  const T = (template, settings, content, styles) => ({ def: { type: 'T', settings: settings || {}, template }, block: { id: 'b1', type: 'T', content: content || {}, styles: styles || {} } });
+  const cases = [
+    T('{{a}}|{{{a}}}|{{{r}}}|{{r}}', { a: { type: 'text' }, r: { type: 'richtext' } }, { a: `<b>'&"`, r: '<i>x</i>' }),
+    T('{{#l}}[{{@index}}{{@number}}{{@first}}{{@last}}:{{x}}/{{top}}]{{/l}}{{^l}}none{{/l}}', { l: { type: 'list', item: { x: { type: 'text', default: 'd' } } }, top: { type: 'text', default: 'T' } }, { l: [{ x: 'a' }, 'junk', { x: 'c' }] }),
+    T('{{#l}}x{{/l}}{{^l}}none{{/l}}{{#l?}}yes{{/l?}}{{^l?}}no{{/l?}}', { l: { type: 'list', item: {} } }, { l: [] }),
+    T('{{#e=b}}B{{/e=b}}{{^e=b}}notB{{/e=b}}:{{e}}:{{{opt.e.html}}}:{{opt.e.html}}', { e: { type: 'enum', default: 'a', options: [{ value: 'a', data: { html: '<u>a</u>' } }, { value: 'b', data: { html: '<u>b</u>' } }] } }, { e: 'b' }),
+    T('{{e}}', { e: { type: 'enum', default: 'a', options: [{ value: 'a' }, { value: '1' }] } }, { e: 1 }),
+    T('{{n}} {{i}} {{r}} {{big}} {{neg}} {{bad}}', { n: { type: 'number', min: 0, max: 10 }, i: { type: 'number', int: true, default: 3 }, r: { type: 'number', round: 2 }, big: { type: 'number' }, neg: { type: 'number', int: true }, bad: { type: 'number', default: 7 } },
+      { n: '12', i: '4.9', r: 1.005, big: 1e15, neg: -0.5, bad: '0x1A' }),
+    T('{{#t}}T{{/t}}{{#f}}F{{/f}}{{#d}}D{{/d}}{{#z}}Z{{/z}}{{#o}}O{{/o}}', { t: { type: 'bool', default: true }, f: { type: 'bool' }, d: { type: 'bool', default: true }, z: { type: 'bool' }, o: { type: 'bool' } }, { t: 0, f: '0', d: false, z: [], o: { k: 1 } }),
+    T('{{c}}|{{d}}|{{img}}|{{p}}|{{m}}|{{w}}', { c: { type: 'color', default: '#000' }, d: { type: 'color', default: '#111' }, img: { type: 'image' }, p: { type: 'text', pattern: '^[a-z]+$', default: 'def' }, m: { type: 'text', maxLength: 3 }, w: { type: 'text', default: 'x', fallbackWhenEmpty: true } },
+      { c: 'var(--cc-color-a, #fff)', d: 'red;}', img: ' JaVa\tscript:alert(1)', p: 'A1', m: 'àèìòù', w: '' }),
+    T('{{s}}|{{x}}|{{_s}}|{{{_style}}}|{{_classes}}|{{_id}}', { s: { type: 'text', from: 'styles', key: 'textAlign', default: 'left' }, x: { type: 'text', from: 'styles', key: 'nope', default: 'dflt' } }, { customClass: 'a<b' }, { textAlign: 'center', color: '#f00' }),
+    T('{{! a comment }}{{a.b.c}}{{#o}}{{k}}{{/o}}{{.}}', { o: { type: 'list', item: { k: { type: 'text' } } } }, { o: [{ k: 1 }] }),
+    T('{{#a}}unclosed', {}), T('{{/a}}', {}), T('{{#a}}{{/b}}', {}), T('{{}}', {}),
+    // 0.21: lists of values, code, calc, transforms, renderIf, leading whole numbers
+    T('{{#l}}[{{{.}}}|{{.}}]{{/l}}{{#f}}<{{.}}>{{/f}}', { l: { type: 'list', of: { type: 'richtext' } }, f: { type: 'list', of: { type: 'text' }, skipEmpty: true } }, { l: ['<b>x</b>', 7, null], f: ['a', '  ', '', ['x'], 'b'] }),
+    T('{{{c}}}|{{c}}', { c: { type: 'code' } }, { c: '<script>admin()</script>' }),
+    T('{{d}} {{e}}', { t: { type: 'number', int: true, default: 2 }, d: { type: 'calc', of: 't', mul: 2, add: 8 }, e: { type: 'calc', of: 'missing', add: 1 } }, { t: '5' }),
+    T('{{u}}|{{c}}|{{e}}|{{{b}}}|{{v}}|{{w}}|{{n}}', { u: { type: 'text', transform: 'blockUrl' }, c: { type: 'text', transform: 'cssUrl' }, e: { type: 'text', transform: 'urlencode' }, b: { type: 'text', transform: 'lines2br' },
+      v: { type: 'text', transform: 'videoEmbed' }, w: { type: 'text', key: 'v2', transform: 'videoEmbed' }, n: { type: 'number', transform: 'fmtNum', decimalsFrom: 'dec' }, dec: { type: 'number', int: true } },
+      { u: 'chi-siamo/index.html', c: "a'(b).jpg", e: "a b&c/é~!*'()", b: 'one\ntwo\r\n<3', v: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1', v2: 'https://vimeo.com/123456', n: 1234567.875, dec: 2 }),
+    T('x', { v: { type: 'text' } }, { v: '' }),
+    T('{{a}} {{b}} {{c}} {{d}} {{e}}', { a: { type: 'number', parse: 'int', default: 15, min: 1, max: 21 }, b: { type: 'number', parse: 'int', default: 15 }, c: { type: 'number', parse: 'int', default: 15 }, d: { type: 'number', parse: 'int', default: 15 }, e: { type: 'number', parse: 'int', default: 15, min: 1, max: 21 } },
+      { a: '7px', b: 'abc', c: true, d: 7.9, e: '-3' }),
+  ];
+  cases[cases.length - 2].def.renderIf = 'v';
+  cases.push(T('.x{{{#a}}y{{/a}}}', {}), T('.x{{{{a}}}}', {}), T('.x{{{_lb}}}{{#a}}y{{/a}}{{{_rb}}}', { a: { type: 'bool', default: true } }));
+  cases.push(
+    T('[{{t}}]{{#s}}S{{/s}}{{#n}}N{{/n}}|{{c}} {{m}}|{{#all}}A{{/all}}{{#any}}Y{{/any}}{{#none}}0{{/none}}', {
+      t: { type: 'text', trim: true }, s: { type: 'bool', strict: true }, n: { type: 'bool', strict: true },
+      cols: { type: 'number', int: true }, auto: { type: 'number', default: 3 }, c: { type: 'calc', of: 'cols', fallback: 'auto' }, m: { type: 'calc', of: 'c', max: 2 },
+      l: { type: 'list', of: { type: 'text' } },
+      all: { type: 'flag', when: { t: { not: [''] }, l: true, cols: ['0'] } }, any: { type: 'flag', any: true, when: { s: true, n: true } }, none: { type: 'flag', when: { l: false } } },
+      { t: ' \t hi \n', s: true, n: 1, cols: 0, l: ['x'] }),
+    T('{{#o}}<{{a}}|{{b}}>{{/o}}{{#p}}P{{/p}}|{{#l}}[{{k}}:{{pct}}:{{p0}}]{{/l}}|{{d}}|{{{r}}}|{{{br}}}|{{u}}|{{v}}', {
+      o: { type: 'object', item: { a: { type: 'text', default: 'A' }, b: { type: 'color', default: '#000' } } }, p: { type: 'object', item: { q: { type: 'text' } } },
+      l: { type: 'list', skipNonObjects: true, keepIf: { k: { not: [''] } }, share: { of: 'n', as: 'pct', format: { p0: 0 } }, item: { k: { type: 'text' }, n: { type: 'number', min: 0 } } },
+      x: { type: 'number', default: 4.3 }, d: { type: 'calc', of: 'x', div: 5, mul: 100, transform: 'fmtNum', decimals: 1 },
+      r: { type: 'number', parse: 'int', key: 'rr', default: 3, transform: 'repeat', text: '&#9733;' },
+      br: { type: 'text', transform: 'br' }, u: { type: 'text', transform: 'contactUrl' }, v: { type: 'text', key: 'vv', transform: 'contactUrl' } },
+      { o: { b: 'red;}' }, p: 'junk', l: ['junk', 7, null, ['list'], { k: 'a', n: 1 }, { k: '', n: 50 }, { k: 'b', n: 2 }], rr: '2', br: ' one \n\n  two<3 \r\n', u: 'me@site.com', vv: 'site.com/x' }),
+    T('{{#c}}[{{value}}:{{{d}}}]{{/c}}|{{#hi}}H{{/hi}}{{#lo}}L{{/lo}}{{#mid}}M{{/mid}}|{{#t0}}a{{/t0}}{{#t1}}b{{/t1}}{{#t2}}c{{/t2}}{{#t3}}d{{/t3}}|{{r}}|{{m1}}|{{m2}}', {
+      c: { type: 'choices', options: [{ value: 'x', data: { d: '<i>X</i>' } }, { value: 'y', data: { d: 'Y' } }, { value: 'z', data: { d: 'Z' } }] },
+      n: { type: 'number' }, hi: { type: 'flag', when: { n: { gt: 55 } } }, lo: { type: 'flag', when: { n: { lt: 25 } } }, mid: { type: 'flag', when: { n: { gt: 25, lt: 75 } } },
+      t0: { type: 'bool', default: true, phpTruthy: true }, t1: { type: 'bool', default: true, phpTruthy: true }, t2: { type: 'bool', default: true, phpTruthy: true }, t3: { type: 'bool', default: false, phpTruthy: true },
+      r: { type: 'text', transform: 'replace', from: 'T', to: ' ' }, m1: { type: 'text', transform: 'mediaSrc' }, m2: { type: 'text', transform: 'mediaSrc' } },
+      { c: ['z', 'x', 7, 'nope', 'x'], n: 60, t1: 0, t2: 'no', r: '2030-01-01T10:00', m1: ' /media/a.mp3 ', m2: 'data:audio/mp3;base64,AA' }),
+    T('{{p}}|{{j}}|{{#t.head}}<{{.}}>{{/t.head}}{{#t.rows}}[{{#cells}}{{.}};{{/cells}}{{#odd}}o{{/odd}}]{{/t.rows}}|{{g}}|{{c}}|{{tel}}|{{w}}|{{mp}}|{{mm}}|{{#d}}{{day}},{{/d}}|{{b}}|{{#sb}}S{{/sb}}|{{{_base}}}', {
+      op: { type: 'number', default: 55 }, p: { type: 'calc', of: 'op', div: 100, transform: 'plain' },
+      j: { type: 'list', of: { type: 'text', pattern: '^[a-z]+$' }, skipEmpty: true, unique: true, max: 2, transform: 'json', key: 'jj' },
+      h: { type: 'bool', default: true }, t: { type: 'text', transform: 'tableData', headerFrom: 'h' },
+      g: { type: 'text', key: 'code', transform: 'lineNumbers' }, c: { type: 'text', transform: 'code' },
+      tel: { type: 'text', transform: 'telDigits' }, w: { type: 'text', transform: ['extUrl', 'stripScheme'] }, mp: { type: 'text', transform: 'mapsUrl' }, mm: { type: 'text', transform: 'mediaMime' },
+      d: { type: 'list', max: 3, defaultsByIndex: { day: ['Mon', 'Tue', 'Wed'] }, item: { day: { type: 'text' } } },
+      b: { type: 'text', default: 'Search', fallbackWhenBlank: true },
+      e: { type: 'enum', default: 'x', options: [{ value: 'x', data: { label: 'X' } }] }, sb: { type: 'flag', when: { 'opt.e.label': ['X'] } } },
+      { jj: ['A', 'b', 'b', 'c', 'd'], t: 'H1 | H2\na|b|c\n\n d\te \nf', code: 'x\r\ny\rz\n\n', c: 'x\r\ny\n', tel: '+39 (06) 12-34', w: 'site.com/a', mp: 'Via Roma 1 \n\n 00100 Roma', mm: '/v/a.MP4?x=1',
+        d: [{ day: 'Lun' }, {}, 'junk', {}], b: '   ' }),
+    T('{{a}}|{{b}}|{{#has}}L{{/has}}{{^has}}-{{/has}}{{#no}}L{{/no}}{{^no}}-{{/no}}|{{{p}}}|{{hv.cls}}/{{hv.vars}}|{{u1}} {{u2}} {{u3}} {{u4}} {{u5}}|{{#_editing}}E{{/_editing}}', {
+      a: { type: 'text', stringsOnly: true, default: 'd' }, b: { type: 'text', stringsOnly: true },
+      l: { type: 'list', presentAs: 'has', item: {} }, m: { type: 'list', key: 'missing', presentAs: 'no', item: {} },
+      p: { type: 'text', transform: 'buttonPreset' },
+      hb: { type: 'text', stringsOnly: true }, hc: { type: 'text', stringsOnly: true }, hd: { type: 'text', stringsOnly: true }, he: { type: 'text', stringsOnly: true },
+      hv: { type: 'text', transform: 'buttonHover', hover: { bg: 'hb', color: 'hc', border: 'hd', effect: 'he' } },
+      u1: { type: 'text', transform: 'legacyUrl' }, u2: { type: 'text', transform: 'legacyUrl' }, u3: { type: 'text', transform: 'legacyUrl' }, u4: { type: 'text', transform: 'legacyUrl' }, u5: { type: 'text', transform: 'legacyUrl' } },
+      { a: 42, b: 'x', l: { k: 1 }, p: 'primary', hb: '#111', hc: 5, hd: ' ', he: 'shine', u1: '', u2: 'chi-siamo/index.html', u3: 'mailto:a@b.c', u4: 'https://x.y', u5: 'home/index.html' }),
+    T('{{i}}|{{m}}|{{x}}|{{e}}', { i: { type: 'text', transform: 'initials' }, m: { type: 'text', transform: 'mailto' }, x: { type: 'text', key: 'm', transform: 'mailto' }, e: { type: 'text', transform: 'extUrl' } },
+      { i: '  émile   zola  rossi', m: 'bad@address', e: '//linkedin.com/in/x' }),
+  );
+  const phpOut = JSON.parse(execFileSync('php', [fileURLToPath(new URL('./render_def.php', import.meta.url))], { input: JSON.stringify(cases) }).toString());
+  let ok = 0;
+  cases.forEach((c, i) => {
+    let js;
+    try { js = renderDefBlock(c.def, c.block, { innerId: 'b1', fields: false }); } catch { js = 'ERROR'; }
+    if (js === phpOut[i]) ok++;
+    else { failures++; console.error(`✗ template case ${i}: JS=${JSON.stringify(js)}  PHP=${JSON.stringify(phpOut[i])}`); }
+  });
+  console.log(`✓ template language and value cleaning: ${ok} of ${cases.length} cases the same in both engines`);
+  const expect = (i, want) => { const js = (() => { try { return renderDefBlock(cases[i].def, cases[i].block, { innerId: 'b1' }); } catch { return 'ERROR'; } })(); if (js !== want) { failures++; console.error(`✗ case ${i} gives ${JSON.stringify(js)}, expected ${JSON.stringify(want)}`); } };
+  expect(0, '&lt;b&gt;&#039;&amp;&quot;|&lt;b&gt;&#039;&amp;&quot;|<i>x</i>|&lt;i&gt;x&lt;/i&gt;');   // {{{ }}} prints raw only trusted HTML
+  expect(1, '[011:a/T][12:d/T][231:c/T]');   // @first / @last print 1 or nothing
+  expect(2, 'noneno');
+  expect(3, 'B:b:<u>b</u>:&lt;u&gt;b&lt;/u&gt;');
+  expect(4, '1');
+  expect(5, '10 4 1.01 1000000000000000 0 7');
+  expect(6, 'TO');
+  expect(7, 'var(--cc-color-a, #fff)|#111||def|àèì|x');
+  expect(8, 'center|dflt||text-align: center; color: #f00; | a&lt;b|b1');
+  expect(9, '1');
+  for (const i of [10, 11, 12, 13]) expect(i, 'ERROR');
+  expect(14, '[<b>x</b>|&lt;b&gt;x&lt;/b&gt;][7|7][|]<a><b>');
+  expect(15, '<script>admin()</script>|&lt;script&gt;admin()&lt;/script&gt;');
+  expect(16, '18 1');
+  expect(17, '{{BASE_URL}}chi-siamo/|a%27%28b%29.jpg|a+b%26c%2F%C3%A9%7E%21%2A%27%28%29|one<br />\ntwo<br />\r\n&lt;3|https://www.youtube.com/embed/dQw4w9WgXcQ|https://player.vimeo.com/video/123456|1,234,567.88');
+  expect(18, null);   // renderIf: nothing at all
+  expect(19, '7 15 15 7 1');
+  expect(20, 'ERROR'); expect(21, 'ERROR');   // a literal { right before a tag is refused
+  expect(22, '.x{y}');
+  expect(23, '[hi]S|3 2|AY');
+  expect(24, '<A|#000>P|[a:33.3333333333:33][b:66.6666666667:67]|86.0|&#9733;&#9733;|one<br>two&lt;3|mailto:me@site.com|https://site.com/x');
+  expect(25, '[x:<i>X</i>][z:Z]|HM|ac|2030-01-01 10:00|/media/a.mp3|');
+  expect(26, '0.55|[&quot;b&quot;,&quot;c&quot;]|<H1><H2><>[a;b;c;][d;e;;o][f;;;]|1\n2\n3|x\ny|+39061234|site.com/a|https://www.google.com/maps/search/?api=1&amp;query=Via%20Roma%201%2C%2000100%20Roma|video/mp4|Lun,Tue,Wed,|Search|S|{{BASE_URL}}');
+  expect(27, 'd|x|L-|' + 'background: var(--cc-btn-primary-bg, var(--brand-color, #3b82f6)); color: var(--cc-btn-primary-text, #ffffff); border: 2px solid var(--cc-btn-primary-border, transparent); border-radius: var(--cc-btn-primary-radius, 6px); ' + '| cc-hbg cc-bfx-shine/--cc-hover-bg:#111; |{{BASE_URL}} {{BASE_URL}}chi-siamo/ {{BASE_URL}}mailto:a@b.c https://x.y {{BASE_URL}}|');
+  expect(28, 'éz|||https://linkedin.com/in/x');
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

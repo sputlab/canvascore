@@ -1,0 +1,225 @@
+{
+  "type": "GALLERY",
+  "script": "gallery",
+  "settings": {
+    "images": {
+      "type": "list",
+      "item": {
+        "src": {
+          "type": "image",
+          "default": "",
+          "label": "Image",
+          "altKey": "alt"
+        },
+        "alt": {
+          "type": "text",
+          "default": "",
+          "label": "Alt text (accessibility / SEO)"
+        },
+        "caption": {
+          "type": "text",
+          "default": "",
+          "label": "Caption (shown in lightbox / under image)"
+        }
+      },
+      "itemTitle": "Image {n}",
+      "itemKeys": [
+        "src",
+        "alt",
+        "caption"
+      ],
+      "addFromMedia": {
+        "label": "+ Add image from media",
+        "key": "src",
+        "alt": "alt"
+      },
+      "addLabel": "+ Add empty slot (paste URL)",
+      "newItem": {
+        "src": "",
+        "alt": "",
+        "caption": ""
+      }
+    },
+    "layout": {
+      "type": "enum",
+      "default": "grid",
+      "options": [
+        {
+          "value": "grid",
+          "label": "Grid (uniform crops)"
+        },
+        {
+          "value": "masonry",
+          "label": "Masonry (natural ratios)"
+        }
+      ],
+      "label": "Layout"
+    },
+    "columns": {
+      "type": "number",
+      "parse": "int",
+      "default": 3,
+      "min": 1,
+      "max": 6,
+      "label": "Columns",
+      "control": "select",
+      "choices": [
+        [
+          1,
+          "1"
+        ],
+        [
+          2,
+          "2"
+        ],
+        [
+          3,
+          "3"
+        ],
+        [
+          4,
+          "4"
+        ],
+        [
+          5,
+          "5"
+        ],
+        [
+          6,
+          "6"
+        ]
+      ]
+    },
+    "gap": {
+      "type": "number",
+      "parse": "int",
+      "default": 12,
+      "min": 0,
+      "max": 80,
+      "label": "Gap (px)"
+    },
+    "aspectRatio": {
+      "type": "text",
+      "default": "1 / 1",
+      "pattern": "^(|auto|[0-9]{1,4}(\\.[0-9]{1,3})? ?/ ?[0-9]{1,4}(\\.[0-9]{1,3})?)$",
+      "label": "Thumbnail ratio",
+      "control": "select",
+      "showIf": {
+        "layout": [
+          "grid"
+        ]
+      },
+      "choices": [
+        [
+          "1 / 1",
+          "1:1 (Square)"
+        ],
+        [
+          "4 / 3",
+          "4:3"
+        ],
+        [
+          "3 / 2",
+          "3:2"
+        ],
+        [
+          "16 / 9",
+          "16:9"
+        ],
+        [
+          "2 / 3",
+          "2:3 (Portrait)"
+        ],
+        [
+          "auto",
+          "Auto (original ratio)"
+        ]
+      ]
+    },
+    "borderRadius": {
+      "type": "text",
+      "default": "8px",
+      "pattern": "^[0-9a-zA-Z.% ]{0,40}$",
+      "label": "Corner radius",
+      "placeholder": "8px"
+    },
+    "lightboxOn": {
+      "type": "bool",
+      "key": "lightbox",
+      "default": true,
+      "label": "Open images in a lightbox"
+    },
+    "showCaptions": {
+      "type": "bool",
+      "default": false,
+      "label": "Show captions under images"
+    },
+    "mobileColumns": {
+      "type": "calc",
+      "of": "columns",
+      "max": 2
+    },
+    "useAr": {
+      "type": "flag",
+      "when": {
+        "layout": {
+          "not": [
+            "masonry"
+          ]
+        },
+        "aspectRatio": {
+          "not": [
+            "",
+            "auto"
+          ]
+        }
+      }
+    },
+    "lightbox": {
+      "type": "flag",
+      "when": {
+        "lightboxOn": true,
+        "images": true
+      }
+    }
+  },
+  "template": [
+    "<style>@media(max-width:768px){#{{_id}} .cc-gal-grid{{{_lb}}}{{#layout=masonry}}column-count:{{mobileColumns}} !important{{/layout=masonry}}{{^layout=masonry}}grid-template-columns:repeat({{mobileColumns}}, 1fr) !important{{/layout=masonry}}}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-gallery{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-gal-grid\" style=\"{{#layout=masonry}}column-count:{{columns}}; column-gap:{{gap}}px;{{/layout=masonry}}{{^layout=masonry}}display:grid; grid-template-columns:repeat({{columns}}, 1fr); gap:{{gap}}px;{{/layout=masonry}}\">",
+    "{{#images}}<figure class=\"cc-gal-fig\" style=\"{{#layout=masonry}}margin:0 0 {{gap}}px 0; break-inside:avoid;{{/layout=masonry}}{{^layout=masonry}}margin:0;{{/layout=masonry}}\">",
+    "{{#lightbox}}<a href=\"{{src}}\" class=\"cc-gal-item\" data-caption=\"{{caption}}\" style=\"display:block; overflow:hidden; border-radius:{{borderRadius}};{{#useAr}} aspect-ratio:{{aspectRatio}};{{/useAr}}{{#lightbox}} cursor:zoom-in;{{/lightbox}}\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"{{#useAr}}width:100%; height:100%; object-fit:cover; display:block;{{/useAr}}{{^useAr}}width:100%; height:auto; display:block;{{/useAr}}\"></a>{{/lightbox}}",
+    "{{^lightbox}}<div class=\"cc-gal-item\" style=\"display:block; overflow:hidden; border-radius:{{borderRadius}};{{#useAr}} aspect-ratio:{{aspectRatio}};{{/useAr}}{{#lightbox}} cursor:zoom-in;{{/lightbox}}\"><img src=\"{{src}}\" alt=\"{{alt}}\" loading=\"lazy\" style=\"{{#useAr}}width:100%; height:100%; object-fit:cover; display:block;{{/useAr}}{{^useAr}}width:100%; height:auto; display:block;{{/useAr}}\"></div>{{/lightbox}}",
+    "{{#showCaptions}}{{^caption=}}<figcaption class=\"cc-gal-cap\" style=\"font-size:13px; color:#64748b; margin-top:6px;\">{{caption}}</figcaption>{{/caption=}}{{/showCaptions}}</figure>{{/images}}</div>\n",
+    "{{#lightbox}}<div class=\"cc-lightbox\" role=\"dialog\" aria-modal=\"true\" aria-label=\"Image viewer\" style=\"display:none; position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(2,6,23,0.92); z-index:100000; align-items:center; justify-content:center; flex-direction:column;\">",
+    "<button type=\"button\" class=\"cc-lb-close\" aria-label=\"Close\" style=\"position:absolute; background:rgba(15,23,42,0.6); color:#fff; border:none; cursor:pointer; line-height:1; border-radius:999px; width:44px; height:44px; font-size:26px; top:16px; right:16px;\">&times;</button>",
+    "<button type=\"button\" class=\"cc-lb-prev\" aria-label=\"Previous\" style=\"position:absolute; background:rgba(15,23,42,0.6); color:#fff; border:none; cursor:pointer; line-height:1; border-radius:999px; width:44px; height:44px; font-size:26px; left:16px; top:50%; margin-top:-22px;\">&#8249;</button>",
+    "<img class=\"cc-lb-img\" alt=\"\" style=\"max-width:90vw; max-height:78vh; object-fit:contain; border-radius:8px;\">",
+    "<div class=\"cc-lb-cap\" style=\"color:#e2e8f0; font-size:14px; margin-top:12px; text-align:center; padding:0 60px;\"></div>",
+    "<button type=\"button\" class=\"cc-lb-next\" aria-label=\"Next\" style=\"position:absolute; background:rgba(15,23,42,0.6); color:#fff; border:none; cursor:pointer; line-height:1; border-radius:999px; width:44px; height:44px; font-size:26px; right:16px; top:50%; margin-top:-22px;\">&#8250;</button>",
+    "</div>\n{{{_script}}}{{/lightbox}}</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Gallery Images",
+      "icon": "GalleryHorizontal",
+      "open": true,
+      "keys": [
+        "images"
+      ]
+    },
+    {
+      "title": "Gallery Settings",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "columns",
+        "gap",
+        "aspectRatio",
+        "borderRadius",
+        "lightboxOn",
+        "showCaptions"
+      ]
+    }
+  ]
+}

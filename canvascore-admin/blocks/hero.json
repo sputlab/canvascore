@@ -1,0 +1,221 @@
+{
+  "type": "HERO",
+  "settings": {
+    "bgUrl": {
+      "type": "text",
+      "default": "",
+      "key": "bgImage",
+      "transform": "cssUrl",
+      "label": "Hero Background Image",
+      "control": "image"
+    },
+    "title": {
+      "type": "richtext",
+      "default": "",
+      "inline": "full",
+      "placeholder": "Title",
+      "label": "Main Title",
+      "control": "editor",
+      "variant": "basic",
+      "editorLabel": "Main title"
+    },
+    "subtitle": {
+      "type": "richtext",
+      "default": "",
+      "inline": "full",
+      "placeholder": "Subtitle",
+      "label": "Subtitle",
+      "control": "editor",
+      "variant": "basic"
+    },
+    "minHeight": {
+      "type": "text",
+      "default": "auto",
+      "from": "styles"
+    },
+    "justify": {
+      "type": "text",
+      "default": "center",
+      "from": "styles",
+      "key": "textAlign"
+    },
+    "buttons": {
+      "type": "list",
+      "presentAs": "hasList",
+      "item": {
+        "text": {
+          "type": "text",
+          "default": "",
+          "label": "Text",
+          "placeholder": "Button text"
+        },
+        "url": {
+          "type": "text",
+          "default": "#",
+          "transform": "legacyUrl",
+          "label": "Link",
+          "control": "link"
+        },
+        "bgColor": {
+          "type": "color",
+          "default": "",
+          "label": "Background"
+        },
+        "textColor": {
+          "type": "color",
+          "default": "",
+          "label": "Text color",
+          "noTransparent": true
+        },
+        "borderRadius": {
+          "type": "text",
+          "default": "",
+          "pattern": "^[0-9a-zA-Z.% ]{0,40}$",
+          "label": "Corner radius"
+        },
+        "borderColor": {
+          "type": "color",
+          "default": "",
+          "label": "Border (empty = no border)",
+          "noTransparent": true,
+          "placeholder": "No border"
+        },
+        "preset": {
+          "type": "text",
+          "default": "",
+          "transform": "buttonPreset",
+          "label": "Button preset",
+          "control": "select",
+          "choicesFrom": "buttonPresets",
+          "hint": "Colours and corners come from the preset (Global Options \u203a Buttons & fields).",
+          "hintIf": {
+            "preset": {
+              "not": [
+                ""
+              ]
+            }
+          }
+        },
+        "hoverBg": {
+          "type": "text",
+          "default": "",
+          "stringsOnly": true,
+          "label": "Background",
+          "control": "color",
+          "placeholder": "No change",
+          "subhead": "ON HOVER"
+        },
+        "hoverColor": {
+          "type": "text",
+          "default": "",
+          "stringsOnly": true,
+          "label": "Text color",
+          "control": "color",
+          "placeholder": "No change",
+          "noTransparent": true
+        },
+        "hoverBorder": {
+          "type": "text",
+          "default": "",
+          "stringsOnly": true,
+          "label": "Border",
+          "control": "color",
+          "placeholder": "No change",
+          "noTransparent": true,
+          "showIf": {
+            "borderColor": {
+              "not": [
+                ""
+              ]
+            }
+          }
+        },
+        "effect": {
+          "type": "text",
+          "default": "",
+          "stringsOnly": true,
+          "label": "Effect",
+          "control": "select",
+          "choicesFrom": "buttonEffects"
+        },
+        "hv": {
+          "type": "text",
+          "default": "",
+          "key": "hoverBg",
+          "transform": "buttonHover",
+          "hover": {
+            "bg": "hoverBg",
+            "color": "hoverColor",
+            "border": "hoverBorder",
+            "effect": "effect"
+          }
+        },
+        "look": {
+          "type": "text",
+          "default": "",
+          "control": "widget:heroButtonLook"
+        }
+      },
+      "itemTitle": "Button {n}",
+      "addLabel": "+ Add Button",
+      "newItem": {
+        "text": "New Button",
+        "url": "#",
+        "bgColor": "#10b981",
+        "textColor": "#ffffff",
+        "borderRadius": "8px"
+      },
+      "itemKeys": [
+        "text",
+        "preset",
+        "url",
+        "look",
+        "bgColor",
+        "textColor",
+        "borderColor",
+        "borderRadius",
+        "hoverBg",
+        "hoverColor",
+        "hoverBorder",
+        "effect"
+      ]
+    },
+    "legacyText": {
+      "type": "text",
+      "default": "Start Now",
+      "key": "btnText"
+    },
+    "legacyUrl": {
+      "type": "text",
+      "default": "#",
+      "key": "btnUrl",
+      "transform": "legacyUrl"
+    }
+  },
+  "template": [
+    "<section id=\"{{_id}}\" class=\"cc-hero{{_classes}}\" style=\"{{{_style}}}; {{^bgUrl=}}background-image: url('{{bgUrl}}'); background-size: cover; background-position: center;{{/bgUrl=}}; min-height:{{minHeight}}; display:flex; flex-direction:column; justify-content:center;\">\n",
+    "<div>\n{{#_editing}}<div{{{_field.title}}}>{{{title}}}</div>{{/_editing}}{{^_editing}}{{{title}}}{{/_editing}}\n",
+    "<div style=\"margin:20px 0;\"{{{_field.subtitle}}}>{{{subtitle}}}</div>\n",
+    "<div style=\"display:flex; gap:15px; flex-wrap:wrap; justify-content:{{justify}};\">{{#hasList}}{{#buttons}}<a href=\"{{url}}\" class=\"cc-btn{{hv.cls}}\" style=\"display:inline-block; padding:14px 28px; {{#preset?}}{{{preset}}}{{/preset?}}{{^preset?}}background:{{bgColor}}; color:{{textColor}}; border-radius:{{borderRadius}}; border:{{#borderColor?}}2px solid {{borderColor}}{{/borderColor?}}{{^borderColor?}}none{{/borderColor?}}; {{/preset?}}text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; {{hv.vars}}\">{{text}}</a>{{/buttons}}{{/hasList}}{{^hasList}}<a href=\"{{legacyUrl}}\" class=\"cc-btn\" style=\"display:inline-block; padding:14px 28px; background:var(--brand-color, #3b82f6); color:#ffffff; border-radius:8px; border:none; text-decoration:none; font-weight:var(--cc-type-button-weight, bold); box-sizing:border-box; \">{{legacyText}}</a>{{/hasList}}</div>\n",
+    "</div>\n</section>\n"
+  ],
+  "panel": [
+    {
+      "title": "Background & Titles",
+      "icon": "Layout",
+      "open": true,
+      "keys": [
+        "bgUrl",
+        "title",
+        "subtitle"
+      ]
+    },
+    {
+      "title": "Hero Buttons",
+      "icon": "Sliders",
+      "keys": [
+        "buttons"
+      ]
+    }
+  ]
+}

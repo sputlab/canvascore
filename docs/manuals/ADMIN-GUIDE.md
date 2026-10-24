@@ -17,7 +17,7 @@ web root (the folder the domain serves). Replace both with your own values.
 2. [Folder layout on the server](#2-folder-layout-on-the-server)
 3. [Installation](#3-installation)
 4. [Web server configuration](#4-web-server-configuration) (Apache, Nginx, HTTPS, reverse proxy / CDN)
-5. [Updating to a new version](#5-updating-to-a-new-version)
+5. [Updating to a new version](#5-updating-to-a-new-version) (one-click updates, manual update, rollback)
 6. [Accounts and roles](#6-accounts-and-roles)
 7. [Publishing](#7-publishing) (what a publish writes, redirects, RSS, site search, cookie banner, images)
 8. [Backup and restore](#8-backup-and-restore) (site backup as ZIP, restore, safety copies, server-level backups)
@@ -35,6 +35,7 @@ web root (the folder the domain serves). Replace both with your own values.
 | PHP | **8.0 or newer** (the installer refuses older versions) |
 | PHP extensions (required) | `pdo_sqlite`, `json`, `session`, `dom` (`php-xml` on some systems: rich text and SVG uploads are checked with it; without it SVGs are refused and rich text loses its links, images and formatting attributes) |
 | PHP extensions (recommended) | `zip` (`ZipArchive`): needed to make and restore site backups on the Backup page (section 8); without it only old `.json` backups can be imported |
+| PHP extensions (for one-click updates) | `sodium` (checks the signature of the update package), `zip` and `curl` (download), and write access to the admin folder and the web root (section 5.1). The Updates page lists what this server lacks. Without them you update by hand (section 5.2) |
 | PHP extensions (optional) | `gd` **with WebP support** (`imagewebp()`), for image optimization: without it uploaded images are used as they are, with no smaller copies (section 7.7). `exif`, to turn phone photos the right way up in those copies. `mbstring`: CanvasCore has built-in fallbacks for the functions it uses, so forms, the site search and the media library work without it |
 | PHP functions | `mail()` enabled, if you want form notifications by email (submissions are stored either way) |
 | PHP settings | `file_uploads = On`; `upload_max_filesize` / `post_max_size` large enough for your images (backup ZIPs are uploaded in pieces, so they are not limited by these settings; old `.json` backups are sent in one piece); a `memory_limit` large enough for your photos if you want them optimized (about 5 bytes per pixel: a 12-megapixel photo needs roughly 60 MB free; larger images are skipped) |
@@ -77,6 +78,9 @@ root, and published pages are written to the folder above it (the web root itsel
 │   ├── quarantine/               SVGs uploaded before 0.14.1 that fail the current check (section 5)
 │   ├── backups/                  Site backups kept on the server and safety copies (section 8),
 │   │                             with its own deny-all .htaccess
+│   ├── updates/                  One-click updates (section 5.1): copies of the database and of the
+│   │                             code taken before each update (the newest 3 of each), the update
+│   │                             history and the last check; deny-all .htaccess
 │   └── .htaccess                 "Deny all" (safety net)
 └── public/                       Web root
     ├── index.html                Home page               ┐
@@ -95,6 +99,8 @@ root, and published pages are written to the folder above it (the web root itsel
         ├── index.html, assets/   Editor build (from canvascore-frontend/dist/)
         ├── menu-preview.html     Menu Builder live preview (sandboxed)
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
+        ├── blocks/               Definitions of the blocks (settings and template, one file per block)
+        ├── update.php, update-keys.php   One-click updates and the public keys of the releases
         ├── .htaccess             Security headers and access rules (Apache, written automatically)
         └── version.json          Version of the installed release
 ```
@@ -236,7 +242,8 @@ instead (section 7.4).
 `# CanvasCore: written automatically…`). If you replace it with a file of your own (for example to
 add HTTP basic auth), CanvasCore leaves it alone: copy CanvasCore's rules into it, or the security
 headers and deny rules are lost. Whatever the server, the library files (`config.php`, `compiler.php`,
-`migrations.php`, `media.php`, `backup.php`) answer 404 when opened directly.
+`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `update.php`, `update-keys.php`) answer 404
+when opened directly.
 
 ### 4.2 Nginx
 
@@ -270,8 +277,8 @@ server {
 
         location ^~ /canvascore-admin/data/ { deny all; return 404; }
         location ~ /\. { deny all; return 404; }
-        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup)\.php$ { deny all; return 404; }
-        location ~ ^/canvascore-admin/[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|update|update-keys|update-source)\.php$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/([^/]+/)?[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
 
         # The Menu Builder's live preview is framed by the editor itself
         location = /canvascore-admin/menu-preview.html {
@@ -370,14 +377,80 @@ Make sure the proxy sets (or appends to) `X-Forwarded-For`.
 
 ## 5. Updating to a new version
 
-The frontend (editor build) and the PHP files form **one release**: always deploy them together.
-An editor build talking to older PHP files (or the reverse) can fail in unexpected ways.
+There are two ways: the **one-click update** from the editor (section 5.1, from 0.21.0 on) and the
+**manual update**, uploading the new files yourself (section 5.2). Either way the frontend (editor
+build) and the PHP files form **one release**: they are always installed together. An editor build
+talking to older PHP files (or the reverse) can fail in unexpected ways.
+
+### 5.1 One-click update (Administration › Updates)
+
+**Updates** in the sidebar (admins only) checks the latest CanvasCore release on GitHub and
+installs it.
+
+1. **Check for updates** shows the latest release: its version, size and release notes. A release
+   that is not newer than the installed version is never offered, so an update can't go back to an
+   older one.
+2. **Update to …** asks for confirmation, then does the following. Keep the page open: it takes
+   about a minute, and the page lists each step as it is done.
+   1. Downloads the release package (`canvascore-<version>.zip`) and its signature
+      (`canvascore-<version>.zip.sig`) over HTTPS, from GitHub's own addresses only (every redirect
+      is checked), within a size limit.
+   2. **Checks the signature.** Releases are signed with the CanvasCore release key (Ed25519). The
+      public key is in `canvascore-admin/update-keys.php`. A package that was not signed with it,
+      or was changed after signing, is refused and nothing is installed.
+   3. Checks the package: every file belongs to `canvascore-admin/`, no file path goes outside it,
+      no links, nothing for your data folder, the files an installation needs are all there, and
+      its `version.json` is the release's version.
+   4. **Takes a backup**: a safety copy of the content (listed on the Backup page), a copy of the
+      database and a copy of the current code, the last two in the `updates/` folder of the data
+      directory (the newest 3 of each are kept).
+   5. Unpacks the new version next to the admin folder, checks that its PHP files can be read, and
+      swaps the two folders. Your data folder (if it is inside the admin folder), the admin
+      folder's own `.htaccess` and `update-source.php` come along.
+   6. Calls the new version once, with a one-time token. It opens the database, runs its
+      migrations (section 5.2, step 6) and answers with its version.
+   7. **Rolls back if any step after the swap fails**: the previous folder and the database copy
+      are put back, and the page says what went wrong. Nothing of the failed version stays on the
+      site.
+3. When it says **updated**, click **Reload the editor** and **Publish Site** (section 5.2, step 9).
+
+The page also shows what this server needs (the PHP `sodium`, `zip` and `curl` extensions, write
+access to the admin folder and the web root, and 300 MB of free disk space) and the **history** of
+the updates made from here, with the ones that were rolled back.
+
+Things to know:
+
+- **Files you added yourself** inside `canvascore-admin/` are not carried over: only the data
+  folder, `.htaccess` and `update-source.php` are. They stay in the code copy in `updates/`.
+- **Other people in the editor** should save their work first: the editor is replaced while it
+  runs. Everyone reloads afterwards.
+- **A server that can't call itself** (for example one that blocks requests to its own address, or
+  an admin folder behind a password): the update still installs, but step 6 is skipped, so the new
+  version finishes its migrations on the first request after the update, and there is no automatic
+  rollback for a failure then. Use the copies in `updates/` (below) if that happens.
+- **A demo site** (with `demo.json`) can't be updated from the page.
+- **The first update from 0.20.0 or earlier is manual** (section 5.2): those versions don't have
+  the Updates page yet.
+- **Releases without a signed package** (only the source code) can't be installed from the page:
+  the page says so, and you update by hand.
+- `update-source.php` (not part of a release) can point the page to another release feed (a mirror,
+  or a test); it is described in the Developer Guide.
+
+**Going back by hand.** If an update could not be rolled back, or you want the previous version
+again: in the data folder, `updates/` holds `code-<version>-<date>-<id>.zip` (the previous
+`canvascore-admin/` folder, without its data folder) and `db-<version>-<date>-<id>.sqlite` (the
+database before the update). Unpack the code zip over `canvascore-admin/` (delete the new files
+first), put the database copy in place of `canvascore.sqlite` while no one is using the editor,
+and reload. A database that a newer version already migrated can't be used by the older code,
+so always restore both together. The Backup page's safety copy restores the content on its own.
+
+### 5.2 Manual update
 
 1. **Back up first**: download a site backup from the Backup page (section 8.1), or, better
    before an update, copy the data directory, `uploads/` and the site files (section 8.3).
 2. On your computer, build the new release: `cd canvascore-frontend && npm install && npm run build`.
 3. Upload the new `canvascore-admin/` files, overwriting the old ones (`*.php`, `*.json`,
-   `master.html`, `effects.css`, `version.json`).
+   `master.html`, `effects.css`, `version.json`, and the `blocks/` folder, new in 0.21.0).
    - **Do not** delete or overwrite `canvascore-admin/data/` if your data lives there.
    - **Do not** touch `uploads/` or `canvascore-data/`.
 4. Copy the contents of the new `dist/` into `canvascore-admin/`. You can delete the old
@@ -401,8 +474,10 @@ An editor build talking to older PHP files (or the reverse) can fail in unexpect
    | 13 | Listing and archive pages: `collections.archive_json` (page size and archives) |
    | 14 | Scheduled publishing: `publish_at` and `unpublish_at` on pages and items (section 7.9) |
 
+   0.21.0 adds no migration: the schema stays at 14.
+
    Back up the data directory before updating: a migration cannot be undone by installing the
-   older release again.
+   older release again. (The one-click update does it for you, section 5.1.)
 7. Ask everyone to **reload any open editor tabs** (a hard refresh, Ctrl/Cmd+Shift+R). A tab
    opened before the update still runs the old editor.
 8. Check the version at the bottom of the sidebar: `CanvasCore v0.14.1 · build 29` (example).
@@ -976,6 +1051,13 @@ What CanvasCore does for you:
 - **Admin folder**: security headers that keep the editor out of other sites' frames
   (clickjacking) and stop MIME sniffing and referrer leaks; the library files and JSON files
   can't be opened directly (section 4). The editor also refuses to run inside a frame.
+- **Updates**: only admins can check for or install an update. A package is installed only if its
+  Ed25519 signature matches a public key in `canvascore-admin/update-keys.php` (so a changed or
+  forged package, or a hijacked download, is refused); it is downloaded over HTTPS from GitHub's
+  addresses only, within a size limit, and unpacked only after every file name has been checked (nothing outside
+  `canvascore-admin/`, no `..`, no links, nothing for the data folder). Versions that are not newer
+  are never installed. A backup is taken first and a failure after the swap is rolled back
+  (section 5.1). The private key that signs releases is never part of the code or of a site.
 - **Sessions**: cookie `CCSESSID`, `HttpOnly`, `SameSite=Lax`, and `Secure` over HTTPS; no
   session is created for visitors who aren't signing in; the session ID is regenerated at login;
   session files are stored in the data directory (`sessions/`), isolated from other apps.
@@ -1220,6 +1302,25 @@ backups can be imported; use a server-level backup (section 8.3).
   the Backup page and check the site: the safety copy of the previous site is listed there if you
   need to go back. Then click **Publish Site**, because the automatic republish is started by the
   browser after the restore.
+
+**Updates page: "This server can't update itself"**
+One of the requirements listed on the page is missing: the PHP `sodium`, `zip` or `curl` extension
+(ask your host, or install `php8.x-sodium`, `php8.x-zip` and `php8.x-curl` on Debian/Ubuntu), write
+access to the admin folder and to the web root (the update renames the admin folder, so PHP needs
+to be able to create and rename folders next to it), or free disk space. Until then, update by hand
+(section 5.2).
+
+**Updates page: "Could not check for updates"**
+The server could not reach GitHub, or GitHub answered with an error. Check that the server can open
+HTTPS connections to `api.github.com` (a firewall or a hosting restriction can block them) and try
+again later: GitHub limits how often one address can ask.
+
+**An update was refused or rolled back**
+The page shows each step and the reason: a signature that is not valid (the package was not signed
+with the CanvasCore release key: do not install it), a package with a file that is not allowed, a
+file the new version could not be read from, or a new version that did not start. After a rollback
+the previous version and its database are back; nothing else is needed. The history on the Updates
+page keeps the message. If the same update fails again, update by hand (section 5.2).
 
 **Version mismatch warning in the sidebar**
 `Editor vX / server vY: reload the page after updating`: reload the tab (hard refresh). If it

@@ -1,0 +1,31 @@
+{
+  "type": "CARDS",
+  "settings": {
+    "items": {
+      "type": "list",
+      "of": {
+        "type": "richtext",
+        "default": ""
+      }
+    }
+  },
+  "template": [
+    "<section id=\"{{_id}}\" class=\"cc-cards{{_classes}}\" style=\"{{{_style}}}\">\n<div style=\"display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:20px;\">\n",
+    "{{#items}}<div style=\"background:#fff; padding:30px; border-radius:12px; box-shadow:0 4px 6px rgba(0,0,0,0.05); border:1px solid #e2e8f0; min-width:0;\">{{{.}}}</div>\n{{/items}}",
+    "</div>\n</section>\n"
+  ],
+  "panel": [
+    {
+      "title": "Cards",
+      "icon": "Columns3",
+      "open": true,
+      "hint": "Cards sit side by side and wrap to a new row when there is not enough room.",
+      "widget": "gridCount"
+    },
+    {
+      "title": "Cards content",
+      "icon": "Layout",
+      "widget": "gridItems"
+    }
+  ]
+}

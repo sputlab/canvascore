@@ -1,0 +1,123 @@
+{
+  "type": "ACCORDION",
+  "settings": {
+    "items": {
+      "type": "list",
+      "item": {
+        "title": {
+          "type": "text",
+          "default": "",
+          "label": "Title",
+          "placeholder": "Title"
+        },
+        "content": {
+          "type": "richtext",
+          "default": "",
+          "label": "Content",
+          "control": "code",
+          "rows": 4,
+          "placeholder": "Content: text or HTML (<p>, <strong>, <a>, <img>\u2026)"
+        }
+      },
+      "itemTitle": "Item {n}",
+      "itemKeys": [
+        "title",
+        "content"
+      ],
+      "addLabel": "+ Add item",
+      "newItem": {
+        "title": "New item",
+        "content": "<p>Content\u2026</p>"
+      }
+    },
+    "allowMultiple": {
+      "type": "bool",
+      "default": false,
+      "label": "Allow several items open at once"
+    },
+    "openFirst": {
+      "type": "bool",
+      "default": false,
+      "label": "First item open by default"
+    },
+    "icon": {
+      "type": "enum",
+      "default": "plus",
+      "options": [
+        {
+          "value": "plus",
+          "data": {
+            "char": "+",
+            "rot": "rotate(45deg)"
+          },
+          "label": "Plus (+)"
+        },
+        {
+          "value": "chevron",
+          "data": {
+            "char": "&#9662;",
+            "rot": "rotate(180deg)"
+          },
+          "label": "Chevron (\u25be)"
+        },
+        {
+          "value": "none",
+          "data": {
+            "char": "",
+            "rot": "rotate(45deg)"
+          },
+          "label": "None"
+        }
+      ],
+      "label": "Icon"
+    },
+    "variant": {
+      "type": "enum",
+      "default": "card",
+      "options": [
+        {
+          "value": "card",
+          "data": {
+            "item": "margin-bottom:10px; background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;"
+          },
+          "label": "Cards"
+        },
+        {
+          "value": "flat",
+          "data": {
+            "item": "border-bottom:1px solid #e2e8f0;"
+          },
+          "label": "Flat (lines)"
+        }
+      ],
+      "label": "Style"
+    }
+  },
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-accordion{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<style>#{{_id}} .cc-acc-item>summary{list-style:none}#{{_id}} .cc-acc-item>summary::-webkit-details-marker{display:none}#{{_id}} .cc-acc-icon{transition:transform .2s ease; display:inline-block; color:var(--brand-color, #3b82f6)}#{{_id}} .cc-acc-item[open]>summary .cc-acc-icon{transform:{{{opt.icon.rot}}}}</style>\n",
+    "{{#items}}<details class=\"cc-acc-item\"{{^allowMultiple}} name=\"{{_id}}\"{{/allowMultiple}}{{#openFirst}}{{#@first}} open{{/@first}}{{/openFirst}} style=\"{{{opt.variant.item}}}\">\n",
+    "<summary style=\"display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 18px; font-weight:600; cursor:pointer; list-style:none;\"><span class=\"cc-acc-title\">{{title}}</span>{{#opt.icon.char?}}<span class=\"cc-acc-icon\" aria-hidden=\"true\">{{{opt.icon.char}}}</span>{{/opt.icon.char?}}</summary>\n",
+    "<div class=\"cc-acc-body\" style=\"padding:4px 18px 16px; font-size:15px; color:#475569; line-height:1.6;\">{{{content}}}</div>\n</details>\n{{/items}}</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Accordion Items",
+      "icon": "Rows3",
+      "open": true,
+      "keys": [
+        "items"
+      ]
+    },
+    {
+      "title": "Accordion Settings",
+      "icon": "Sliders",
+      "keys": [
+        "variant",
+        "icon",
+        "openFirst",
+        "allowMultiple"
+      ]
+    }
+  ]
+}

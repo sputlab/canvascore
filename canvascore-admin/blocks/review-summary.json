@@ -1,0 +1,239 @@
+{
+  "type": "REVIEW_SUMMARY",
+  "settings": {
+    "color": {
+      "type": "color",
+      "default": "#f59e0b",
+      "label": "Star and bar color"
+    },
+    "layout": {
+      "type": "text",
+      "default": "",
+      "label": "Layout",
+      "control": "select",
+      "choices": [
+        [
+          "side",
+          "Score beside the bars"
+        ],
+        [
+          "stacked",
+          "Score above the bars"
+        ]
+      ]
+    },
+    "average": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 5,
+      "label": "Average rating (0\u20135)",
+      "step": 0.1
+    },
+    "averageText": {
+      "type": "number",
+      "key": "average",
+      "default": 0,
+      "min": 0,
+      "max": 5,
+      "transform": "fmtNum",
+      "decimals": 1
+    },
+    "starsWidth": {
+      "type": "calc",
+      "of": "average",
+      "div": 5,
+      "mul": 100,
+      "transform": "fmtNum",
+      "decimals": 1
+    },
+    "total": {
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 1000000000,
+      "transform": "fmtNum",
+      "decimals": 0,
+      "label": "Number of reviews"
+    },
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Title (empty = none)"
+    },
+    "totalLabel": {
+      "type": "text",
+      "default": "",
+      "label": "Reviews label",
+      "placeholder": "reviews"
+    },
+    "source": {
+      "type": "text",
+      "default": "",
+      "label": "Source (optional)",
+      "placeholder": "Based on verified reviews"
+    },
+    "linkText": {
+      "type": "text",
+      "default": "",
+      "label": "Link text (empty = no link)",
+      "placeholder": "Read all reviews"
+    },
+    "linkUrl": {
+      "type": "text",
+      "default": "",
+      "transform": "blockUrl",
+      "label": "Link",
+      "placeholder": "/reviews or https://\u2026"
+    },
+    "rowValue": {
+      "type": "enum",
+      "default": "percent",
+      "options": [
+        {
+          "value": "percent",
+          "label": "Percentage"
+        },
+        {
+          "value": "count",
+          "label": "Number of reviews"
+        },
+        {
+          "value": "none",
+          "label": "Nothing"
+        }
+      ],
+      "label": "Next to each bar"
+    },
+    "showDistribution": {
+      "type": "bool",
+      "default": true,
+      "label": "Show the breakdown bars"
+    },
+    "distribution": {
+      "type": "list",
+      "skipNonObjects": true,
+      "share": {
+        "of": "count",
+        "as": "pct",
+        "format": {
+          "pctText": 0,
+          "pctBar": 1
+        }
+      },
+      "item": {
+        "stars": {
+          "type": "number",
+          "parse": "int",
+          "default": 5,
+          "min": 1,
+          "max": 5,
+          "label": "Stars",
+          "control": "select",
+          "choices": [
+            [
+              5,
+              "5"
+            ],
+            [
+              4,
+              "4"
+            ],
+            [
+              3,
+              "3"
+            ],
+            [
+              2,
+              "2"
+            ],
+            [
+              1,
+              "1"
+            ]
+          ]
+        },
+        "count": {
+          "type": "number",
+          "default": 0,
+          "min": 0,
+          "max": 1000000000,
+          "label": "Number of reviews"
+        },
+        "countText": {
+          "type": "number",
+          "key": "count",
+          "default": 0,
+          "min": 0,
+          "max": 1000000000,
+          "transform": "fmtNum",
+          "decimals": 0
+        }
+      },
+      "itemTitle": "{stars|?} stars",
+      "itemKeys": [
+        "stars",
+        "count"
+      ],
+      "addLabel": "+ Add row",
+      "newItem": {
+        "stars": 1,
+        "count": 0
+      }
+    }
+  },
+  "template": [
+    "<style>@media(max-width:640px){#{{_id}} .cc-rs-card{flex-direction:column !important;align-items:stretch !important}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-review-summary{{_classes}}\" style=\"{{{_style}}}\">\n",
+    "<div class=\"cc-rs-card\" style=\"display:flex; flex-direction:{{#layout=stacked}}column{{/layout=stacked}}{{^layout=stacked}}row{{/layout=stacked}}; gap:32px; align-items:{{#layout=stacked}}stretch{{/layout=stacked}}{{^layout=stacked}}center{{/layout=stacked}}; background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:28px;\">",
+    "<div class=\"cc-rs-score\" style=\"flex:0 0 auto; text-align:center;\">",
+    "{{^title=}}<div class=\"cc-rs-title\" style=\"font-size:14px; font-weight:700; color:#475569; margin-bottom:8px;\">{{title}}</div>{{/title=}}",
+    "<div class=\"cc-rs-average\" style=\"font-size:52px; font-weight:800; line-height:1; color:#0f172a;\">{{averageText}}</div>",
+    "<div class=\"cc-rs-stars\" role=\"img\" aria-label=\"{{averageText}} out of 5 stars\" style=\"position:relative; display:inline-block; margin-top:8px; font-size:26px; line-height:1; letter-spacing:2px; color:#e2e8f0;\">&#9733;&#9733;&#9733;&#9733;&#9733;",
+    "<span class=\"cc-rs-stars-fill\" aria-hidden=\"true\" style=\"position:absolute; top:0; left:0; bottom:0; width:{{starsWidth}}%; overflow:hidden; white-space:nowrap; color:{{color}};\">&#9733;&#9733;&#9733;&#9733;&#9733;</span></div>",
+    "<div class=\"cc-rs-total\" style=\"margin-top:8px; font-size:14px; color:#64748b;\">{{total}}{{^totalLabel=}} {{totalLabel}}{{/totalLabel=}}</div>",
+    "{{^source=}}<div class=\"cc-rs-source\" style=\"margin-top:4px; font-size:12px; color:#94a3b8;\">{{source}}</div>{{/source=}}",
+    "{{^linkText=}}<a class=\"cc-rs-link\" href=\"{{linkUrl}}\" style=\"display:inline-block; margin-top:12px; font-size:14px; font-weight:700; color:var(--brand-color, #3b82f6); text-decoration:none;\">{{linkText}} &rarr;</a>{{/linkText=}}",
+    "</div>",
+    "{{#showDistribution}}{{#distribution?}}<ul class=\"cc-rs-dist\" style=\"flex:1; min-width:0; list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;\">{{#distribution}}<li class=\"cc-rs-row\" style=\"display:flex; align-items:center; gap:10px; font-size:14px;\">",
+    "<span class=\"cc-rs-row-label\" style=\"width:34px; flex-shrink:0; color:#475569;\">{{stars}} &#9733;</span>",
+    "<span class=\"cc-rs-bar\" style=\"flex:1; height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden;\"><span class=\"cc-rs-bar-fill\" style=\"display:block; height:100%; width:{{pctBar}}%; background:{{color}}; border-radius:999px;\"></span></span>",
+    "{{^rowValue=none}}<span class=\"cc-rs-row-value\" style=\"width:48px; text-align:right; flex-shrink:0; color:#64748b;\">{{#rowValue=percent}}{{pctText}}%{{/rowValue=percent}}{{#rowValue=count}}{{countText}}{{/rowValue=count}}</span>{{/rowValue=none}}",
+    "</li>{{/distribution}}</ul>{{/distribution?}}{{/showDistribution}}",
+    "</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Rating",
+      "icon": "StarHalf",
+      "open": true,
+      "keys": [
+        "title",
+        "average",
+        "total",
+        "totalLabel",
+        "source",
+        "linkText",
+        "linkUrl"
+      ],
+      "hint": "Shown as a visual summary only: no rating markup for search engines, which don't accept ratings a business publishes about itself."
+    },
+    {
+      "title": "Rating Breakdown",
+      "icon": "BarChart3",
+      "keys": [
+        "showDistribution",
+        "rowValue",
+        "distribution"
+      ]
+    },
+    {
+      "title": "Rating Layout",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "color"
+      ]
+    }
+  ]
+}

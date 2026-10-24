@@ -72,7 +72,7 @@ Every screen except the page editor has a sidebar on the left. On a narrow scree
 - **Publish Site**: rebuilds and publishes the whole site (see [Publish vs Publish Site](#publish-vs-publish-site)).
 - **Content**: **Pages**, **Collections**, **Templates**, **Media**.
 - **Site**: **Menu**, **Global Options**.
-- **Administration** (admins only): **Submissions**, **Accounts**, **Backup**.
+- **Administration** (admins only): **Submissions**, **Accounts**, **Backup**, **Updates**.
 
 At the bottom you see your name, your role, two icons (the key, **Change your password**, and the arrow leaving a box, **Log out**) and the CanvasCore version. The **ⓘ** next to the version opens **About CanvasCore**: the version and build, and links to the CanvasCore website, the source code on GitHub, the Discord community, the address for bugs and suggestions (bug@sputlab.com) and the donation page. If it says "Editor v… / server v…: reload the page after updating", CanvasCore was just updated. Reload the page in your browser.
 
@@ -1022,6 +1022,7 @@ These sections appear under **Administration** in the sidebar only for admins. D
 - **Submissions** (**Form Submissions**): messages visitors sent through your forms, including the **Multi-step Form** and **Newsletter Signup** blocks. You can search them, **Refresh** the list, **Export CSV**, delete single messages or **Clear all**.
 - **Accounts**: **Add a user** with a **Username** (3–32 letters, digits, `.`, `_`, `-` or `@`; `Anna` and `anna` count as the same name), **Password** and **Role**. In the list you can **Change password** of another account (it is signed out at once and must choose a new password at the next sign-in; for your own, use the key icon) or delete an account. You can't delete your own account or the last admin.
 - **Backup**: **Download backup (.zip)** saves the whole site in one file: pages and their drafts, collections and items, templates, masters, the global header and footer, redirects, Global Options, the menu and every uploaded image, audio and video file (with its description and folder). Version history and form messages are optional. User accounts and passwords are never included. **Keep a copy on the server** stores it on the server instead, where it can later be downloaded, restored or deleted. **Restore** (from a file, or from a copy on the server) **replaces** the whole site with the backup; user accounts are kept, a safety copy of the current site is saved first, and the site is published again afterwards. Older `.json` backups can still be imported.
+- **Updates**: **Check for updates** looks for a newer CanvasCore release on GitHub and shows its version and release notes. **Update to …** downloads it, checks its signature, saves a backup (a safety copy of the content, the database and the code), installs it and checks that it starts; if any check fails, the previous version is put back and the page says why. Keep the page open while it works (about a minute), tell the other people in the editor to save first, then click **Reload the editor** and **Publish Site**. The page also lists what the server needs and the history of the updates. Details and what to do when an update is refused are in the [Administrator Guide](ADMIN-GUIDE.md#5-updating-to-a-new-version).
 
 ---
 

@@ -1,0 +1,169 @@
+{
+  "type": "SPLIT_CTA",
+  "settings": {
+    "left": {
+      "type": "object",
+      "item": {
+        "icon": {
+          "type": "text",
+          "default": "",
+          "label": "Icon (emoji)"
+        },
+        "title": {
+          "type": "text",
+          "default": "",
+          "label": "Title"
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "label": "Text",
+          "control": "textarea",
+          "rows": 2
+        },
+        "buttonText": {
+          "type": "text",
+          "default": "",
+          "label": "Button text (empty = no button)"
+        },
+        "buttonUrl": {
+          "type": "text",
+          "default": "",
+          "transform": "blockUrl",
+          "label": "Button link",
+          "placeholder": "/page or https://\u2026"
+        },
+        "bg": {
+          "type": "color",
+          "default": "#0f172a",
+          "label": "Background"
+        },
+        "color": {
+          "type": "color",
+          "default": "#ffffff",
+          "label": "Text color"
+        },
+        "buttonBg": {
+          "type": "color",
+          "default": "#3b82f6",
+          "label": "Button background"
+        },
+        "buttonColor": {
+          "type": "color",
+          "default": "#ffffff",
+          "label": "Button text color"
+        }
+      },
+      "flat": true,
+      "labels": {
+        "bg": "Left background"
+      }
+    },
+    "right": {
+      "type": "object",
+      "item": {
+        "icon": {
+          "type": "text",
+          "default": "",
+          "label": "Icon (emoji)"
+        },
+        "title": {
+          "type": "text",
+          "default": "",
+          "label": "Title"
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "label": "Text",
+          "control": "textarea",
+          "rows": 2
+        },
+        "buttonText": {
+          "type": "text",
+          "default": "",
+          "label": "Button text (empty = no button)"
+        },
+        "buttonUrl": {
+          "type": "text",
+          "default": "",
+          "transform": "blockUrl",
+          "label": "Button link",
+          "placeholder": "/page or https://\u2026"
+        },
+        "bg": {
+          "type": "color",
+          "default": "#eff6ff",
+          "label": "Background"
+        },
+        "color": {
+          "type": "color",
+          "default": "#0f172a",
+          "label": "Text color"
+        },
+        "buttonBg": {
+          "type": "color",
+          "default": "#0f172a",
+          "label": "Button background"
+        },
+        "buttonColor": {
+          "type": "color",
+          "default": "#ffffff",
+          "label": "Button text color"
+        }
+      },
+      "flat": true,
+      "labels": {
+        "bg": "Right background"
+      }
+    },
+    "gap": {
+      "type": "number",
+      "parse": "int",
+      "default": 16,
+      "min": 0,
+      "max": 48,
+      "label": "Gap px"
+    },
+    "radius": {
+      "type": "number",
+      "parse": "int",
+      "default": 16,
+      "min": 0,
+      "max": 40,
+      "label": "Corner radius px"
+    }
+  },
+  "template": [
+    "<style>@media(max-width:768px){#{{_id}} .cc-split-cta-row{flex-direction:column !important}}</style>",
+    "<div id=\"{{_id}}\" class=\"cc-split-cta{{_classes}}\" style=\"{{{_style}}}\">\n<div class=\"cc-split-cta-row\" style=\"display:flex; gap:{{gap}}px;\">",
+    "{{#left}}<div class=\"cc-split-cta-side cc-split-cta-left\" style=\"flex:1; min-width:0; background:{{bg}}; color:{{color}}; padding:40px 32px; border-radius:{{radius}}px; display:flex; flex-direction:column; align-items:flex-start; gap:12px;\">{{^icon=}}<div class=\"cc-split-cta-icon\" aria-hidden=\"true\" style=\"font-size:32px; line-height:1;\">{{icon}}</div>{{/icon=}}{{^title=}}<h3 class=\"cc-split-cta-title\" style=\"margin:0; font-size:24px; line-height:1.25; color:inherit;\">{{title}}</h3>{{/title=}}{{^text=}}<p class=\"cc-split-cta-text\" style=\"margin:0; font-size:15px; line-height:1.6; opacity:0.9;\">{{text}}</p>{{/text=}}{{^buttonText=}}<a class=\"cc-split-cta-btn\" href=\"{{buttonUrl}}\" style=\"display:inline-block; margin-top:8px; padding:12px 22px; border-radius:8px; background:{{buttonBg}}; color:{{buttonColor}}; font-weight:700; text-decoration:none;\">{{buttonText}}</a>{{/buttonText=}}</div>{{/left}}",
+    "{{#right}}<div class=\"cc-split-cta-side cc-split-cta-right\" style=\"flex:1; min-width:0; background:{{bg}}; color:{{color}}; padding:40px 32px; border-radius:{{radius}}px; display:flex; flex-direction:column; align-items:flex-start; gap:12px;\">{{^icon=}}<div class=\"cc-split-cta-icon\" aria-hidden=\"true\" style=\"font-size:32px; line-height:1;\">{{icon}}</div>{{/icon=}}{{^title=}}<h3 class=\"cc-split-cta-title\" style=\"margin:0; font-size:24px; line-height:1.25; color:inherit;\">{{title}}</h3>{{/title=}}{{^text=}}<p class=\"cc-split-cta-text\" style=\"margin:0; font-size:15px; line-height:1.6; opacity:0.9;\">{{text}}</p>{{/text=}}{{^buttonText=}}<a class=\"cc-split-cta-btn\" href=\"{{buttonUrl}}\" style=\"display:inline-block; margin-top:8px; padding:12px 22px; border-radius:8px; background:{{buttonBg}}; color:{{buttonColor}}; font-weight:700; text-decoration:none;\">{{buttonText}}</a>{{/buttonText=}}</div>{{/right}}",
+    "</div>\n</div>\n"
+  ],
+  "panel": [
+    {
+      "title": "Left Side",
+      "icon": "PanelLeft",
+      "open": true,
+      "keys": [
+        "left"
+      ]
+    },
+    {
+      "title": "Right Side",
+      "icon": "PanelRight",
+      "keys": [
+        "right"
+      ]
+    },
+    {
+      "title": "Split Layout",
+      "icon": "Sliders",
+      "keys": [
+        "gap",
+        "radius"
+      ]
+    }
+  ]
+}

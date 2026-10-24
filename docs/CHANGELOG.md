@@ -10,6 +10,87 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-24 — One-click updates and shared block definitions
+
+### Added
+- **One-click updates** (Administration › **Updates**, admins): **Check for updates** asks GitHub for the latest
+  CanvasCore release and shows its version, size and release notes; **Update to …** installs it:
+  1. the update package (`canvascore-<version>.zip`) and its signature (`.zip.sig`) are downloaded over HTTPS, from
+     GitHub's hosts only (each redirect is checked), within a size limit;
+  2. the **Ed25519 signature** is checked against the trusted release keys in `canvascore-admin/update-keys.php`:
+     a package not signed with the CanvasCore release key is refused;
+  3. the package is checked: every file inside `canvascore-admin/`, no `..`, no links, nothing for the site's data
+     folder, the required files present, and its `version.json` matching the release. Older or equal versions are
+     never installed;
+  4. a **backup** is taken: a safety copy of the content (listed in Backup), plus copies of the database and of the
+     current code in the data folder (`updates/`, the newest 3 kept);
+  5. the new version is unpacked next to the admin folder, and its PHP files are checked to parse. Then the two folders
+     are swapped. The data folder, when it is inside the admin folder, and the admin folder's own `.htaccess` are kept;
+  6. the new version is called once, with a one-time token: it opens the database, runs its migrations and answers
+     with its version;
+  7. **rollback**: if a check after the swap fails, the previous folder and the database copy are put back. Nothing
+     of the old version is left in the site.
+
+  The page also lists what the server needs (the sodium and zip extensions, curl, write access, free space) and the
+  update history. Updates are off in the demo. The first version that can update itself this way is 0.21.0.
+- **Release tooling**: `scripts/release-keygen.php` makes the signing key pair (the secret key must be kept outside the
+  repository). `scripts/release-package.php` builds the editor, packs `canvascore-admin/` with it, runs the same checks
+  a site makes, and signs the package. Both files are uploaded as assets of the GitHub release.
+- **Shared block definitions**: a block can now be described once, in `canvascore-admin/blocks/<name>.json`, as a
+  settings schema plus a template. The editor (`src/render/blockDef.mjs`) and the published site (`blockdef.php`)
+  read the same file, so the block has one rendering by construction instead of two renderers kept in step by hand.
+  - **Settings** (`text`, `richtext`, `number`, `bool`, `enum`, `color`, `image`, `list`) rebuild every value before it
+    reaches the template: a value of the wrong type or a hostile value gets the setting's default.
+  - **Templates** use a logic-light, Mustache-like language with escaping built in: `{{name}}` is always escaped;
+    `{{{name}}}` prints raw only trusted HTML (sanitized rich text, the definition's own data). Sections cover lists,
+    tests and equality.
+  - **The Content panel** is generated from the same schema (`SchemaPanel.jsx`) for all 45 blocks: sections, labels,
+    hints and defaults come from the definition. Its controls cover texts, numbers, switches, choices, colours, images
+    and audio or video files, the rich text editor, page links, one-per-line lists, date and time, cards for list
+    items (with "add from the media library"), objects, multiple choices, half-width pairs, fields shown only when
+    another setting calls for them, and fields that edit the block's style. The few controls that are more than a field
+    are named widgets (`widgets.jsx`): placing hotspot pins on the image, the Site Search filters, the opening hours,
+    the Grid and Cards columns, the button size and border, and the Hero button looks. 29 hand-written panels are gone.
+  - Behaviour scripts stay site-side, named by the definition.
+
+  Blocks moved to it: **Text, Image, Icon Box, Testimonial, Callout, Timeline, Steps, Progress Bars, Grid, Cards,
+  Image + Text, FAQ, Map, Video, Custom HTML, Divider, Counters, Accordion, Tabs, Pricing, Gallery, Logos, Team, Bento,
+  Split CTA, Case Study, Author Bio, Review Summary, Testimonial Wall, Hover Grid, Slider, Before / After, Countdown,
+  Table of Contents, Share Bar, Audio Player, Scrollytelling, Hotspots, Video Hero, Code Snippet, Data Table, Site Search,
+  Business Details, Button and Hero**: 45 blocks. Behaviour scripts and structured data (the Business JSON-LD) stay
+  site-only, named by the definition. Still written in code, on purpose: the containers (the editor draws their children),
+  Master, Collection List and the item blocks (Item Field, Related, Categories & tags: they read the database), the
+  form blocks (Form, Multi-step Form, Newsletter: they register their recipient for the form handler), the
+  Announcement Bar (shared with the site-wide bar) and the Price Calculator (it computes the prices on the server). Their published HTML is unchanged for real content
+  (checked byte for byte against the previous renderer, with every field also fuzzed with wrong types and hostile
+  values), and the editor and the site now give exactly the same HTML for them. The engine also has lists of plain
+  values, value transforms (internal links, CSS addresses, URL encoding, line breaks, video players, number format),
+  computed sizes and flags, objects, filtered lists and shares of a total, multiple choices, numeric conditions, admin-only code, blocks that render only when a value is set, and behaviour scripts that receive
+  the block's values. The generated panel shows a field only when another setting calls for it, warns about a link
+  it can't use, and keeps code read-only for editors. `npm run test:parity` checks both engines on every definition, hostile values
+  included, and on the template language itself.
+
+### Changed
+- The admin folder's `.htaccess` also blocks direct access to `publish.php`, `blockdef.php`, `update.php`, `update-keys.php`
+  and `update-source.php`; on Nginx add them to the library-files rule and let the JSON rule cover `blocks/` (Administrator
+  Guide, section 4.2).
+- Update packages must contain `blockdef.php` and the `blocks/` definitions.
+
+### Security
+- Every update package is checked against the CanvasCore release key before anything is unpacked, and every file name in
+  it is checked (nothing outside `canvascore-admin/`, no links, nothing for the data folder).
+
+### Fixed
+- Publishing no longer stops on content of the wrong type in the blocks above (for example a list where a text was
+  expected, from an import): the value gets its default. An Image block no longer outputs a `javascript:` address
+  or an object-fit value that is not one of its choices, and a Progress bar colour that is not a colour gets the
+  brand colour. Likewise Grid, Cards, FAQ and Counters with an object where a list belongs, Image + Text with a
+  `javascript:` image, Divider with a colour that is not a colour; a Map zoom is kept between 1 and 21. Gallery,
+  Logos and Team images go through the image address check (no `javascript:`), a Gallery aspect ratio or corner radius
+  that is not one gets the default, and an unknown Tabs or Team style gets the default style. Slider and Before / After
+  images, aspect ratios and image fit values go through the same checks, and so do a Hero button's colours and corner
+  radius. A Button with an empty text shows "Click here".
+
 ## [0.20.0] - 2026-10-24 — Categories and tags, archives, scheduled publishing, faceted search
 
 ### Added
@@ -1105,7 +1186,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/sputlab/CanvasCore/compare/v0.20.0...v0.21.0
 [0.16.0]: https://github.com/sputlab/CanvasCore/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sputlab/CanvasCore/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/sputlab/CanvasCore/compare/v0.14.0...v0.14.1
