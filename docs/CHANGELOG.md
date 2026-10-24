@@ -10,6 +10,34 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **One-click updates** (Administration › **Updates**, admins): **Check for updates** asks GitHub for the latest
+  CanvasCore release and shows its version, size and release notes; **Update to …** installs it:
+  1. the update package (`canvascore-<version>.zip`) and its signature (`.zip.sig`) are downloaded over HTTPS, from
+     GitHub's hosts only (each redirect is checked), within a size limit;
+  2. the **Ed25519 signature** is checked against the trusted release keys in `canvascore-admin/update-keys.php`:
+     a package not signed with the CanvasCore release key is refused;
+  3. the package is checked: every file inside `canvascore-admin/`, no `..`, no links, nothing for the site's data
+     folder, the required files present, and its `version.json` matching the release. Older or equal versions are
+     never installed;
+  4. a **backup** is taken: a safety copy of the content (listed in Backup), plus copies of the database and of the
+     current code in the data folder (`updates/`, the newest 3 kept);
+  5. the new version is unpacked next to the admin folder, and its PHP files are checked to parse. Then the two folders
+     are swapped. The data folder, when it is inside the admin folder, and the admin folder's own `.htaccess` are kept;
+  6. the new version is called once, with a one-time token: it opens the database, runs its migrations and answers
+     with its version;
+  7. **rollback**: if a check after the swap fails, the previous folder and the database copy are put back. Nothing
+     of the old version is left in the site.
+
+  The page also lists what the server needs (the sodium and zip extensions, curl, write access, free space) and the
+  update history. Updates are off in the demo. The first version that can update itself this way is 0.21.0.
+- **Release tooling**: `scripts/release-keygen.php` makes the signing key pair (the secret key must be kept outside the
+  repository). `scripts/release-package.php` builds the editor, packs `canvascore-admin/` with it, runs the same checks
+  a site makes, and signs the package. Both files are uploaded as assets of the GitHub release.
+
+### Changed
+- The admin folder's `.htaccess` also blocks direct access to `publish.php`, `update.php` and `update-keys.php`.
+
 ## [0.20.0] - 2026-10-24 — Categories and tags, archives, scheduled publishing, faceted search
 
 ### Added

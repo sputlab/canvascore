@@ -19,6 +19,7 @@ import DemoBanner from './components/DemoBanner';
 import DraftRestorePrompt from './components/DraftRestorePrompt';
 import AdminLayout from './components/AdminLayout';
 import Backup from './components/Backup';
+import Updates from './components/Updates';
 import { Toaster } from './ui/toast';
 import { DialogHost } from './ui/dialogHost';
 import { useBrandingHead } from './ui/branding';
@@ -60,6 +61,7 @@ export default function App() {
   else if (currentView === 'submissions' && userRole === 'admin') view = <Submissions />;
   else if (currentView === 'collections') view = <Collections />;
   else if (currentView === 'backup' && userRole === 'admin') view = <Backup />;
+  else if (currentView === 'updates' && userRole === 'admin') view = <Updates />;
   // Every section except the full-screen page editor lives in the admin shell (sidebar navigation)
   if (currentView !== 'editor') view = <AdminLayout wide={currentView === 'manager'}>{view}</AdminLayout>;
 

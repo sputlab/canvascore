@@ -4,6 +4,7 @@
 // SVG upload check, sanitizer, numbers, slider arrows and empty-text fallbacks.
 require __DIR__ . '/../../canvascore-admin/compiler.php';
 require_once __DIR__ . '/../../canvascore-admin/publish.php';
+require_once __DIR__ . '/../../canvascore-admin/update.php';
 $fails = 0; $total = 0;
 function check($name, $ok, $extra = '') { global $fails, $total; $total++; if ($ok) echo "  ✓ $name\n"; else { $fails++; echo "  ✗ $name" . ($extra !== '' ? "  → $extra" : '') . "\n"; } }
 
@@ -463,6 +464,55 @@ check('other collections, pages and the home page are untouched', is_file($sr . 
 check('unsafe prefixes and paths are refused', cc_unpublish_files($sr, '../', []) === 0 && cc_unpublish_files($sr, '', ['index.html']) === 0 && cc_unpublish_files($sr, 'gone/', ['gone/../index.html']) === 0 && is_file($sr . '/index.html') && is_file($sr . '/news/a/index.html'));
 unset($GLOBALS['CC_SITE_ROOT']);
 cc_backup_rrmdir($sr);
+
+echo "\nONE-CLICK UPDATES\n";
+check('release tags are read as versions (v0.21.0 → 0.21.0), anything else is refused', cc_update_version('v0.21.0') === '0.21.0' && cc_update_version('1.2.3') === '1.2.3' && cc_update_version('latest') === null && cc_update_version('1.2.3-beta') === null);
+$gh = cc_update_source();
+check('downloads only over HTTPS from GitHub\'s hosts', cc_update_url_ok('https://api.github.com/repos/x/y', $gh) && cc_update_url_ok('https://objects.githubusercontent.com/a', $gh)
+    && !cc_update_url_ok('http://api.github.com/repos/x/y', $gh) && !cc_update_url_ok('https://evil.example/x.zip', $gh) && !cc_update_url_ok('https://user:pw@github.com/x', $gh) && !cc_update_url_ok('file:///etc/passwd', $gh));
+check('the shipped release key is a valid Ed25519 public key', count(cc_update_keys()) >= 1);
+$ut = sys_get_temp_dir() . '/cc_upd_' . getmypid(); @mkdir($ut);
+$kp = sodium_crypto_sign_keypair(); $pk = sodium_crypto_sign_publickey($kp); $sk = sodium_crypto_sign_secretkey($kp);
+$pkg = function ($entries, $name = 'p.zip') use ($ut) {
+    $f = "$ut/$name"; @unlink($f);
+    $z = new ZipArchive(); $z->open($f, ZipArchive::CREATE);
+    foreach ($entries as $n => $c) { if (is_array($c)) { $z->addFromString($n, $c[0]); $z->setExternalAttributesName($n, ZipArchive::OPSYS_UNIX, $c[1] << 16); } else $z->addFromString($n, $c); }
+    $z->close(); return $f;
+};
+$good = ['canvascore-admin/version.json' => '{"app":"9.0.0"}', 'canvascore-admin/assets/app.js' => 'x'];
+foreach (CC_UPDATE_REQUIRED as $f) if ($f !== 'version.json') $good["canvascore-admin/$f"] = "<?php // $f\n";
+$f = $pkg($good);
+$sig = base64_encode(sodium_crypto_sign_detached(cc_update_signed_message($f), $sk));
+check('a package signed with a trusted key verifies', cc_update_verify($f, $sig, [$pk]));
+$other = sodium_crypto_sign_keypair();
+check('…signed with another key it is refused', !cc_update_verify($f, base64_encode(sodium_crypto_sign_detached(cc_update_signed_message($f), sodium_crypto_sign_secretkey($other))), [$pk]));
+check('…and so is a garbled or empty signature, or no trusted key', !cc_update_verify($f, 'AAAA', [$pk]) && !cc_update_verify($f, '', [$pk]) && !cc_update_verify($f, $sig, []));
+file_put_contents($f, 'x', FILE_APPEND);
+check('a package changed after signing is refused', !cc_update_verify($f, $sig, [$pk]));
+$inspect = function ($entries, $ver = '9.0.0') use ($pkg) {
+    $z = new ZipArchive(); $z->open($pkg($entries));
+    try { $files = cc_update_inspect($z, $ver); $z->close(); return $files; } catch (Throwable $e) { $z->close(); return $e->getMessage(); }
+};
+$r = $inspect($good);
+check('a complete package passes the checks, with every file listed', is_array($r) && isset($r['assets/app.js'], $r['api.php']) && count($r) === count($good), is_string($r) ? $r : '');
+check('a file outside the admin folder is refused', is_string($inspect($good + ['canvascore-admin/../evil.php' => 'x'])) && is_string($inspect($good + ['other/evil.php' => 'x'])) && is_string($inspect($good + ['canvascore-admin/a\\..\\b.php' => 'x'])));
+check('…and so is a file for the site\'s data folder or .htaccess', strpos((string)$inspect($good + ['canvascore-admin/data/canvascore.sqlite' => 'x']), 'belongs to the site') !== false && is_string($inspect($good + ['canvascore-admin/.htaccess' => 'x'])));
+check('…and a link', strpos((string)$inspect($good + ['canvascore-admin/link' => ['/etc/passwd', 0120777]]), 'link') !== false);
+$missing = $good; unset($missing['canvascore-admin/update-keys.php']);
+check('…and an incomplete package', strpos((string)$inspect($missing), 'update-keys.php is missing') !== false);
+check('…and one whose version.json is not the release\'s version', strpos((string)$inspect($good, '9.0.1'), 'not version 9.0.1') !== false);
+// the swap keeps the data folder (when inside the admin folder) and the site's .htaccess; the undo puts everything back
+$adm = "$ut/site/canvascore-admin"; @mkdir("$adm/data", 0755, true);
+file_put_contents("$adm/api.php", 'old'); file_put_contents("$adm/data/canvascore.sqlite", 'db'); file_put_contents("$adm/.htaccess", 'mine');
+$z = new ZipArchive(); $z->open($pkg($good)); cc_update_unpack($z, cc_update_inspect($z, '9.0.0'), "$ut/site/.new"); $z->close();
+check('the package unpacks into the new folder', is_file("$ut/site/.new/assets/app.js") && strpos(file_get_contents("$ut/site/.new/api.php"), 'api.php') !== false);
+check('a PHP file that can\'t be parsed is found before the swap', cc_update_syntax_error("$ut/site/.new") === null && (file_put_contents("$ut/site/.new/assets/bad.php", '<?php function (') || true) && strpos((string)cc_update_syntax_error("$ut/site/.new"), 'assets/bad.php') === 0);
+unlink("$ut/site/.new/assets/bad.php");
+cc_update_swap($adm, "$ut/site/.new", "$ut/site/.old");
+check('swap: the new version takes the admin folder\'s place', strpos(file_get_contents("$adm/api.php"), 'api.php') !== false && !is_dir("$ut/site/.new"));
+check('…the data folder inside it moves along, and the site\'s .htaccess is kept', file_get_contents("$adm/data/canvascore.sqlite") === 'db' && file_get_contents("$adm/.htaccess") === 'mine' && !is_dir("$ut/site/.old/data"));
+check('rollback: the old version and its data folder are back', cc_update_unswap($adm, "$ut/site/.old", "$ut/site/.failed") && file_get_contents("$adm/api.php") === 'old' && file_get_contents("$adm/data/canvascore.sqlite") === 'db' && !is_dir("$ut/site/.old") && !is_dir("$ut/site/.failed"));
+cc_backup_rrmdir($ut);
 
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

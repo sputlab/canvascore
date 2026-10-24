@@ -336,6 +336,18 @@
 .cc-backup-result--error { background: #450a0a; border-color: #7f1d1d; color: #fecaca; }
 .cc-backup-result svg { flex-shrink: 0; margin-top: 2px; }
 
+/* Updates: the available release, its notes, the install steps and the server requirements */
+.cc-update-release { display: grid; gap: 8px; }
+.cc-update-release__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; color: var(--ui-strong); }
+.cc-update-release__head a { display: inline-flex; align-items: center; gap: 3px; }
+.cc-update-notes { margin: 0; max-height: 260px; overflow: auto; padding: 10px 12px; border-radius: 8px; background: #0f172a; border: 1px solid var(--ui-border-soft); color: var(--ui-text, #cbd5e1); font: 400 12.5px/1.5 var(--ui-font); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cc-update-steps, .cc-update-reqs { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font: 400 12.5px/1.45 var(--ui-font); }
+.cc-update-steps li, .cc-update-reqs li { display: flex; gap: 6px; align-items: flex-start; }
+.cc-update-steps svg, .cc-update-reqs svg { flex-shrink: 0; margin-top: 2px; }
+.cc-update-reqs li { color: var(--ui-strong); }
+.cc-update-reqs li[data-ok="true"] svg, .cc-update-steps li[data-ok="true"] svg { color: #22c55e; }
+.cc-update-reqs li[data-ok="false"] svg, .cc-update-steps li[data-ok="false"] svg { color: #f87171; }
+
 /* Collections: fixed-width list, rows that never grow with the name, bulk selection */
 .cc-collections-grid { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
 @media (max-width: 760px) { .cc-collections-grid { grid-template-columns: minmax(0, 1fr); } }

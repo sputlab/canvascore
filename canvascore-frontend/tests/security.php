@@ -78,7 +78,7 @@ echo "\nSESSIONS, SIGN-IN AND CSRF\n";
 $r = (new Client())->req('GET', '/canvascore-admin/api.php?action=branding');
 check('anonymous requests get no session cookie (no session files for visitors)', stripos($r['head'], 'Set-Cookie') === false);
 check('API answers carry anti-framing and no-sniff headers', stripos($r['head'], 'X-Frame-Options: DENY') !== false && stripos($r['head'], "frame-ancestors 'none'") !== false && stripos($r['head'], 'X-Content-Type-Options: nosniff') !== false);
-foreach (['config.php', 'compiler.php', 'migrations.php', 'media.php', 'backup.php'] as $lib) {
+foreach (['config.php', 'compiler.php', 'migrations.php', 'media.php', 'backup.php', 'update.php', 'update-keys.php'] as $lib) {
     $r = (new Client())->req('GET', '/canvascore-admin/' . $lib);
     if ($r['code'] !== 404) break;
 }
@@ -585,6 +585,98 @@ unlink($data . '/demo.json');
 check('removing demo.json turns demo mode off', !isset((new Client())->api('branding')['json']['demo']));
 $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 check('…and the next publish lets search engines in again', strpos((string)@file_get_contents($web . '/contact/index.html'), 'name="robots"') === false && strpos((string)@file_get_contents($web . '/robots.txt'), 'Allow: /') !== false);
+
+echo "\nONE-CLICK UPDATES\n";
+// A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
+$kp = sodium_crypto_sign_keypair(); $tsk = sodium_crypto_sign_secretkey($kp);
+file_put_contents($admin . '/update-keys.php', "<?php\nreturn ['" . base64_encode(sodium_crypto_sign_publickey($kp)) . "'];\n");
+file_put_contents($admin . '/update-source.php', "<?php\nreturn ['latest' => 'http://127.0.0.1:$port/feed/latest.json', 'hosts' => ['127.0.0.1'], 'https' => false];\n");
+@mkdir($web . '/feed');
+$cur = json_decode(file_get_contents($admin . '/version.json'), true)['app'];
+// writes release $ver: the package (the repository's admin files, $edit changing some), its signature (test key unless $key) and the feed
+$release = function ($ver, array $edit = [], $key = null, array $extra = []) use ($src, $web, $port, $tsk) {
+    $zf = "$web/feed/canvascore-$ver.zip"; @unlink($zf);
+    $z = new ZipArchive(); $z->open($zf, ZipArchive::CREATE);
+    foreach (scandir($src) as $f) {
+        if (!is_file("$src/$f") || $f[0] === '.') continue;
+        $c = file_get_contents("$src/$f");
+        if ($f === 'version.json') { $v = json_decode($c, true); $v['app'] = $edit['version'] ?? $ver; $c = json_encode($v); }
+        if (isset($edit[$f])) $c = $edit[$f]($c);
+        $z->addFromString("canvascore-admin/$f", $c);
+    }
+    $z->addFromString('canvascore-admin/index.html', "<!doctype html><title>editor $ver</title>");
+    foreach ($extra as $n => $c) $z->addFromString($n, $c);
+    $z->close();
+    file_put_contents("$zf.sig", base64_encode(sodium_crypto_sign_detached("canvascore-update-v1\n" . hash_file('sha256', $zf, true), $key ?: $tsk)));
+    $u = "http://127.0.0.1:$port/feed/canvascore-$ver.zip";
+    file_put_contents("$web/feed/latest.json", json_encode(['tag_name' => "v$ver", 'name' => "CanvasCore $ver", 'body' => "Notes for $ver", 'published_at' => '2026-10-24T10:00:00Z',
+        'html_url' => "https://github.com/sputlab/CanvasCore/releases/tag/v$ver", 'assets' => [
+        ['name' => "canvascore-$ver.zip", 'size' => filesize($zf), 'browser_download_url' => $u], ['name' => "canvascore-$ver.zip.sig", 'size' => 90, 'browser_download_url' => "$u.sig"]]]));
+};
+$leftovers = function () use ($web) { return glob($web . '/.cc-update-*', GLOB_ONLYDIR) ?: []; };
+$apiHash = hash_file('sha256', $admin . '/api.php');
+$unchanged = function () use ($own, $cur, $admin, $apiHash, $leftovers) {
+    return ($own->api('version')['json']['app'] ?? '') === $cur && hash_file('sha256', $admin . '/api.php') === $apiHash && !$leftovers();
+};
+$pagesBefore = (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn();
+
+$r = $vis->api('update_check');
+check('editors can\'t check for updates', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'Only admins') !== false, $r['body']);
+check('…nor install one', empty($vis->api('update_install', ['version' => '9.9.9'])['json']['success']));
+$r = (new Client())->req('GET', '/canvascore-admin/api.php?action=update_health', null, ['X-CC-Update-Token: guess']);
+check('the new version\'s health check answers nothing without its one-time token', $r['code'] === 404 && empty($r['json']['success']));
+$r = $own->api('update_info');
+check('the admin sees the installed version and the server requirements (all met here)', ($r['json']['current'] ?? '') === $cur && count($r['json']['requirements'] ?? []) >= 5 && !array_filter($r['json']['requirements'], function ($q) { return !$q['ok']; }), $r['body']);
+
+$release('9.9.9');
+$r = $own->api('update_check');
+$rel = $r['json']['release'] ?? [];
+check('checking finds the newer release, with its notes and size', !empty($r['json']['success']) && $rel['latest'] === '9.9.9' && $rel['available'] === true && $rel['package'] === true && $rel['notes'] === 'Notes for 9.9.9' && $rel['size'] > 0, $r['body']);
+check('…without handing the download addresses to the browser', strpos($r['body'], 'feed/canvascore') === false);
+$r = $own->api('update_install', ['version' => '9.9.8']);
+check('installing a version other than the latest one is refused', empty($r['json']['success']) && strpos((string)$r['json']['message'], 'latest release is now 9.9.9') !== false && $unchanged(), $r['body']);
+
+$release('9.9.9', [], sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair()));
+$r = $own->api('update_install', ['version' => '9.9.9']);
+check('a package signed with an untrusted key is refused, nothing changes', empty($r['json']['success']) && strpos((string)$r['json']['message'], 'signature is not valid') !== false && $unchanged(), $r['body']);
+$release('9.9.9');
+file_put_contents("$web/feed/canvascore-9.9.9.zip", 'tampered', FILE_APPEND);
+$r = $own->api('update_install', ['version' => '9.9.9']);
+check('a package changed after signing is refused', empty($r['json']['success']) && strpos((string)$r['json']['message'], 'signature is not valid') !== false && $unchanged(), $r['body']);
+$release('9.9.9', [], null, ['canvascore-admin/../evil.php' => '<?php echo "pwned";']);
+$r = $own->api('update_install', ['version' => '9.9.9']);
+check('a signed package with a file outside the admin folder is refused, and nothing is written there', empty($r['json']['success']) && strpos((string)$r['json']['message'], 'outside the admin folder') !== false && !is_file($web . '/evil.php') && $unchanged(), $r['body']);
+$release('9.9.9', ['version' => '9.9.7']);
+$r = $own->api('update_install', ['version' => '9.9.9']);
+check('a package whose version.json is not the release\'s version is refused', empty($r['json']['success']) && strpos((string)$r['json']['message'], 'not version 9.9.9') !== false && $unchanged(), $r['body']);
+$release('9.9.9', ['compiler.php' => function ($c) { return preg_replace('/^<\?php\n/', "<?php\nfunction broken( {\n", $c, 1); }]);
+$r = $own->api('update_install', ['version' => '9.9.9']);
+check('a new version with a PHP file that can\'t be parsed is stopped before the swap', empty($r['json']['success']) && strpos((string)$r['json']['message'], 'compiler.php') !== false && empty($r['json']['rolled_back']) && $unchanged(), $r['body']);
+
+// the new version installs but does not start: everything is put back
+$release('9.9.9', ['api.php' => function ($c) { return preg_replace('/^<\?php\n/', "<?php\nif ((\$_GET['action'] ?? '') === 'update_health') { http_response_code(500); exit; }\n", $c, 1); }]);
+$r = $own->api('update_install', ['version' => '9.9.9']);
+check('a new version that fails its first check is rolled back', empty($r['json']['success']) && !empty($r['json']['rolled_back']) && strpos((string)$r['json']['message'], 'rolled back') !== false, $r['body']);
+check('…the previous version is back in place, with no leftover folders in the site', $unchanged(), json_encode($leftovers()));
+check('…the site and its content still work', (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $pagesBefore && !empty($own->api('get_pages')['json']) && is_file($admin . '/update-source.php'));
+check('…and a backup was taken first (a safety copy of the content, copies of the database and of the code)', count(glob($data . '/updates/db-*.sqlite') ?: []) >= 1 && count(glob($data . '/updates/code-' . $cur . '-*.zip') ?: []) >= 1
+    && array_filter($own->api('backup_info')['json']['backups'] ?? [], function ($b) { return $b['kind'] === 'safety'; }));
+$h = $own->api('update_info')['json']['history'] ?? [];
+check('…and the history records the rollback', ($h[0]['result'] ?? '') === 'rolled_back' && ($h[0]['to'] ?? '') === '9.9.9');
+
+$release('0.0.1');
+$r = $own->api('update_check');
+check('an older release is not offered (no downgrade)', ($r['json']['release']['available'] ?? null) === false);
+check('…nor installed', empty($own->api('update_install', ['version' => '0.0.1'])['json']['success']) && $unchanged());
+
+$release('9.9.9');
+$r = $own->api('update_install', ['version' => '9.9.9']);
+check('a signed release installs: downloaded, verified, backed up, swapped and checked', !empty($r['json']['success']) && ($r['json']['to'] ?? '') === '9.9.9' && count($r['json']['steps'] ?? []) >= 7, $r['body']);
+check('…the server now runs the new version, and the session goes on', ($own->api('version')['json']['app'] ?? '') === '9.9.9' && strpos((string)file_get_contents($admin . '/index.html'), 'editor 9.9.9') !== false);
+check('…the content is untouched and the old folder is gone from the site', (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $pagesBefore && !$leftovers());
+check('…the site\'s own files in the admin folder are kept', is_file($admin . '/update-source.php') && strpos((string)file_get_contents($admin . '/.htaccess'), 'CanvasCore') !== false);
+check('…the history records it', ($own->api('update_info')['json']['history'][0]['result'] ?? '') === 'updated');
+check('…and checking again finds nothing newer', ($own->api('update_check')['json']['release']['available'] ?? null) === false);
 
 echo "\n" . ($fails ? "$fails checks failed" : 'SECURITY OK') . " ($total checks)\n";
 exit($fails ? 1 : 0);
