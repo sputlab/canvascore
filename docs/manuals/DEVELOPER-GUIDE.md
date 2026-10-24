@@ -102,6 +102,8 @@ canvascore-frontend/         React editor
 | `update.php` | One-click updates: release check, signed package, backup, folder swap, health check, rollback (section 7) |
 | `update-keys.php` | The public keys (Ed25519) that releases are signed with; the private key is never in the repository |
 | `blockdef.php` | The PHP engine of the shared block definitions: setting cleaning, the template language, transforms, behaviour scripts (section 5) |
+| `blockpkg.php` | Block packages: the format, the install checks, the registry in the data folder, the scoped CSS (sections 7 and 8.3) |
+| `wpimport.php` | The WordPress importer: export reader, HTML to blocks, image download, the resumable import (section 7) |
 | `blocks/*.json` | One definition per block: settings, template, panel (45 files). Read by the editor at build time and by PHP at publish time |
 | `migrations.php` | Versioned DB migrations and content migrations |
 | `submit_form.php` | Public endpoint for form submissions (rate-limited; recipient, fields and success message from `forms.json`) |
@@ -119,6 +121,7 @@ canvascore-frontend/         React editor
 | `vite.config.js` | Injects `__APP_VERSION__`, `__APP_BUILD__`, `__BLOCK_DEFS__`, `__EFFECTS_CSS__` from `../canvascore-admin/`; the `canvascore-editor-csp` plugin adds the editor's Content Security Policy (`script-src 'self'`) and `referrer` / `robots` metas to the **built** `index.html` (not in the dev server, which needs inline scripts) |
 | `public/menu-preview.html` | Menu Builder live preview: a page of its own, loaded in a sandboxed iframe (`allow-scripts`, no same origin) and fed the menu HTML by `postMessage`, so the menu's scripts run there and not under the editor's CSP |
 | `scripts/bump.mjs` | `prebuild` hook: increments `build` in `version.json`, syncs `package.json` version |
+| `scripts/block-package.php` | Developer tool for block packages: `check <folder or zip>` runs the install checks, `pack <folder>` makes the ZIP (section 8.3) |
 | `scripts/release-keygen.php`, `scripts/release-package.php` | Release tooling: make the signing key pair; pack and sign the update package of a release (section 13) |
 | `.oxlintrc.json` | Lint config (react + oxc plugins) |
 | `src/main.jsx` | Entry: imports `apiClient.js` first (installs the fetch guard), then the CSS and `<App />`; refuses to render inside a frame (`window.top !== window.self`) |
@@ -150,6 +153,8 @@ canvascore-frontend/         React editor
 | `src/components/panel/` | `StyleTab`, `AdvancedTab`, `PageSettings`, `fields.jsx`, `helpers.js`, `constants.js` |
 | `src/components/panel/SchemaPanel.jsx`, `widgets.jsx`, `widgetRegistry.js` | The Content panel generated from a block definition, and the named widgets it can use (hotspot pins, search filters, opening hours, grid columns, button size and border, hero button looks) |
 | `src/components/panel/blocks/` | The hand-written Content panels of the blocks that are not (yet) definitions (`FlexRowPanel.jsx`, `FormPanel.jsx`…); `index.js` maps type → panel (`CONTENT_PANELS`) and adds a generated panel for every definition |
+| `src/components/BlockPackages.jsx`, `src/editor/blockPackages.js` | Administration › Block packages; and the editor side of packages: `registerPackages()` registers their definitions, catalog entries and CSS, `loadBlockPackages()` fetches `pkg_list` after sign-in |
+| `src/components/ImportWordPress.jsx` | Administration › Import from WordPress: choose, options, progress and report (drives `wp_analyze`, `wp_start`, `wp_step`) |
 | `src/components/Updates.jsx` | Administration › Updates: check, update, requirements, history |
 | `src/components/*.jsx` | Admin screens: PageManager, Collections, Templates, MediaManager, MediaPickerModal, MenuBuilder, GlobalSettings, UserManager, Submissions, Backup, AdminLayout… |
 | `src/session/` | Session manager, fetch guard, local draft backups and trackers |
@@ -264,7 +269,7 @@ How they work:
   and load the real modules with `vite.ssrLoadModule('/src/...')`, then mount them with `react-dom` and drive
   them with DOM events. `__BLOCK_DEFS__` etc. are passed via `define`. `fetch` is stubbed or replaced by a
   fake backend.
-- **`tests/security.php`** also covers the updates over real HTTP: a fake release feed (`update-source.php` and a test
+- **`tests/security.php`** also covers block packages (install by upload, refusals, images served, an editor using a block) and the WordPress import (who may use it, a hostile file, a full import) over HTTP, and the updates over real HTTP: a fake release feed (`update-source.php` and a test
   `update-keys.php` in the temporary install) serves signed and tampered packages; an untrusted signature, a changed package,
   a path outside the admin folder, a wrong version, a file PHP can't parse and a new version that fails its first check must
   all be refused or rolled back with the old version intact, and a signed release must install.
@@ -301,6 +306,8 @@ the web root can be written. It contains:
 | `media.json` | Media metadata per uploaded file name: `alt`, `w`, `h`, `bytes`, `variants` (widths of the WebP copies), `optimized`, `folder` (media library folder path such as `Products/Shoes`, `''` = none; see `media.php`) |
 | `media-folders.json` | Array of media folder paths, so empty folders exist too (parents of listed folders are implied) |
 | `backups/` | Backup ZIPs: `backup-…zip` (kept by hand), `before-restore-…zip` (safety copies, newest 5), `download-…zip` and `upload-….part` (temporary, removed after an hour); deny-all `.htaccess` |
+| `packages/` | Installed block packages: `<id>/` (the package's files, as installed) and `index.json` (the registry: id, version, enabled, installer, date) |
+| `imports/` | WordPress import jobs, one folder per job (`meta.json`, `state.json`, `slugs.json`, `terms.json`, `pages.jsonl`, `posts.jsonl`, `media.jsonl`, `mediamap.json`, `lock`); deleted on discard and after 7 days; deny-all `.htaccess` |
 | `updates/` | One-click updates (`update.php`): `db-<version>-…sqlite` and `code-<version>-…zip` copies taken before each update (newest 3 of each), `history.json`, `last-check.json`, `health.json` (the one-time token of the running check); deny-all `.htaccess` |
 | `published_files.json` | Manifest of files the last successful publish wrote (`…/index.html` and `…/feed.xml`, relative to the site root); used to delete pages and feeds no longer published |
 | `login_attempts.json`, `rate_*.json` | Login throttling (at most 5000 keys) and form rate limits |
@@ -308,7 +315,7 @@ the web root can be written. It contains:
 | `install-key.txt`, `.install.lock` | Setup key and lock of `install.php` (the key file is deleted after installing) |
 | `quarantine/` | SVGs moved out of `uploads/` by the one-time recheck after updating to 0.14.1 (`cc_meta` key `svg_recheck_v1`) |
 
-Outside the data dir, in the site root, a publish also writes `search-index.json` (the Site Search index,
+Outside the data dir, package images are copied to `canvascore-blocks/<id>/` in the site root (a reserved address), and in the site root, a publish also writes `search-index.json` (the Site Search index,
 public by design), and uploads get their optimized copies in `uploads/_cc/`.
 
 ### Tables
@@ -870,6 +877,58 @@ a version that is not newer is never installed. Library files are listed in the 
 `tests/server.php` covers the pieces (signatures, package checks, swap and undo); `tests/security.php` runs the whole flow over
 HTTP against a fake feed, including every refusal and a rollback.
 
+### `blockpkg.php` (block packages)
+
+Loaded by `compiler.php` (so every publish and render knows the installed packages) and by `api.php` (admins: `pkg_info`,
+`pkg_install`, `pkg_set_enabled`, `pkg_remove`; any signed-in user: `pkg_list`, which the editor calls after sign-in). The admin-facing
+description is section 12.1 of the [Administrator Guide](ADMIN-GUIDE.md#12-block-packages-and-the-wordpress-importer); the format is
+section 8.3 here.
+
+| Function | What it does |
+| --- | --- |
+| `cc_pkg_read($source)` | Reads a ZIP or a folder: manifest, blocks, CSS, images and a list of `errors`. Sizes are checked on the real decompressed data, not on what the ZIP claims |
+| `cc_pkg_check_manifest()` / `cc_pkg_check_block()` / `cc_pkg_check_setting()` | The manifest (id, version, `minVersion` against `cc_version()['app']`, or `$GLOBALS['CC_PKG_APP_VERSION']`) and every definition: allowed keys and setting types (no `code`, no widgets), known transforms only, `{{_id}}` and `{{_classes}}` in the template, regular expressions that compile |
+| `cc_pkg_html_problem()` / `cc_pkg_css_problem()` / `cc_pkg_selector_problem()` | The static checks of the template HTML and of the style sheet: no script, frame, form, style or event attribute, no active address; no `@import`, no backslash, only `@media`, `@supports` and `@container`, `url()` only as `__ASSETS__/…` or an image `data:` address; `&` only at the start of a selector, nothing that can reach outside the block (`+`, `~`, `:has(&)`…) |
+| `cc_pkg_run_checks($id, $blocks)` | The package's own `tests` and the **hostile-value fuzz**: hostile text, addresses, arrays and numbers typed into every setting; the rendered HTML is parsed with `DOMDocument` and a script, event attribute or active address refuses the package |
+| `cc_pkg_install($source, $user)` | Everything above, then: a newer version replaces an older one (the same or an older version is refused), files to `packages/<id>/`, images to `canvascore-blocks/<id>/` (with the uploads `.htaccess`), the registry. Returns `{ success, message, errors, id, types }` |
+| `cc_pkg_load()` / `cc_pkg_defs()` | Reads an installed package and **checks it again**; the definitions of the enabled packages, which `cc_block_defs()` adds to the core ones (a core block always wins) |
+| `cc_pkg_css()` / `cc_pkg_editor_payload()` / `cc_pkg_rich_fields()` | The package CSS nested as `.cc-pkg-<id>{ … }` (the `{{PACKAGE_CSS}}` placeholder of `master.html`, filled by `publish.php`); what the editor needs (`packages`, `css`); the rich-text fields of a package block (`cc_sanitize_blocks()` cleans them on save) |
+| `cc_pkg_info($pdo)` / `cc_pkg_usage()` | The list for the admin page, with where each package's blocks are used |
+
+A package block's type is `X_<ID>__<NAME>` (upper case, dashes as underscores), so it can never clash with a core type. The engines add the
+class `cc-pkg-<id>` and the built-in `{{_assets}}` (`{{BASE_URL}}canvascore-blocks/<id>/`; the canvas rewrites it to `../canvascore-blocks/`).
+`cc_render_block_body()` and `renderBlock()` catch a failure of a package block and give an HTML comment instead, so a publish never stops
+because of a package. Test overrides: `$GLOBALS['CC_PACKAGES_DIR']`, `CC_SITE_ROOT`, `CC_PKG_APP_VERSION` (also the environment variable of the CLI tool).
+`tests/server.php` covers the library (BLOCK PACKAGES, WHAT IS REFUSED, RICH TEXT), `tests/parity.mjs` that both engines render a package block
+identically, `tests/panels-ui.mjs` the editor registration, `tests/ui-shell.mjs` the admin page and `tests/security.php` the whole flow over HTTP.
+Packages are not part of a site backup (`backup.php` does not know them).
+
+### `wpimport.php` (WordPress importer)
+
+Loaded by `api.php` only when a `wp_*` action is called (admins, not in the demo): `wp_info`, `wp_analyze` (multipart `file`), `wp_start`
+(`{ job, options }`), `wp_step` (`{ job }`), `wp_discard`. The admin-facing description is section 12.2 of the Administrator Guide.
+
+The import is a small state machine over a **job folder** (`imports/<job>/`, a 16-hex id): `analyze` reads the export once with `XMLReader`
+(no entities, no network, a document type is refused, 200 MB and 50,000 entries at most) and writes `pages.jsonl`, `posts.jsonl`, `media.jsonl`
+(one JSON line per entry, so memory stays flat) and `meta.json`; `start` creates the collection, its Categories and Tags and the new address
+of every entry (`slugs.json`: old path to new path, also `?p=` and `?page_id=`), in one transaction; `step` does about 15 seconds of work
+(pictures, then pages, then posts) and saves `state.json` after every entry, so a repeated step continues where it stopped. A lock file
+refuses two steps at once (`busy`).
+
+| Function | What it does |
+| --- | --- |
+| `cc_wp_analyze($file)` / `cc_wp_summary()` | Read and summarise; returns `{ job, summary }` or `{ error }` |
+| `cc_wp_start($pdo, $job, $options)` | The options (`pages`, `posts`, `media`, `drafts`, `redirects`, `collection`, `collection_name`), the collection, taxonomies and terms (limits `CC_TAX_MAX`, `CC_TERM_MAX`), unique addresses |
+| `cc_wp_step($pdo, $job, $budget)` | One slice; returns the progress (`phase`, `totals`, `done`, `created`, `failed`, and when finished `warnings`) |
+| `cc_wp_blocks($html, $ctx)` | WordPress HTML to blocks: removes comments, turns `[caption]` and `[gallery ids]` into figures and drops other shortcodes, splits old posts at blank lines, rewrites picture and link addresses through `$ctx`, then walks the top level (headings, lists, quotes and tables collect into a Text block; a picture, video link, `<pre>` or rule starts a block of its own; layout wrappers are unwrapped). Callers run `cc_sanitize_blocks()` on the result |
+| `cc_wp_url_check($url)` | Whether an address may be downloaded: http(s), no credentials, ports 80, 443, 8080, 8443 only, and **every** address the name resolves to must be public (`FILTER_FLAG_NO_PRIV_RANGE` and `NO_RES_RANGE` plus 100.64.0.0/10) |
+| `cc_wp_fetch($url)` / `cc_wp_store_image()` | The download (cURL, redirects followed by hand and checked at every hop, the connection pinned to the checked address with `CURLOPT_RESOLVE`, 25 MB cap) and the upload checks (extension allow-list, real image through `getimagesize`, SVG through `cc_svg_is_safe`, then `cc_media_process()`) |
+
+Redirects are made only for entries imported as published, never from an address that is a live page or collection, nor from an address that is
+another imported entry's new address. Test overrides: `$GLOBALS['CC_WP_DIR']`, `CC_WP_UPLOADS`, `CC_WP_BASE_DIR`, `CC_WP_FETCH` (a stub downloader) and
+`CC_WP_RESOLVE` (a stub resolver). `tests/fixtures/wordpress.xml` is a small export used by `tests/server.php` (WORDPRESS IMPORT) and `tests/security.php`;
+`tests/ui-shell.mjs` covers the page.
+
 ### `backup.php`
 
 Loaded by `api.php`. A backup is a ZIP with `manifest.json` (`format: "canvascore-backup"`, `format_version`
@@ -920,6 +979,49 @@ Example: a `QUOTE` block (section 5, "Shared block definitions", describes every
    wrong types, strings with quotes and `<`): both engines must give the same HTML.
 8. **Tests and docs**: `npm test` and lint, the block's entry in [BLOCK-REFERENCE.md](BLOCK-REFERENCE.md), a CHANGELOG
    line under `[Unreleased]`, optionally use it in `starters.json`.
+
+### 8.3 As a package
+
+A block that is **not** part of CanvasCore is a **block package** (Administration › Block packages): a ZIP any admin can install. A package
+is declarative, so it needs no code and can't run any: the same definition format as 8.1, plus a manifest, a style sheet and images. The
+complete example is `docs/examples/block-packages/pull-quote`.
+
+```
+pull-quote/
+├── package.json         id, name, version, author, description, homepage, license, minVersion
+├── blocks/pull-quote.json   one file per block (12 at most)
+├── style.css            optional, 40 KB at most
+├── assets/quote.svg     images: png, jpg, gif, webp, avif, svg
+└── README.md, LICENSE   allowed, ignored
+```
+
+- **`package.json`**: `id` (lower case letters, digits, dashes; it names the folders and the block types), `name`, `version` (`1.2.3`), and the
+  optional `author`, `description`, `homepage`, `license` and `minVersion` (an install on an older CanvasCore is refused).
+- **`blocks/<name>.json`**: `name` (the block's file name), `catalog` (`label`, `icon` from a fixed list of icon names, `keywords`, `color`),
+  `defaults` (`content` and `styles`: what a new block starts with), `settings`, `template`, `panel`, and optionally `rootStyleOmit`, `renderIf`
+  and `tests`. Settings, template language and panel are those of section 5 ("Shared block definitions") with these limits: setting types `text`,
+  `richtext`, `number`, `bool`, `enum`, `color`, `image`, `list`, `object`, `choices`, `calc`, `flag` (no `code`); only the known transforms;
+  no behaviour scripts and no panel widgets; the template must contain `{{_id}}` and `{{_classes}}`; its static HTML may not hold a script,
+  frame, form, style element, event attribute or active address (`javascript:`…). Use `{{_assets}}` for the package's images
+  (`<img src="{{_assets}}quote.svg">`). A rich-text setting is cleaned on save like the core ones.
+- **`style.css`**: written without a prefix. The server nests it under `.cc-pkg-<id>`: a plain selector is something **inside** the block and `&` is
+  the block itself (`&.pq { … }`). `@media`, `@supports` and `@container` are allowed; `@import`, backslash escapes, `+` or `~` against the block,
+  and any `url()` other than `url(__ASSETS__/file.png)` or an image `data:` address are refused. Rules are published once in the `<style>` of every page
+  (`{{PACKAGE_CSS}}` in `master.html`) and in the editor's canvas.
+- **`tests`**: up to 20 per block, run at install and by the CLI: `{ "name", "content": { … }, "contains": [ … ], "notContains": [ … ] }`; the HTML is
+  rendered by the PHP engine.
+- **Block type**: `X_<ID>__<NAME>`, e.g. `X_PULL_QUOTE__PULL_QUOTE`. It is what is stored in the pages.
+
+Develop with the CLI from the repository root:
+
+```bash
+php canvascore-frontend/scripts/block-package.php check docs/examples/block-packages/pull-quote       # the install checks (a folder or a .zip)
+php canvascore-frontend/scripts/block-package.php pack  docs/examples/block-packages/pull-quote out.zip   # check, then the ZIP to install
+CC_PKG_APP_VERSION=0.22.0 php canvascore-frontend/scripts/block-package.php check <folder>             # against another CanvasCore version
+```
+
+`check` is the same code as an install, so a package that passes it installs. Both engines render a package block from the same template, which
+is why a package has no PHP or JS to write; what a package can't do (read the database, hold other blocks, run a script) is a block for 8.2.
 
 ### 8.2 With code
 
@@ -1185,6 +1287,14 @@ Recently added actions:
 | `backup_download` | GET `?name=` | Streams a saved backup (or a `download-…` one, deleted after sending, named after the site) |
 | `backup_delete` | POST `{ name }` | Deletes a saved backup or safety copy |
 | `backup_upload_chunk` | POST multipart `{ id, index, chunk }` | Appends a piece to `backups/upload-<id>.part` (`id`: 16 hex characters; index 0 starts the file) |
+| `pkg_list` | GET | Any signed-in user: `{ packages, css }`, the enabled packages' block definitions, catalog entries and scoped CSS (`cc_pkg_editor_payload()`) |
+| `pkg_info` | GET | Admins: `{ zip, demo, max_mb, packages }` with `used` (where the blocks are used) |
+| `pkg_install` | POST multipart `package` | Admins, not in the demo: `cc_pkg_install()`; returns `{ success, message, errors, id, types }` (`errors` lists every problem) |
+| `pkg_set_enabled` / `pkg_remove` | POST `{ id, enabled }` / `{ id }` | Admins, not in the demo; return `{ success, packages }` |
+| `wp_info` | GET | Admins: `{ demo, curl, xml, max_mb, upload_mb, collections }` |
+| `wp_analyze` | POST multipart `file` | Admins, not in the demo: reads the export; returns `{ job, summary }` or `{ success: false, message }` |
+| `wp_start` / `wp_step` | POST `{ job, options }` / `{ job }` | Admins: start (and the first slice) and next slice; return the progress, `finished: true` at the end; `busy: true` when another step is running. A step is safe to repeat |
+| `wp_discard` | POST `{ job }` | Admins: deletes the job folder |
 | `update_info` | GET | Admins: `{ current, requirements, last_check, history, demo }` |
 | `update_check` | GET | Admins: asks GitHub and returns `{ release }` (version, notes, size, whether it is newer and has a signed package) or an error message |
 | `update_install` | POST `{ version }` | Admins, not in the demo. `version` must be the latest release; runs `cc_update_install()` and returns `{ success, message, steps, from, to, rolled_back, history }`. The session is closed first (`session_write_close()`): the update takes a while |

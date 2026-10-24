@@ -10,6 +10,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-25 — Block packages and the WordPress importer
+
 ### Added
 - **Block packages** (Administration › **Block packages**, admins): third-party blocks installed from a ZIP. A package holds
   `package.json`, one `blocks/<name>.json` per block (a block definition: settings, template and panel, with the block's
@@ -53,6 +55,13 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
     address a page of the site already uses).
   - The export file is read as a stream with no entities and no network access; a file with a document type is refused. Nothing is
     deleted or replaced: everything is added.
+
+### Upgrade notes
+- No migration: the schema stays at 14. New folders are created when first used: `packages/` and `imports/` in the data folder,
+  `canvascore-blocks/` in the site (a reserved address: no page or collection can take it).
+- **Nginx**: add the `canvascore-blocks` location and `blockpkg|wpimport` to the library-file rule of the example in the Administrator
+  Guide (section 4.2). One-click updates do not change your server configuration; Apache needs nothing.
+- Block packages are not included in site backups: keep their `.zip` files.
 
 ### Fixed
 - A link to a page chosen in the rich-text link dialog (`{{BASE_URL}}about/`) was stored with its braces percent-encoded
@@ -1240,7 +1249,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.21.1...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/sputlab/CanvasCore/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/sputlab/CanvasCore/compare/v0.20.0...v0.21.0
 [0.16.0]: https://github.com/sputlab/CanvasCore/compare/v0.15.0...v0.16.0

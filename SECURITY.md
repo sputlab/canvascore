@@ -18,6 +18,14 @@ release key, and a site installs a package only when the signature matches a pub
 release, a package or an update that is **not** signed with that key, or a way around the signature or the package checks,
 treat it as a vulnerability and report it as described below.
 
+## Block packages and the WordPress importer
+
+From 0.22.0, admins can install **block packages** and import from a **WordPress export**. A package is declarative (no code that
+runs) and is checked before it is installed; the importer reads the export without XML entities or network access and downloads
+pictures only from public addresses. A package that gets script, an event attribute or an active address into a published page,
+CSS that reaches outside its own blocks, a file written outside its folders, an import that reads a local file or reaches a private
+network, or a way to use either feature without being an admin, is a vulnerability: report it as described below.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue, pull request or Discord message for security problems.**
