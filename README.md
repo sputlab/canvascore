@@ -15,9 +15,11 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 - **Styles**: per-device styles (desktop, tablet and phone), global colours, text styles, button presets and a form
   field style, and copy and paste of a block's style.
 - **Collections** (blogs, news, portfolios, catalogues): custom fields of nine types, one design per collection with
-  dynamic values (`{{field:price}}`), related items, lists with fields, sort and filter, and structured data
-  (schema.org) for search engines.
-- **Publishing**: a static site of HTML files, with RSS feeds, a sitemap, a search index, redirects, and images
+  dynamic values (`{{field:price}}`), categories and tags with their own pages, paginated listings and archives (by
+  year, month, sort and filter), related items (by reference or by shared tags), lists with fields, sort and filter,
+  and structured data (schema.org) for search engines.
+- **Publishing**: a static site of HTML files, with RSS feeds, a sitemap, a search index with filters, redirects, scheduled
+  publishing (a page or item goes live and comes down at a time; `cron.php` for sites nobody edits), and images
   optimised to WebP with responsive sizes.
 - **Running it**: accounts with admin and editor roles, drafts and version history, whole-site backups, forms with
   submissions, and a cookie banner.

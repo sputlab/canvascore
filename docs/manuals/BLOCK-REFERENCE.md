@@ -74,6 +74,7 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | | [Collection List](#collection-list) | The latest posts, news or items of a collection, with their fields, a sort and a filter |
 | | [Related Items](#related-items) | The items of a collection that point to this item (the team of a department) |
 | | [Item Field](#item-field) | One field of the collection item, shown on its page |
+| | [Categories & Tags](#categories--tags) | The terms of the item, as links to their listing pages |
 | | [Site Search](#site-search) | A search box that finds your pages and items |
 | | [Table of Contents](#table-of-contents) | A list of the page's headings, which follows you down the page |
 | | [Share Bar](#share-bar) | Buttons to share the page on social networks, by email or by copying the link |
@@ -930,6 +931,7 @@ Lists the items of one of your collections that point to the item being shown. I
 
 **Settings** (panel: **Related items**)
 - **Heading (optional)**.
+- **Find items**: **That point to this item (a reference field)** (the default), or **That share tags with this item**. With tags, pick **Through the taxonomy** (any taxonomy by default); the items are ranked by how many terms they share with this one.
 - **Items of collection**: the collection to list.
 - **That point to this item through the field**: a reference field of that collection that points to this item's collection. The panel only offers those fields, and says so when there are none.
 - **How many** (default 3), **Columns** (default 3), **Fields on each card**, **Sort by** and **Ascending** or **Descending**.
@@ -952,6 +954,18 @@ Shows one field of the collection item being published, on that item's page: the
 - On pages that are not collection items the block shows nothing. In the editor it shows which field it is for.
 - For any text, use a [dynamic value](USER-GUIDE.md#the-design-of-a-collection-admins) such as `{{field:price}}` instead, when the value belongs inside a sentence.
 
+### Categories & Tags
+
+Shows the categories and tags (the terms) of the collection item being published, as links to their listing pages. The taxonomies and their terms are defined by an admin in the collection (Collections › Categories & tags), and each item picks its terms in its settings.
+
+**Settings** (panel: **Categories & tags**)
+- **Show**: **All of them** (named by taxonomy, such as "Category: News") or one taxonomy.
+- **Between the terms**: the text between two terms. Default " · ".
+
+**Tips**
+- Shown on item pages only; the editor shows a placeholder.
+- An archived item shows its terms without links, since their listing pages are not published.
+
 ### Site Search
 
 A search box. Visitors type a word and see a list of matching pages and collection items, each linking to its page.
@@ -961,6 +975,7 @@ A search box. Visitors type a word and see a list of matching pages and collecti
 - **Button text**: default "Search".
 - **When nothing is found**: the message shown when there are no results, followed by what the visitor typed. Default "No results for".
 - **Results to show (1–50)**: the most results listed at once. Default 10.
+- **Filters (faceted search)**: tick **Collection** and/or one taxonomy. Visitors get checkboxes above the results: the choices of one filter combine with "or", and the filters with "and". With a filter on, a search with no words lists the matching items.
 
 **How it works**
 - The search looks at the titles, descriptions and text of every published page and collection item. The list it searches (`search-index.json`) is rebuilt each time you publish, so publish after adding or changing content.

@@ -1,6 +1,6 @@
 # CanvasCore manuals
 
-Manuals for CanvasCore 0.19.0. Pick the one that matches what you do:
+Manuals for CanvasCore 0.20.0. Pick the one that matches what you do:
 
 | Manual | For | What's inside |
 | --- | --- | --- |

@@ -304,6 +304,13 @@ public by design), and uploads get their optimized copies in `uploads/_cc/`.
   Items publish to `/<collection-slug>/<item-slug>/`. The `COLLECTION_LIST` and `RELATED` blocks list them at build time
   (from a per-build cache, `cc_collections_data()`). With a design, `content_json` is not used for the page layout: it is
   kept as it is.
+- **`collection_taxonomies`** (`id, collection_id, name, slug, multiple, position`) and **`collection_terms`**
+  (`id, taxonomy_id, collection_id, name, slug, description, position`): the categories and tags of a collection
+  (migration 12). An item's terms are `collection_items.terms_json` (`{taxonomy id: [term ids]}`); term ids are unique across
+  the site, and the cleaners drop any id that is not a term of the item's own collection.
+- **`collections.archive_json`** (migration 13): `{ perPage, years, filters, sorts }` for the listing and archive pages.
+- **`pages.publish_at` / `unpublish_at`** and the same two columns on `collection_items` (migration 14): `"YYYY-MM-DD HH:MM"`
+  in the server's local time, `''` when not scheduled. The scheduler (`cc_run_schedules()`) clears a time once it has made the change.
 - **`master_components`** (`id, name, content_json`): one block (a subtree) reused by reference.
 - **`templates`** (`id, name, content_json`): one block saved as a reusable **copy**.
 - **`site_parts`** (`name` = `header`/`footer`, `content_json` = block array): global header/footer.
@@ -389,10 +396,12 @@ undoable change.
 
 `api.php` runs `cc_migrate($pdo)` and `cc_migrate_content($pdo)` on every request (`migrations.php`).
 
-**DB schema** (currently 11; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
+**DB schema** (currently 14; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
 unique user names, old default account removed, pre-wizard sites marked installed, stored content sanitized, 9 = custom
 fields (`collections.fields`, `collection_items.field_values`), 10 = structured data (`collections.schema_json`), 11 = the
-collection design (`collections.design_json`)): add a numbered closure
+collection design (`collections.design_json`), 12 = categories and tags (`collection_taxonomies`, `collection_terms`,
+`collection_items.terms_json`), 13 = listing and archives (`collections.archive_json`), 14 = scheduled publishing
+(`publish_at` / `unpublish_at` on pages and items)): add a numbered closure
 to `cc_db_migrations()`, then bump `db_schema` in `version.json` and note it in the CHANGELOG. Each migration
 runs once, in order, in a transaction, and the number is recorded in `cc_meta`.
 
@@ -548,7 +557,18 @@ The CSS lives in `canvascore-admin/effects.css`:
 - canvas: `vite.config.js` injects it as `__EFFECTS_CSS__`; `Canvas.jsx` adds overrides so entrance and loop
   effects stay still while editing and play only on "Preview animation" (`previewEffects.js`).
 
-## 6. Publishing pipeline (`rebuild_all.php`)
+## 6. Publishing pipeline (`publish.php`, `rebuild_all.php`, `cron.php`)
+
+`cc_publish_site($pdo, $data_dir, $base_dir)` in `publish.php` is the whole publish. The **Publish Site** button reaches it
+through `rebuild_all.php` (after the login and CSRF checks); the scheduler reaches it through `cc_run_schedules()` in the same
+file, called by `api.php` on an admin request when a change is due (`cc_schedules_pending()`), and by `cron.php` from the
+command line. A scheduled run has no request, so each HTTP publish remembers the site's base path in `cc_meta.site_base_dir`.
+
+The collection pages are written after the items, with one page shell (`$render_page`) and one paginated writer (`$archive`):
+the listing, the sorts, the years and months, the filters of the choice fields, and the taxonomy and term pages. An archive
+address that an item already uses is skipped with a warning. The search index (`search-index.json`) carries each entry's
+facets: `f` (the collection, and `tax:<id>` with the terms) and `fl` (their labels).
+
 
 A POST to `rebuild_all.php` (login + CSRF, an account that still exists and has no pending forced password change
 via `cc_session_account()`, session released right away) rebuilds the whole site in one pass:
@@ -660,6 +680,26 @@ Helpers for the collection features (all in `config.php` unless noted; `compiler
 
 `api.php` gives the definitions and the structured data back in `get_collections` (decoded and cleaned), and returns
 `has_design` instead of the design itself. `save_collection` only changes what it is sent (`fields`, `schema`).
+
+### Taxonomies, archives, schedules and search facets
+
+| Function | What it does |
+| --- | --- |
+| `cc_taxonomies_clean($raw)` / `cc_taxonomies_load($pdo, $cid)` (`config.php`) | The taxonomies of a collection with their terms: names and addresses unique within the collection, a reserved address refused, term ids kept or made new |
+| `cc_terms_clean($raw, $pdo, $cid)` (`config.php`) | An item's terms: only terms of its collection's taxonomies, one term at most for a single-term taxonomy |
+| `cc_tax_free_id($pdo, $table, $id, $cid)` (`config.php`) | A taxonomy or term id: the one sent when no other collection uses it, a new one otherwise |
+| `cc_archive_clean($raw)` (`config.php`) | The listing settings: items per page (3 to 50) and which archives are on |
+| `cc_archive_nav()`, `cc_archive_browse_html()`, `cc_archive_page_inner()` (`compiler.php`) | The pagination links, the browse links of the first listing page, and the body of an archive page |
+| `cc_term_page_inner()`, `cc_taxonomy_index_inner()`, `cc_render_item_terms()` (`compiler.php`) | The term page, the taxonomy page, and the Categories & Tags block |
+| `cc_render_related_tags($block, $ctx)` (`compiler.php`) | The Related block in tag mode: the items sharing the item's terms, most shared first |
+| `cc_schedule_clean($raw)` (`publish.php`) | A schedule time from the editor ("YYYY-MM-DDTHH:MM") or the stored form; `false` when invalid |
+| `cc_schedules_pending()` / `cc_run_schedules()` (`publish.php`) | Is a change due? Make the due changes (a page or an item goes live, or comes down), then publish the site when any changed |
+
+`api.php` returns the taxonomies with `get_taxonomies`, and `get_taxonomy_list` lists every taxonomy with its collection (for the
+search filters). `save_taxonomies` (admins) replaces a collection's taxonomies and cleans each item's `terms_json`. `set_schedule`
+(POST `{ kind: 'page'|'item', id, publish_at, unpublish_at }`) sets a schedule; `''` clears it, and an unpublish time must be after
+the publish time. `save_collection` also takes `archive` (`{ perPage, years, filters, sorts }`). A page being edited may be its
+hidden draft copy: `set_schedule` writes to the live page behind it.
 
 ### `media.php`
 
@@ -979,6 +1019,8 @@ moved }`. `delete_collection` and `delete_item` take the published files offline
 blocks }`) sanitizes the blocks like a page and stores them as the collection's design. `save_item` accepts `field_values`
 (cleaned against the collection's fields; a required field left empty refuses a **publish** with `code: "required"`
 and the labels in the message) and `blocks: null` (keeps the stored blocks: an item built from a design sends no blocks).
+`get_collection_design`, `get_taxonomies`, `save_taxonomies`, `get_taxonomy_list` and `set_schedule` are described in the
+helpers section: taxonomies and schedules are written with the same CSRF and login checks as every other POST.
 `export_site` / `import_site` (the pre-0.14 `.json` format) remain; the editor only uses `import_site`, for old
 backups.
 

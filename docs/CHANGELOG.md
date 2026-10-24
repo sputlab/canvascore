@@ -10,6 +10,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-24 — Categories and tags, archives, scheduled publishing, faceted search
+
 ### Added
 - **Related items by tag**: the Related block has a second mode, **That share tags with this item**: the other items of
   the collection that share terms with this one, the most shared first, optionally through one taxonomy.
@@ -38,6 +40,12 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 - **Categories & Tags block**: on an item page, shows the item's terms as links to their listing pages (one taxonomy,
   or all of them, with a separator).
 - Database schema 12: `collection_taxonomies`, `collection_terms`, and `collection_items.terms_json` (added on update).
+
+### Documentation
+- The user guide (categories and tags, listing and archive pages, scheduled publishing, related items by tag, search
+  filters), the block reference (Categories & Tags, the Related modes, the Site Search filters), the administrator
+  guide (migrations 12 to 14, the archive pages, scheduled publishing and cron) and the developer guide (the tables, the
+  publish split into `publish.php`, the helpers and the API) are updated. The manuals index is at 0.20.0.
 
 ## [0.19.0] - 2026-10-22 — Custom fields, one design per collection, structured data
 

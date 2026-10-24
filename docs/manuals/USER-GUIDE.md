@@ -698,6 +698,35 @@ Each row has a checkbox. Tick the items you want, or tick the box in the header 
 
 Some items may be skipped, and a message lists them with the reason. For example, a published item isn't moved when the destination collection already has a published item with the same URL slug: change one of the two slugs first. Lists and the site search are updated when you publish the site, so click **Publish now** in the bar that appears.
 
+### Categories and tags (admins define them)
+
+Click **Categories & tags** above the items of a collection to define its taxonomies. A **taxonomy** is a kind of label, such as **Category** (an item takes one of its terms) or **Tags** (an item takes several). Tick **Several terms per item** for the second kind.
+
+- Each taxonomy has **terms**: a name and a short **description** (shown on the term's page). Click **Add term** to add one, the bin to delete it.
+- Editors can pick the terms of an item but can't change the taxonomies. Renaming a term keeps the items that have it; deleting a term takes it off the items on their next save.
+- Each term has its own **listing page** (`/<collection>/<taxonomy>/<term>/`), with its live items, newest first, paginated. Each taxonomy has a page listing its terms with their counts. Both are in the sitemap and linked from the first listing page.
+
+An item picks its terms under **Categories & tags** in its settings.
+
+### Listing and archive pages (admins)
+
+Every collection has a **listing** (its address, `/<collection>/`), paginated, with the newest items first. Click **Listing & archives** above the items to set:
+
+- **Items per page**: from 3 to 50 (12 by default).
+- **Year and month archives**: `/<collection>/2026/` and `/<collection>/2026/10/`, for the items of that period.
+- **Filter archives**: one page for each choice of a choice field (for example `/<collection>/filter/tier/gold/`).
+- **Sorted listings**: oldest first, and A to Z.
+
+The first listing page has links to all of these, to the taxonomies and to the years. Every archive is paginated with **← Newer** and **Older →** links. Publish the site to show the archives. An address that an item already uses is kept for the item: that archive is skipped, and the publish message says so.
+
+### Scheduled publishing
+
+A page or an item can go live at a date and time, and come down at another one. In its settings, open **Scheduled publishing** and set **Publish at** and/or **Unpublish at**, then click **Save schedule**. Leave a field empty to clear it. The panel says in words what will happen ("Goes live at …").
+
+- The change is made by the server at that time: on the next visit to the admin after it, or by the server's scheduler (see the [Administrator Guide](ADMIN-GUIDE.md#79-scheduled-publishing-and-cron)). The site is published again after each change.
+- Times are the **server's** local time. Ask your host which time zone the server uses.
+- A page that has unpublished edits waiting is not changed by its schedule: publish it by hand. An address that another live page or item already uses is skipped, and the change is reported.
+
 ### Editing an item
 
 An item opens in the same editor as a page, with a **Collection item** badge. Build its content with blocks as usual, unless the collection has a [design](#the-design-of-a-collection-admins): then the layout is read-only and the item has only its fields and settings. With no block selected, the panel shows **Item Settings** first:
@@ -746,6 +775,16 @@ On the canvas you see grey placeholder cards. The real items are filled in when 
 - **How many**, **Columns**, **Fields on each card**, and **Sort by**, as for a Collection List.
 
 It shows nothing on other pages, and the editor says so until the block is used on a collection item.
+
+**Related items by tag.** Set **Find items** to **That share tags with this item** to list the other items of the same collection that share terms with this one: the most shared first, then the newest. **Through the taxonomy** limits it to one taxonomy (for example Tags), or leaves it on any taxonomy.
+
+### Faceted search
+
+The **Site Search** block has a **Filters** section. Tick the **Collection** filter, and/or one filter per taxonomy. Visitors then see checkboxes above the results:
+
+- The choices of one filter combine with "or" (a Tag of *Red* or *Blue*), and the filters combine with "and" (a Cuisine of *Italian* and a Mood of *Quick*).
+- With a filter on, the search also works with no words: it lists the matching items, so the filters act as a browser.
+- The choices shown are the ones of the published content, with how many items each has.
 
 ---
 
