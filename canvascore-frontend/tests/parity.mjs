@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 import { renderBlock } from '../src/render/renderBlock.mjs';
-import { BLOCK_DEFS, blockDef, renderDefBlock } from '../src/render/blockDef.mjs';
+import { BLOCK_DEFS, blockDef, renderDefBlock, registerPackageDefs } from '../src/render/blockDef.mjs';
 import { readdirSync } from 'node:fs';
 
 const phpScript = fileURLToPath(new URL('./render_php.php', import.meta.url));
@@ -492,6 +492,41 @@ console.log('\nSHARED BLOCK DEFINITIONS');
   expect(26, '0.55|[&quot;b&quot;,&quot;c&quot;]|<H1><H2><>[a;b;c;][d;e;;o][f;;;]|1\n2\n3|x\ny|+39061234|site.com/a|https://www.google.com/maps/search/?api=1&amp;query=Via%20Roma%201%2C%2000100%20Roma|video/mp4|Lun,Tue,Wed,|Search|S|{{BASE_URL}}');
   expect(27, 'd|x|L-|' + 'background: var(--cc-btn-primary-bg, var(--brand-color, #3b82f6)); color: var(--cc-btn-primary-text, #ffffff); border: 2px solid var(--cc-btn-primary-border, transparent); border-radius: var(--cc-btn-primary-radius, 6px); ' + '| cc-hbg cc-bfx-shine/--cc-hover-bg:#111; |{{BASE_URL}} {{BASE_URL}}chi-siamo/ {{BASE_URL}}mailto:a@b.c https://x.y {{BASE_URL}}|');
   expect(28, 'éz|||https://linkedin.com/in/x');
+}
+
+// --- Block packages: a package block is a definition with a package id; both engines must give the same HTML for it,
+// including the package class and the address of its images ---
+console.log('\nBLOCK PACKAGES');
+{
+  const ex = JSON.parse(readFileSync(fileURLToPath(new URL('../../docs/examples/block-packages/pull-quote/blocks/pull-quote.json', import.meta.url)), 'utf-8'));
+  const def = { type: 'X_PULL_QUOTE__PULL_QUOTE', settings: ex.settings, template: ex.template, panel: ex.panel, _pkg: 'pull-quote' };
+  const assetsDef = { type: 'X_ASSETS__IMG', _pkg: 'assets', settings: { alt: { type: 'text', default: '' } }, template: '<div id="{{_id}}" class="a{{_classes}}"><img src="{{_assets}}pic.png" alt="{{alt}}"></div>' };
+  const H = `a'b"c<d>&e`;
+  const fx = (d, content, styles = {}) => ({ def: d, block: { id: 'b1', type: d.type, content, styles } });
+  const cases = [
+    fx(def, ex.defaults.content, ex.defaults.styles), fx(def, {}), fx(def, { quote: H, author: ['x'], role: { o: 1 }, accent: 'red;}x{', align: 'evil', avatar: 'javascript:alert(1)', linkText: H, link: 'javascript:alert(1)' }),
+    fx(def, { quote: 'Q', linkText: 'More', link: 'about/index.html', avatar: 'a.jpg', accent: 'var(--cc-color-a, #fff)', align: 'center', customId: 'my id!', customClass: `x"y z`, animDelay: 300 }, { textAlign: 'right', animation: 'fade-up', color: 'red;}x{' }),
+    fx(assetsDef, { alt: H }), fx(assetsDef, {}),
+  ];
+  const php = JSON.parse(execFileSync('php', [fileURLToPath(new URL('./render_def.php', import.meta.url))], { input: JSON.stringify(cases) }).toString());
+  let ok = 0;
+  cases.forEach((c, i) => {
+    registerPackageDefs([c.def]);
+    let js; try { js = renderDefBlock(c.def, c.block, { innerId: 'b1', fields: false }); if (js === null) js = ''; } catch (e) { js = 'THROWS ' + e.message; }
+    if (js === php[i]) ok++;
+    else { failures++; console.error(`✗ package block case ${i}: JS=${JSON.stringify(js).slice(0, 260)}  PHP=${JSON.stringify(php[i]).slice(0, 260)}`); }
+  });
+  registerPackageDefs([]);
+  console.log(`✓ package blocks: the same HTML from both engines in ${ok} of ${cases.length} cases (hostile values included)`);
+  const one = (c) => { registerPackageDefs([c.def]); const h = renderBlock(c.block); registerPackageDefs([]); return h; };
+  const must = (name, cond) => { if (!cond) { failures++; console.error(`✗ ${name}`); } else console.log(`✓ ${name}`); };
+  must('a package block carries its package class (the scope of the package CSS) and its images have an address', /class="a cc-pkg-assets"/.test(one(cases[4])) && /src="\{\{BASE_URL\}\}canvascore-blocks\/assets\/pic\.png"/.test(one(cases[4])));
+  must('a core block has no package class and an empty _assets', !/cc-pkg-/.test(renderBlock({ id: 'c1', type: 'CALLOUT', content: { title: 'x' } })));
+  registerPackageDefs([{ type: 'CALLOUT', _pkg: 'evil', settings: {}, template: '<b id="{{_id}}" class="{{_classes}}">hacked</b>' }]);
+  must('a package can never replace a core block', !/hacked/.test(renderBlock({ id: 'c1', type: 'CALLOUT', content: { title: 'x' } })));
+  registerPackageDefs([{ type: 'X_BAD__BAD', _pkg: 'bad', settings: {}, template: '{{#open}}' }]);
+  must('a faulty package block is left out (a comment) instead of breaking the page', /Block error: X_BAD__BAD/.test(renderBlock({ id: 'b1', type: 'X_BAD__BAD', content: {} })));
+  registerPackageDefs([]);
 }
 
 console.log(`\n${failures === 0 ? 'PARITY OK' : failures + ' blocks differ'}`);

@@ -530,5 +530,122 @@ check('a behaviour script comes from the definition, only when it is needed', st
 check('content of the wrong type never stops a publish (it gets the defaults)', strpos(render_block(['id' => 'w', 'type' => 'TIMELINE', 'content' => ['items' => [['title' => ['x'], 'date' => ['y']]], 'layout' => ['z']]]), 'cc-timeline-left') !== false);
 check('a definition with a broken template is refused', (function () { try { cc_tpl_parse('{{#a}}x'); return false; } catch (Throwable $e) { return true; } })());
 
+echo "\nBLOCK PACKAGES\n";
+$GLOBALS['CC_PKG_APP_VERSION'] = '0.22.0';
+$pt = sys_get_temp_dir() . '/cc_pkg_' . getmypid(); @mkdir($pt . '/site', 0755, true); @mkdir($pt . '/data', 0755, true);
+$GLOBALS['CC_PACKAGES_DIR'] = $pt . '/data/packages'; $GLOBALS['CC_SITE_ROOT'] = $pt . '/site';
+$example = realpath(__DIR__ . '/../../docs/examples/block-packages/pull-quote');
+$pkgZip = function (array $files, $name = 'p.zip') use ($pt) {
+    $f = "$pt/$name"; @unlink($f);
+    $z = new ZipArchive(); $z->open($f, ZipArchive::CREATE);
+    foreach ($files as $n => $c) $z->addFromString($n, $c);
+    $z->close(); return $f;
+};
+$exFiles = function () use ($example) {
+    $out = [];
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($example, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) $out[str_replace('\\', '/', substr($f->getPathname(), strlen($example) + 1))] = file_get_contents($f->getPathname());
+    return $out;
+};
+// the example with one change: $edit gets the files and the decoded block, and returns them changed
+$mutant = function ($edit) use ($exFiles, $pkgZip) {
+    $files = $exFiles(); $b = json_decode($files['blocks/pull-quote.json'], true);
+    $m = json_decode($files['package.json'], true);
+    [$files, $b, $m] = $edit($files, $b, $m);
+    $files['blocks/pull-quote.json'] = json_encode($b); $files['package.json'] = json_encode($m);
+    return $pkgZip($files, 'mut.zip');
+};
+$refused = function ($zip, $needle) { $r = cc_pkg_install($zip); $all = implode(' | ', $r['errors']) . ' ' . $r['message']; return empty($r['success']) && stripos($all, $needle) !== false ? true : $all; };
+
+$ex = cc_pkg_read($example);
+check('the example package reads without problems', !$ex['errors'] && $ex['id'] === 'pull-quote' && count($ex['blocks']) === 1 && count($ex['assets']) === 1, json_encode($ex['errors']));
+check('its own tests and the hostile-value fuzz pass', cc_pkg_run_checks($ex['id'], $ex['blocks']) === [], json_encode(cc_pkg_run_checks($ex['id'], $ex['blocks'])));
+check('a block type is made from the package and block names, and cannot clash with a core type', cc_pkg_type('pull-quote', 'pull-quote') === 'X_PULL_QUOTE__PULL_QUOTE' && !isset(cc_block_defs()['X_PULL_QUOTE__PULL_QUOTE']));
+$zip1 = $pkgZip($exFiles(), 'ex.zip');
+$r = cc_pkg_install($zip1, 'ann');
+check('a valid package installs: files in the data folder, images in the site, registered and enabled', !empty($r['success']) && is_file($pt . '/data/packages/pull-quote/blocks/pull-quote.json') && is_file($pt . '/site/canvascore-blocks/pull-quote/quote.svg')
+    && (cc_pkg_registry()['pull-quote']['enabled'] ?? false) === true && (cc_pkg_registry()['pull-quote']['installed_by'] ?? '') === 'ann', json_encode($r));
+check('…the folder of images is closed to scripts (its own .htaccess)', strpos((string)@file_get_contents($pt . '/site/canvascore-blocks/.htaccess'), 'php') !== false);
+cc_block_defs(true);
+$T = 'X_PULL_QUOTE__PULL_QUOTE';
+$h = render_block(['id' => 'q1', 'type' => $T, 'content' => ['quote' => 'Hi <b>x</b>', 'author' => 'Ann', 'link' => 'javascript:alert(1)', 'linkText' => 'src'], 'styles' => ['padding' => '5px']]);
+check('its block is rendered by the site, escaped, with the package class for its CSS', strpos($h, 'class="pq cc-pkg-pull-quote"') !== false && strpos($h, 'Hi &lt;b&gt;x&lt;/b&gt;') !== false && strpos($h, 'href="javascript:') === false && strpos($h, 'padding: 5px;') !== false, $h);
+check('…and a type nobody installed is still "Unknown element"', strpos(render_block(['id' => 'z', 'type' => 'X_NOPE__NOPE', 'content' => []]), 'Unknown element') !== false);
+$css = cc_pkg_css();
+check('the package CSS is nested under its own class, with its image address, and nothing else is added', strpos($css, '.cc-pkg-pull-quote{') === 0 && strpos($css, '{{BASE_URL}}canvascore-blocks/pull-quote/quote.svg') !== false && strpos($css, '__ASSETS__') === false && substr_count($css, '.cc-pkg-') === 1 && substr($css, -2) === "}\n" && strpos($css, '{&.pq {') !== false, json_encode($css));
+$pl = cc_pkg_editor_payload();
+check('the editor gets the enabled packages: definition, catalog, defaults and the style sheet', count($pl['packages']) === 1 && $pl['packages'][0]['blocks'][0]['type'] === $T && $pl['packages'][0]['blocks'][0]['catalog']['label'] === 'Pull Quote'
+    && ($pl['packages'][0]['blocks'][0]['defaults']['content']['author'] ?? '') === 'Steve Jobs' && $pl['css'] === $css && !isset($pl['packages'][0]['blocks'][0]['definition']['_ast']));
+$r = cc_pkg_install($zip1);
+check('the same version again is refused (upload a newer one, or remove it first)', empty($r['success']) && stripos(implode(' ', $r['errors']), 'already installed') !== false);
+$up = $mutant(function ($f, $b, $m) { $m['version'] = '1.1.0'; $b['catalog']['label'] = 'Pull Quote 2'; return [$f, $b, $m]; });
+$r = cc_pkg_install($up);
+check('a newer version replaces it (and keeps it enabled)', !empty($r['success']) && (cc_pkg_registry()['pull-quote']['version'] ?? '') === '1.1.0' && (cc_pkg_load('pull-quote')['blocks'][0]['catalog']['label'] ?? '') === 'Pull Quote 2');
+cc_pkg_set_enabled('pull-quote', false); cc_block_defs(true);
+check('switched off, its blocks are not published and its CSS is left out', strpos(render_block(['id' => 'q1', 'type' => $T, 'content' => []]), 'Unknown element') !== false && cc_pkg_css() === '' && cc_pkg_editor_payload()['packages'] === []);
+cc_pkg_set_enabled('pull-quote', true); cc_block_defs(true);
+$mem = new PDO('sqlite::memory:'); $mem->exec("CREATE TABLE pages (id TEXT, content_json TEXT)");
+$mem->prepare("INSERT INTO pages VALUES ('p1', ?)")->execute([json_encode([['id' => 'a', 'type' => $T, 'content' => []]])]);
+check('the admin sees where a package is used', cc_pkg_info($mem)[0]['used'] === 1 && cc_pkg_info($mem)[0]['blocks'][0]['type'] === $T);
+cc_pkg_remove('pull-quote'); cc_block_defs(true);
+check('removing it deletes its files and its images and takes its blocks off', !is_dir($pt . '/data/packages/pull-quote') && !is_dir($pt . '/site/canvascore-blocks/pull-quote') && cc_pkg_registry() === [] && strpos(render_block(['id' => 'q1', 'type' => $T, 'content' => []]), 'Unknown element') !== false);
+
+echo "\nBLOCK PACKAGES: WHAT IS REFUSED\n";
+$tpl = function ($mut) use ($mutant) { return $mutant(function ($f, $b, $m) use ($mut) { $b['template'] = $mut($b['template']); return [$f, $b, $m]; }); };
+check('a <script> in a template', $refused($tpl(function ($t) { $t[] = '<script>alert(1)</script>'; return $t; }), '<script>') === true);
+check('a <style> in a template (CSS goes in style.css)', $refused($tpl(function ($t) { $t[] = '<style>body{display:none}</style>'; return $t; }), '<style>') === true);
+check('an event attribute written in a template', $refused($tpl(function ($t) { $t[0] = str_replace('<figure ', '<figure onclick="x()" ', $t[0]); return $t; }), 'event attribute') === true);
+check('an active address written in a template', $refused($tpl(function ($t) { $t[] = '<a href="java&#115;cript:alert(1)">x</a>'; return $t; }), 'active address') === true);
+check('an <iframe> or a <form>', $refused($tpl(function ($t) { $t[] = '<iframe src="https://x.example"></iframe>'; return $t; }), '<iframe>') === true && $refused($tpl(function ($t) { $t[] = '<form action="https://x.example"></form>'; return $t; }), '<form>') === true);
+check('a template without {{_id}} and {{_classes}}', $refused($tpl(function ($t) { return ['<div>{{quote}}</div>']; }), '{{_id}}') === true);
+check('a template that does not parse', $refused($tpl(function ($t) { $t[] = '{{#open}}'; return $t; }), 'not closed') === true);
+check('a script for the block', $refused($mutant(function ($f, $b, $m) { $b['script'] = 'progress'; return [$f, $b, $m]; }), 'no script') === true);
+$set = function ($key, $v) use ($mutant) { return $mutant(function ($f, $b, $m) use ($key, $v) { $b['settings'][$key] = $v; return [$f, $b, $m]; }); };
+check('a code setting (raw HTML)', $refused($set('x', ['type' => 'code']), 'code setting') === true);
+check('a panel widget', $refused($set('x', ['type' => 'text', 'control' => 'widget:hotspotPins']), 'widgets are not available') === true);
+check('an unknown transform', $refused($set('x', ['type' => 'text', 'transform' => 'evil']), 'unknown transform') === true);
+check('a regular expression that could take forever', $refused($set('x', ['type' => 'text', 'pattern' => '^(a+)+$']), 'safe regular expression') === true);
+check('a repeat text that carries a script', $refused($set('x', ['type' => 'number', 'transform' => 'repeat', 'text' => '<script>x</script>']), '<script>') === true);
+check('option data that carries an event attribute', $refused($set('x', ['type' => 'enum', 'default' => 'a', 'options' => [['value' => 'a', 'data' => ['h' => '<i onclick=x()>']]]]), 'event attribute') === true);
+$leak = $mutant(function ($f, $b, $m) { $b['settings']['page'] = ['type' => 'text', 'default' => '', 'label' => 'Page']; $b['template'][] = '<a href="{{page}}">go</a>'; unset($b['tests']); return [$f, $b, $m]; });
+check('a text that ends up in an address unchecked (found by the hostile-value fuzz)', $refused($leak, 'runs code') === true);
+$leak2 = $mutant(function ($f, $b, $m) { $b['settings']['u'] = ['type' => 'text', 'default' => '']; $b['template'][] = '<div {{u}}>x</div>'; unset($b['tests']); return [$f, $b, $m]; });
+check('a text placed inside a tag (an event attribute can be added)', $refused($leak2, 'onmouseover attribute') === true, (string)$refused($leak2, 'onmouseover attribute'));
+check('a failing test of the author', $refused($mutant(function ($f, $b, $m) { $b['tests'][] = ['name' => 'nope', 'content' => [], 'contains' => ['never there']]; return [$f, $b, $m]; }), 'never there') === true);
+$css2 = function ($css) use ($exFiles, $pkgZip) { $f = $exFiles(); $f['style.css'] = $css; return $pkgZip($f, 'css.zip'); };
+check('CSS with @import', $refused($css2('@import url(https://evil.example/x.css);'), '@import') === true || $refused($css2('@import url(https://evil.example/x.css);'), 'import') === true);
+check('CSS with an external image', $refused($css2('.a{background:url(https://evil.example/t.png)}'), 'url()') === true);
+check('CSS with an escape or an at-rule that cannot be nested', $refused($css2('.a{color:\\72 ed}'), 'backslash') === true && $refused($css2('@keyframes x{from{opacity:0}to{opacity:1}}'), '@keyframes') === true);
+check('CSS that would reach outside the block: & in the middle, & + sibling, a leading +, :has(&)', $refused($css2('html:has(&){display:none}'), '& anywhere but at its start') === true && $refused($css2('body &{color:red}'), '& anywhere') === true
+    && $refused($css2('& + .x{color:red}'), 'siblings') === true && $refused($css2('&.a ~ .b{color:red}'), 'siblings') === true && $refused($css2('+ .x{color:red}'), 'neighbours') === true && $refused($css2('.a:not(&){color:red}'), '& anywhere') === true
+    && $refused($css2('@media (min-width:1px){html:has(&){display:none}}'), '& anywhere') === true);
+check('CSS rules that stay inside are accepted: &, &.class, & .child, & > .child, child + sibling, pseudo-elements, @media', ($r = cc_pkg_css_problem("&{color:red} &.pq:hover::before{content:'x'} & .a{color:red} & > .b{color:red} .c + .d{color:red} .e:has(~ .f){color:red} @media (max-width:600px){&.pq{color:red} .g{color:red}}")) === null, (string)$r);
+check('CSS with active content', $refused($css2('.a{width:expression(alert(1))}'), 'active') === true);
+$files = function ($extra) use ($exFiles, $pkgZip) { return $pkgZip($extra($exFiles()), 'f.zip'); };
+check('a file that is not part of a package', $refused($files(function ($f) { $f['evil.php'] = '<?php echo 1;'; return $f; }), 'evil.php') === true);
+check('a path that climbs out of the package', $refused($files(function ($f) { $f['assets/../../evil.png'] = 'x'; return $f; }), 'not allowed') === true);
+check('an image that is not an image', $refused($files(function ($f) { $f['assets/fake.png'] = '<?php echo 1;'; return $f; }), 'valid image') === true);
+check('an SVG with a script', $refused($files(function ($f) { $f['assets/bad.svg'] = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'; return $f; }), 'safe SVG') === true);
+check('a package that is not a ZIP', ($r = cc_pkg_install(__FILE__)) && empty($r['success']) && stripos(implode(' ', $r['errors']), 'ZIP') !== false);
+check('a package for a newer CanvasCore', $refused($mutant(function ($f, $b, $m) { $m['minVersion'] = '9.0.0'; return [$f, $b, $m]; }), 'needs CanvasCore 9.0.0') === true);
+check('a bad package id', $refused($mutant(function ($f, $b, $m) { $m['id'] = '../x'; return [$f, $b, $m]; }), 'id must') === true);
+check('nothing was installed by all those refusals', cc_pkg_registry() === [] && !is_dir($pt . '/data/packages/pull-quote') && !is_dir($pt . '/site/canvascore-blocks/pull-quote'));
+
+echo "\nBLOCK PACKAGES: RICH TEXT IS CLEANED WHEN SAVED\n";
+$rich = $pkgZip([
+    'package.json' => json_encode(['id' => 'rt', 'name' => 'Rich', 'version' => '1.0.0']),
+    'blocks/note.json' => json_encode(['name' => 'note', 'catalog' => ['label' => 'Note'],
+        'settings' => ['body' => ['type' => 'richtext', 'default' => ''], 'rows' => ['type' => 'list', 'item' => ['cell' => ['type' => 'richtext', 'default' => '']]], 'tips' => ['type' => 'list', 'of' => ['type' => 'richtext']]],
+        'template' => ['<div id="{{_id}}" class="n{{_classes}}">{{{body}}}{{#rows}}<p>{{{cell}}}</p>{{/rows}}{{#tips}}<i>{{{.}}}</i>{{/tips}}</div>']]),
+], 'rich.zip');
+check('a package with rich text installs', !empty(cc_pkg_install($rich)['success'])); cc_block_defs(true);
+$blocks = [['id' => 'n', 'type' => 'X_RT__NOTE', 'content' => ['body' => '<p onclick="x()">Hi<script>bad()</script></p>', 'rows' => [['cell' => '<img src=x onerror=a()>'], 'junk'], 'tips' => ['<b onmouseover=x>t</b>', ['arr']]]]];
+cc_sanitize_blocks($blocks);
+$j = json_encode($blocks);
+check('its rich text settings are cleaned when saved (a field, a list field, a list of texts)', strpos($j, 'onclick') === false && strpos($j, 'script') === false && strpos($j, 'onerror') === false && strpos($j, 'onmouseover') === false && strpos($j, 'Hi') !== false, $j);
+check('…and when rendered', ($o = render_block(['id' => 'n', 'type' => 'X_RT__NOTE', 'content' => ['body' => '<p onclick="x()">Hi</p><script>bad()</script>']])) && strpos($o, 'onclick') === false && strpos($o, '<script') === false && strpos($o, 'Hi') !== false);
+unset($GLOBALS['CC_PACKAGES_DIR'], $GLOBALS['CC_SITE_ROOT'], $GLOBALS['CC_PKG_APP_VERSION']); cc_block_defs(true);
+cc_backup_rrmdir($pt);
+
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);

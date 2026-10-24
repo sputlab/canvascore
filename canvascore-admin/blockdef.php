@@ -14,8 +14,9 @@ if (!function_exists('array_is_list')) {
 final class CcTrusted { public $h; function __construct($h) { $this->h = (string)$h; } }
 
 // Every definition in blocks/, by type. A file that can't be read or parsed is left out (and logged).
-function cc_block_defs() {
+function cc_block_defs($reset = false) {
     static $defs = null;
+    if ($reset) $defs = null;
     if ($defs !== null) return $defs;
     $defs = [];
     foreach (glob(__DIR__ . '/blocks/*.json') ?: [] as $f) {
@@ -25,6 +26,8 @@ function cc_block_defs() {
         catch (Throwable $e) { error_log('CanvasCore: block definition ' . basename($f) . ': ' . $e->getMessage()); continue; }
         $defs[$d['type']] = $d;
     }
+    // the blocks of the installed block packages (blockpkg.php); a core block is never replaced
+    if (function_exists('cc_pkg_defs')) { try { $defs += cc_pkg_defs(); } catch (Throwable $e) { error_log('CanvasCore block packages: ' . $e->getMessage()); } }
     return $defs;
 }
 function cc_block_def($type) { $d = cc_block_defs(); return is_string($type) && isset($d[$type]) ? $d[$type] : null; }
@@ -367,8 +370,10 @@ function cc_render_def_block(array $def, array $block, $innerId) {
     $script = '';
     $fn = CC_TPL_SCRIPTS[$def['script'] ?? ''] ?? null;
     if ($fn) $script = $fn($innerId, $values);
-    $builtIn = ['_id' => $innerId, '_classes' => cc_effect_classes($styles, $content) . ($custom !== '' ? ' ' . $custom : ''),
+    $pkg = $def['_pkg'] ?? '';   // a block of a package: its own class scopes the package's CSS, its images have an address
+    $builtIn = ['_id' => $innerId, '_classes' => cc_effect_classes($styles, $content) . ($custom !== '' ? ' ' . $custom : '') . ($pkg !== '' ? ' cc-pkg-' . $pkg : ''),
         '_style' => new CcTrusted(build_inline_style($rootStyles)), '_field' => $field, '_script' => new CcTrusted($script),
-        '_lb' => new CcTrusted('{'), '_rb' => new CcTrusted('}'), '_base' => new CcTrusted('{{BASE_URL}}'), '_editing' => false];
+        '_lb' => new CcTrusted('{'), '_rb' => new CcTrusted('}'), '_base' => new CcTrusted('{{BASE_URL}}'), '_editing' => false,
+        '_assets' => new CcTrusted($pkg !== '' ? '{{BASE_URL}}canvascore-blocks/' . $pkg . '/' : '')];
     return cc_tpl_render($def['_ast'], [$builtIn, $values]);
 }

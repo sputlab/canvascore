@@ -49,6 +49,11 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('media_usage')) return new Response(JSON.stringify({ success: true, usage: { 'sky.jpg': ['Page: Home'] } }));
   if (u.includes('delete_media')) { const b = JSON.parse(init.body); return new Response(JSON.stringify({ success: true, deleted: b.names.length, message: `${b.names.length} images deleted.` })); }
   if (u.includes('upload_media')) return new Response(JSON.stringify({ success: true, url: '/uploads/123_new-icon.png' }));
+  if (u.includes('pkg_info')) return new Response(JSON.stringify({ success: true, zip: true, demo: false, max_mb: 5, packages: PKGS }));
+  if (u.includes('pkg_install')) { PKG_INSTALLS.push(init.body.get('package').name); return new Response(JSON.stringify(PKG_NEXT)); }
+  if (u.includes('pkg_set_enabled')) { const b = JSON.parse(init.body); PKG_CALLS.push(['enable', b]); const p = PKGS.find((x) => x.id === b.id); if (p) p.enabled = b.enabled; return new Response(JSON.stringify({ success: true, packages: PKGS })); }
+  if (u.includes('pkg_remove')) { const b = JSON.parse(init.body); PKG_CALLS.push(['remove', b]); PKGS.splice(PKGS.findIndex((x) => x.id === b.id), 1); return new Response(JSON.stringify({ success: true, packages: PKGS })); }
+  if (u.includes('pkg_list')) return new Response(JSON.stringify({ success: true, packages: [], css: '' }));
   if (u.includes('update_info')) return new Response(JSON.stringify({ success: true, current: '0.21.0', demo: false, last_check: null,
     requirements: [{ id: 'sodium', label: 'Signature check (PHP sodium extension)', ok: true }, { id: 'zip', label: 'ZIP packages (PHP zip extension)', ok: true }],
     history: [{ at: 1791900000, from: '0.20.0', to: '0.21.0', by: 'ann', result: 'updated', message: 'ok' }] }));
@@ -112,6 +117,9 @@ const BACKUPS = [
 ];
 const BACKUP_OPTS = [];
 const UPDATE_INSTALLS = [];
+const PKG_INSTALLS = []; const PKG_CALLS = [];
+const PKGS = [{ id: 'pull-quote', name: 'Pull Quote', version: '1.0.0', author: 'Ann', description: 'A quote block.', license: 'CC0-1.0', enabled: true, valid: true, blocks: [{ type: 'X_PULL_QUOTE__PULL_QUOTE', name: 'pull-quote', label: 'Pull Quote' }], used: 2 }];
+let PKG_NEXT = { success: false, message: 'The package was not installed.', errors: ['blocks/x.json: template: it uses <script>', 'assets/a.png is not a valid image'] };
 const LONG_COL = 'Recipes and seasonal stories from our kitchen, collected over many many years';
 const COLS = [{ id: 'c1', name: 'Blog', slug: 'blog' }, { id: 'c2', name: LONG_COL, slug: 'recipes' }];
 const ITEMS = [
@@ -158,7 +166,7 @@ try {
   mount(React.createElement(AdminLayout, null, React.createElement('p', null, 'child')));
   const nav = await waitFor(() => $('nav.ui-nav'));
   check('sections: Pages, Collections, Templates, Media, Menu, Global Options', ['Pages', 'Collections', 'Templates', 'Media', 'Menu', 'Global Options'].every((l) => btn(l, nav)));
-  check('admins also see Submissions, Accounts, Backup and Updates', ['Submissions', 'Accounts', 'Backup', 'Updates'].every((l) => btn(l, nav)));
+  check('admins also see Submissions, Accounts, Backup, Updates and Block packages', ['Submissions', 'Accounts', 'Backup', 'Updates', 'Block packages'].every((l) => btn(l, nav)));
   check('the current section is marked (aria-current)', btn('Pages', nav).getAttribute('aria-current') === 'page');
   click(btn('Media', nav));
   check('clicking a section opens it', st().currentView === 'media');
@@ -168,7 +176,7 @@ try {
   check('user, logout and version in the sidebar', /ann/.test($('.ui-sidebar__foot').textContent) && !!$('[aria-label="Log out"]') && !!$('[aria-label="Change your password"]') && /CanvasCore v/.test($('.ui-sidebar__foot').textContent));
   useStore.setState({ userRole: 'editor' });
   await sleep(30);
-  check('editors do not see the administration group', !btn('Accounts', $('nav.ui-nav')) && !btn('Backup', $('nav.ui-nav')) && !btn('Updates', $('nav.ui-nav')));
+  check('editors do not see the administration group', !btn('Accounts', $('nav.ui-nav')) && !btn('Backup', $('nav.ui-nav')) && !btn('Updates', $('nav.ui-nav')) && !btn('Block packages', $('nav.ui-nav')));
 
   console.log('\nPAGES');
   useStore.setState({ currentView: 'manager', userRole: 'admin', pages: PAGES });
@@ -742,6 +750,43 @@ try {
     check('…then installs the version that was shown', UPDATE_INSTALLS.length === 1 && UPDATE_INSTALLS[0].version === '0.22.0', JSON.stringify(UPDATE_INSTALLS));
     check('a rolled-back update shows what happened, step by step', !!res && /rolled back/.test(res.textContent) && $$('li[data-ok="false"]', res).length === 1 && $$('li', res).length === 4 && !btnHas('Reload the editor'), res && res.textContent);
     check('…and the history records it', /Rolled back/.test($('[aria-label="Update history"]').textContent));
+  }
+
+  console.log('\nBLOCK PACKAGES (admin page)');
+  {
+    useStore.setState({ currentView: 'packages', userRole: 'admin' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/BlockPackages.jsx')).default)));
+    const list = await waitFor(() => $('[aria-label="Installed packages"]'));
+    check('the page lists the installed packages with their blocks, author, licence and where they are used', !!list && /Pull Quote/.test(list.textContent) && /1\.0\.0/.test(list.textContent) && /Ann/.test(list.textContent) && /1 block: Pull Quote/.test(list.textContent) && /CC0-1\.0/.test(list.textContent) && /used in 2 places/.test(list.textContent) && /On/.test(list.textContent));
+    const file = $('input[type="file"]'); const F = globalThis.File || w.File;
+    Object.defineProperty(file, 'files', { configurable: true, value: [new F([new Uint8Array(10)], 'evil.zip', { type: 'application/zip' })] });
+    file.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const dlg = await waitFor(() => $('[role="alertdialog"]'));
+    check('installing asks first, saying to install only packages from people you trust', !!dlg && /Install "evil\.zip"\?/.test(dlg.textContent) && /people you trust/.test(dlg.textContent));
+    click(btn('Install the package', dlg));
+    const bad = await waitFor(() => $('[aria-label="Problems found"]'));
+    check('a refused package shows every problem the server found, and the file was sent', PKG_INSTALLS.join() === 'evil.zip' && !!bad && $$('li', bad).length === 2 && /<script>/.test(bad.textContent) && /not a valid image/.test(bad.textContent) && /was not installed/.test($('.cc-backup-result--error').textContent));
+    PKG_NEXT = { success: true, message: '"Quote 2" 1.0.0 is installed: 1 block.', errors: [], id: 'quote-2', types: ['X_QUOTE_2__Q'] };
+    PKGS.push({ id: 'quote-2', name: 'Quote 2', version: '1.0.0', author: '', description: '', license: '', enabled: true, valid: true, blocks: [], used: 0 });
+    Object.defineProperty(file, 'files', { configurable: true, value: [new F([new Uint8Array(10)], 'good.zip', { type: 'application/zip' })] });
+    file.dispatchEvent(new w.Event('change', { bubbles: true }));
+    click(btn('Install the package', await waitFor(() => $('[role="alertdialog"]'))));
+    const ok = await waitFor(() => $('.cc-backup-result:not(.cc-backup-result--error)'));
+    await waitFor(() => /Quote 2/.test(($('[aria-label="Installed packages"]') || {}).textContent || ''));
+    check('an installed package is confirmed and appears in the list', !!ok && /is installed/.test(ok.textContent) && /Quote 2/.test($('[aria-label="Installed packages"]').textContent) && $$('li[data-package]').length === 2);
+    const row = () => $('li[data-package="pull-quote"]');
+    click(row().querySelector('input[type="checkbox"]'));
+    await waitFor(() => PKG_CALLS.length);
+    check('the switch turns a package off (and says what that means)', JSON.stringify(PKG_CALLS[0]) === '["enable",{"id":"pull-quote","enabled":false}]' && PKGS[0].enabled === false);
+    await waitFor(() => /Off/.test(row().textContent));
+    check('…and the list shows it as Off', /Off/.test(row().textContent));
+    click(row().querySelector('[aria-label="Remove Pull Quote"]'));
+    const rd = await waitFor(() => $('[role="alertdialog"]'));
+    check('removing asks first and says how many places use its blocks', !!rd && /Remove "Pull Quote"\?/.test(rd.textContent) && /2 saved pages, items or templates use its blocks/.test(rd.textContent) && /installed again/.test(rd.textContent));
+    click(btn('Remove', rd));
+    await waitFor(() => PKG_CALLS.length > 1);
+    await waitFor(() => !row());
+    check('…then removes it', JSON.stringify(PKG_CALLS[1]) === '["remove",{"id":"pull-quote"}]' && !row());
   }
 
   console.log('\nSTYLES PER DEVICE');

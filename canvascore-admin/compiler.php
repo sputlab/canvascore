@@ -4,6 +4,7 @@
 if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/blockdef.php';
+require_once __DIR__ . '/blockpkg.php';
 
 // Registry of the forms collected during the build (formId => recipient email)
 function &cc_form_registry() { static $r = []; return $r; }
@@ -1813,7 +1814,14 @@ function cc_render_block_body($block) {
     }
 
     // A block with a shared definition (blocks/) is rendered from it, here and in the editor
-    if ($def = cc_block_def($block['type'])) { $h = cc_render_def_block($def, $block, $innerId); return $h === null ? '' : $customCss . $h; }
+    if ($def = cc_block_def($block['type'])) {
+        // a block of a package can never stop a publish: a faulty one is left out
+        if (isset($def['_pkg'])) {
+            try { $h = cc_render_def_block($def, $block, $innerId); }
+            catch (Throwable $e) { error_log('CanvasCore block package ' . $def['_pkg'] . ': ' . $e->getMessage()); return "<!-- Block error: " . preg_replace('/[^A-Za-z0-9_]/', '', (string)$block['type']) . " -->\n"; }
+        } else $h = cc_render_def_block($def, $block, $innerId);
+        return $h === null ? '' : $customCss . $h;
+    }
 
     $childrenHtml = '';
     if (isset($block['children']) && is_array($block['children'])) {

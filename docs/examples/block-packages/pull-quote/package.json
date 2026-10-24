@@ -1,0 +1,9 @@
+{
+  "id": "pull-quote",
+  "name": "Pull Quote",
+  "version": "1.0.0",
+  "author": "CanvasCore examples",
+  "description": "A pull quote with an author, a role, an avatar and an optional source link. Example of a block package.",
+  "license": "CC0-1.0",
+  "minVersion": "0.22.0"
+}

@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
-if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install']) && !$is_admin) {
+if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove']) && !$is_admin) {
     echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
@@ -1265,6 +1265,42 @@ if ($action === 'update_install' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $res = cc_update_install($pdo, $want, (string)($account['username'] ?? ''));
     $res['history'] = cc_update_history();
     echo json_encode($res); exit;
+}
+
+// ---------------------------------------------------------------------------
+// Block packages (blockpkg.php): third-party blocks installed from a ZIP. Everyone signed in reads the enabled ones
+// (the editor registers them); only admins list, install, switch and remove them.
+// ---------------------------------------------------------------------------
+if ($action === 'pkg_list') {
+    echo json_encode(['success' => true] + cc_pkg_editor_payload()); exit;
+}
+if ($action === 'pkg_info') {
+    echo json_encode(['success' => true, 'zip' => class_exists('ZipArchive'), 'demo' => cc_demo_on(), 'max_mb' => CC_PKG_MAX_ZIP / 1048576, 'packages' => cc_pkg_info($pdo)]); exit;
+}
+if ($action === 'pkg_install' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    session_write_close();
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Packages are turned off in the demo.', 'errors' => []]); exit; }
+    $f = $_FILES['package'] ?? null;
+    if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) {
+        echo json_encode(['success' => false, 'message' => 'The package did not arrive' . (in_array($f['error'] ?? null, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) ? ' (larger than this server accepts)' : '') . '. Try again.', 'errors' => []]); exit;
+    }
+    $res = cc_pkg_install($f['tmp_name'], (string)($account['username'] ?? ''));
+    cc_block_defs(true);
+    echo json_encode($res); exit;
+}
+if ($action === 'pkg_set_enabled' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Packages are turned off in the demo.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    if (!cc_pkg_set_enabled((string)($d['id'] ?? ''), !empty($d['enabled']))) { echo json_encode(['success' => false, 'message' => 'Package not found.']); exit; }
+    cc_block_defs(true);
+    echo json_encode(['success' => true, 'packages' => cc_pkg_info($pdo)]); exit;
+}
+if ($action === 'pkg_remove' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Packages are turned off in the demo.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    if (!cc_pkg_remove((string)($d['id'] ?? ''))) { echo json_encode(['success' => false, 'message' => 'Package not found.']); exit; }
+    cc_block_defs(true);
+    echo json_encode(['success' => true, 'message' => 'Package removed.', 'packages' => cc_pkg_info($pdo)]); exit;
 }
 
 if ($action === 'export_site') {

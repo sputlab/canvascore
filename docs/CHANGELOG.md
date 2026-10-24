@@ -10,6 +10,31 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **Block packages** (Administration › **Block packages**, admins): third-party blocks installed from a ZIP. A package holds
+  `package.json`, one `blocks/<name>.json` per block (a block definition: settings, template and panel, with the block's
+  catalog entry, its defaults and its own tests), an optional `style.css` and images in `assets/`. Its blocks appear in the
+  Add panel under **Block packages**, get their Content panel generated from the definition, and are rendered by the same two
+  engines as the core blocks, so the canvas and the published page match.
+  - **Sandboxed by construction.** A package holds no code that runs: no script, no server code, no `code` settings, no panel
+    widgets. Templates can't contain `<script>`, `<style>`, frames, forms, event attributes or active addresses; only the
+    engine's known transforms are available; text is escaped, rich text is sanitized (also when saved), addresses go through
+    the same checks as core blocks.
+  - **Checked on install**, and refused with every reason listed: the layout, sizes and file names of the ZIP (no links, no
+    `..`, nothing but a package's files), the manifest and every definition, the HTML written in the templates, the style
+    sheet, every image (SVG through the SVG check), the package's own tests, and a **hostile-value fuzz**: hostile text,
+    addresses, arrays and numbers are typed into every setting and the rendered HTML is parsed: a script, an event attribute
+    or an active address in the output refuses the package.
+  - **Scoped CSS.** `style.css` is nested under the package's own class (`.cc-pkg-<id>{ … }`): a plain selector is something
+    inside the block and `&` is the block itself. Selectors that could reach outside it (`html:has(&)`, `& + .x`, `body &`) are
+    refused, as are `@import`, escapes and external `url()`; images are written `url(__ASSETS__/file.png)`.
+  - Installed packages live in the data folder (`packages/<id>/`); their images are copied to `canvascore-blocks/<id>/` in the
+    site (a reserved address). A newer version replaces an older one; a package can be switched off (its blocks leave the
+    published pages but stay saved) or removed, and the page shows where its blocks are used. A faulty package block is left
+    out of a page instead of stopping a publish, and a package can never replace a core block.
+  - **Developer tool**: `php scripts/block-package.php check <folder|zip>` runs the install checks; `… pack <folder>` makes the
+    ZIP. A complete example is in `docs/examples/block-packages/pull-quote`.
+
 ## [0.21.1] - 2026-10-24 — Collection List label on the canvas
 
 ### Fixed

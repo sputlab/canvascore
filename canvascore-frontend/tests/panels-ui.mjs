@@ -311,6 +311,67 @@ try {
   addAndSelect('TEAM'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add member'));
   check('TEAM: each member card is titled with the name', $$('span').some((x) => x.textContent === content().members[0].name));
 
+  // --- block packages in the editor: registered at run time, they join the catalog, the Add panel, addBlock, the panels and the canvas
+  {
+    const { registerPackages, packageCss } = await vite.ssrLoadModule('/src/editor/blockPackages.js');
+    const cat = await vite.ssrLoadModule('/src/editor/blockCatalog.js');
+    const { contentPanelFor } = await vite.ssrLoadModule('/src/components/panel/blocks/index.js');
+    const AddBlocksPanel = (await vite.ssrLoadModule('/src/components/AddBlocksPanel.jsx')).default;
+    const exDir = path.join(PROJECT, '../docs/examples/block-packages/pull-quote');
+    const ex = JSON.parse(readFileSync(path.join(exDir, 'blocks/pull-quote.json'), 'utf8'));
+    const T = 'X_PULL_QUOTE__PULL_QUOTE';
+    const payload = {
+      packages: [{ id: 'pull-quote', name: 'Pull Quote', version: '1.0.0', blocks: [
+        { type: T, definition: { type: T, settings: ex.settings, template: ex.template, panel: ex.panel, _pkg: 'pull-quote' }, catalog: ex.catalog, defaults: ex.defaults },
+        { type: 'X_PULL_QUOTE__PIC', definition: { type: 'X_PULL_QUOTE__PIC', settings: { alt: { type: 'text', default: '' } }, template: '<div id="{{_id}}" class="pic{{_classes}}"><img src="{{_assets}}pic.png" alt="{{alt}}"></div>', panel: [{ title: 'Picture', keys: ['alt'], open: true }], _pkg: 'pull-quote' },
+          catalog: { label: 'Picture', icon: 'NoSuchIcon', keywords: 'photo' }, defaults: [] },
+      ] }],
+      css: '.cc-pkg-pull-quote{&.pq {color:red}}\n',
+    };
+    check('before a package is registered its block is just an unknown type (not in the catalog)', !cat.searchBlocks('pull quote').some((b) => b.type === T) && cat.blockInfo(T).category === undefined);
+    const v0 = st().packagesVersion;
+    registerPackages(payload);
+    check('registering packages tells the editor to redraw', st().packagesVersion === v0 + 1);
+    const info = cat.blockInfo(T);
+    check('a package block gets its catalog entry: name, "Block packages" group, colour', info.label === 'Pull Quote' && info.category === 'packages' && info.color === '#f59e0b' && cat.CATEGORIES.some((c) => c.id === 'packages'));
+    check('…an icon that is not on the list becomes the package icon, and search finds it by its keywords', cat.blockInfo('X_PULL_QUOTE__PIC').icon === cat.PACKAGE_ICONS.Package && cat.blockInfo(T).icon === cat.PACKAGE_ICONS.Quote && cat.searchBlocks('testimonial').some((b) => b.type === T) && cat.searchBlocks('photo').some((b) => b.type === 'X_PULL_QUOTE__PIC'));
+    check('the core catalog is untouched', cat.searchBlocks('callout').some((b) => b.type === 'CALLOUT') && cat.blockInfo('CALLOUT').category !== 'packages');
+    check('the package CSS is kept for the canvas', packageCss() === payload.css);
+
+    mount(React.createElement(AddBlocksPanel, { onAdd: (t) => { globalThis.__added = t; }, targetType: null }));
+    await waitFor(() => buttonByText('Pull Quote'));
+    check('the Add panel lists them in the "Block packages" group', $$('button').some((b) => /Block packages/.test(b.textContent)) && !!buttonByText('Pull Quote') && !!buttonByText('Picture'));
+    click(buttonByText('Pull Quote')); await sleep(20);
+    check('…and a click adds the block', globalThis.__added === T);
+
+    const b = addAndSelect(T);
+    check('addBlock gives a package block the defaults of its package (content and styles)', b.content.author === 'Steve Jobs' && b.content.accent === '#f59e0b' && b.styles.padding === '24px 0' && b.type === T, JSON.stringify(b));
+    check('…and an empty list of defaults is fine', addAndSelect('X_PULL_QUOTE__PIC').type === 'X_PULL_QUOTE__PIC');
+    addAndSelect(T); mount(React.createElement(PropertyPanel)); await waitFor(() => field('Quote'));
+    check('the panel is generated from the package definition: its sections and fields', ['Pull Quote', 'Pull Quote Link', 'Pull Quote Style'].every((t) => !!buttonByText(t)) && !!field('Author') && !!field('Role or source (empty = none)') && field('Quote').tagName === 'TEXTAREA');
+    setValue(field('Author'), 'Ada'); await sleep(40);
+    check('…editing a field changes the block', content().author === 'Ada');
+    click(buttonByText('Pull Quote Style')); await waitFor(() => field('Alignment'));
+    setValue(field('Alignment'), 'center'); await sleep(40);
+    check('…a choice stores its value', content().align === 'center');
+
+    addAndSelect(T);
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [st().blocks[0].id] }, React.createElement(SortableBlock, { block: st().blocks[0] }))));
+    const el = await waitFor(() => doc.querySelector('.pq.cc-pkg-pull-quote'));
+    check('the canvas draws a package block from its definition, with the package class', !!el && /Design is not just/.test(el.textContent) && !/Unknown element/.test(doc.body.innerHTML));
+    const b2 = addAndSelect('X_PULL_QUOTE__PIC');
+    mount(React.createElement(DndContext, null, React.createElement(SortableContext, { items: [b2.id] }, React.createElement(SortableBlock, { block: b2 }))));
+    const img = await waitFor(() => doc.querySelector('.pic img'));
+    check('a package\'s images are loaded from the site folder (../canvascore-blocks/ next to the admin folder)', !!img && img.getAttribute('src') === '../canvascore-blocks/pull-quote/pic.png', img && img.getAttribute('src'));
+    check('a core package-free block is not changed by any of this', contentPanelFor('CALLOUT') && contentPanelFor(T) && !contentPanelFor('X_NOPE__NOPE'));
+
+    registerPackages({ packages: [], css: '' });
+    check('registering the packages again replaces them: an uninstalled block is gone from the catalog and the panel', !cat.searchBlocks('pull quote').some((b3) => b3.type === T) && cat.blockInfo(T).category !== 'packages' && !contentPanelFor(T) && packageCss() === '');
+    registerPackages({ packages: [{ id: 'evil', name: 'Evil', version: '1.0.0', blocks: [{ type: 'CALLOUT', definition: { type: 'CALLOUT', settings: {}, template: '<b id="{{_id}}" class="{{_classes}}">x</b>', _pkg: 'evil' }, catalog: { label: 'Hacked' } }] }], css: '' });
+    check('a package can not take the place of a core block', cat.blockInfo('CALLOUT').label === 'Callout' && !cat.searchBlocks('hacked').length);
+    registerPackages({ packages: [], css: '' });
+  }
+
   addAndSelect('LOGOS'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add empty slot'));
   click(buttonByText('+ Add empty slot')); await sleep(40);
   check('LOGOS: adding an empty slot', content().logos.length === 6 && content().logos[5].src === '');

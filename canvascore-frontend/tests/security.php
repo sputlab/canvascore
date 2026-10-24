@@ -588,6 +588,67 @@ check('removing demo.json turns demo mode off', !isset((new Client())->api('bran
 $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 check('…and the next publish lets search engines in again', strpos((string)@file_get_contents($web . '/contact/index.html'), 'name="robots"') === false && strpos((string)@file_get_contents($web . '/robots.txt'), 'Allow: /') !== false);
 
+echo "\nBLOCK PACKAGES (over HTTP)\n";
+$exDir = realpath(__DIR__ . '/../../docs/examples/block-packages/pull-quote'); $PT = 'X_PULL_QUOTE__PULL_QUOTE'; $pkgN = 0;
+// a package ZIP made from the example (without its minVersion: this server runs the version being tested), changed by $edit(files, block)
+$mkPkg = function ($edit = null) use ($exDir, $T, &$pkgN) {
+    $files = [];
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($exDir, FilesystemIterator::SKIP_DOTS)) as $f) $files[str_replace('\\', '/', substr($f->getPathname(), strlen($exDir) + 1))] = file_get_contents($f->getPathname());
+    $m = json_decode($files['package.json'], true); unset($m['minVersion']); $files['package.json'] = json_encode($m);
+    $b = json_decode($files['blocks/pull-quote.json'], true);
+    if ($edit) [$files, $b] = $edit($files, $b);
+    $files['blocks/pull-quote.json'] = json_encode($b);
+    $zf = $T . '/pkg-' . (++$pkgN) . '.zip'; $z = new ZipArchive(); $z->open($zf, ZipArchive::CREATE);
+    foreach ($files as $n => $c) $z->addFromString($n, $c);
+    $z->close(); return $zf;
+};
+$upload = function ($client, $zf) { return $client->req('POST', '/canvascore-admin/api.php?action=pkg_install', ['package' => new CURLFile($zf, 'application/zip', 'p.zip')], [], false); };
+$good = $mkPkg();
+// an editor of its own for this section (the earlier editor's session may have ended)
+$own->api('add_user', ['username' => 'pkged', 'password' => 'Editor-pass-1', 'role' => 'editor']);
+$ed = new Client(); $ed->login('pkged', 'Editor-pass-1');
+$r = $ed->api('change_own_password', ['password' => 'Editor-pass-2']); if (!empty($r['json']['csrf'])) $ed->csrf = $r['json']['csrf'];
+
+check('nobody signed out can list or install packages', (new Client())->api('pkg_list')['code'] === 401 && $upload(new Client(), $good)['code'] === 401);
+$r = $upload($ed, $good);
+check('an editor can\'t install a package', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'Only admins') !== false && !is_dir($web . '/canvascore-blocks/pull-quote'), $r['body']);
+check('…nor list, switch or remove them', strpos((string)($ed->api('pkg_info')['json']['message'] ?? ''), 'Only admins') !== false && empty($ed->api('pkg_set_enabled', ['id' => 'pull-quote', 'enabled' => false])['json']['success']) && empty($ed->api('pkg_remove', ['id' => 'pull-quote'])['json']['success']));
+$r = $upload($own, $good);
+check('an admin installs a package by uploading its ZIP', !empty($r['json']['success']) && ($r['json']['types'][0] ?? '') === $PT && is_file($data . '/packages/pull-quote/blocks/pull-quote.json'), $r['body']);
+$asset = $own->req('GET', '/canvascore-blocks/pull-quote/quote.svg');
+check('its images are copied to the site, and served', $asset['code'] === 200 && strpos($asset['body'], '<svg') !== false && strpos((string)@file_get_contents($web . '/canvascore-blocks/.htaccess'), 'php') !== false);
+$pl = $ed->api('pkg_list')['json'] ?? [];
+check('editors receive the enabled packages (their blocks and the scoped CSS) for the editor', ($pl['packages'][0]['blocks'][0]['type'] ?? '') === $PT && strpos((string)($pl['css'] ?? ''), '.cc-pkg-pull-quote{') === 0);
+$info = $own->api('pkg_info')['json'] ?? [];
+check('the admin sees the package, its blocks and where it is used', ($info['packages'][0]['id'] ?? '') === 'pull-quote' && ($info['packages'][0]['enabled'] ?? null) === true && ($info['packages'][0]['used'] ?? -1) === 0 && !empty($info['zip']));
+$blk = ['id' => 'q1', 'type' => $PT, 'styles' => ['padding' => '8px'], 'content' => ['quote' => 'Hello <script>alert(1)</script>', 'author' => 'Ann', 'link' => 'javascript:alert(1)', 'linkText' => 'src']];
+$r = $ed->api('save_page', ['id' => 'p-pq', 'title' => 'PQ', 'slug' => 'pq', 'publish' => true, 'blocks' => [$blk]]);
+check('an editor can use the block on a page', !empty($r['json']['success']), $r['body']);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pq = (string)@file_get_contents($web . '/pq/index.html');
+check('the published page has the block, escaped, with no active address and no script of its own', strpos($pq, '<figure id="q1" class="pq cc-pkg-pull-quote"') !== false && strpos($pq, 'Hello &lt;script&gt;alert(1)&lt;/script&gt;') !== false && strpos($pq, 'href="javascript:') === false && strpos($pq, 'alert(1)</script>') === false, substr($pq, 0, 0));
+check('…and its CSS, confined to the package\'s class and pointing at the images of the site', strpos($pq, '.cc-pkg-pull-quote{&.pq {') !== false && strpos($pq, '/canvascore-blocks/pull-quote/quote.svg') !== false && strpos($pq, '{{BASE_URL}}') === false && strpos($pq, '{{PACKAGE_CSS}}') === false);
+$r = $own->api('save_page', ['id' => 'p-res', 'title' => 'R', 'slug' => 'canvascore-blocks', 'blocks' => []]);
+check('canvascore-blocks is a reserved address: no page can be published there', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'slug_taken', $r['body']);
+$before = json_encode(glob($data . '/packages/*'));
+$evil = $upload($own, $mkPkg(function ($f, $b) { $b['template'][] = '<script>alert(1)</script>'; $f['evil.php'] = '<?php echo 1;'; return [$f, $b]; }));
+check('a hostile package is refused with the reasons, and nothing is installed or copied', empty($evil['json']['success']) && count($evil['json']['errors'] ?? []) >= 2 && json_encode(glob($data . '/packages/*')) === $before && !is_file($web . '/evil.php'), $evil['body']);
+$r = $upload($own, __FILE__);
+check('something that is not a ZIP is refused cleanly (no server error)', $r['code'] === 200 && empty($r['json']['success']) && !empty($r['json']['errors']), $r['body']);
+$big = $T . '/big.zip'; file_put_contents($big, random_bytes(3 * 1048576)); $r = $upload($own, $big);
+check('a file that is too large is refused cleanly', $r['code'] === 200 && empty($r['json']['success']), substr($r['body'], 0, 200));
+$r = $upload($own, $good);
+check('the same version again is refused', empty($r['json']['success']) && stripos(implode(' ', $r['json']['errors'] ?? []), 'already installed') !== false);
+$r = $own->api('pkg_set_enabled', ['id' => 'pull-quote', 'enabled' => false]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pq = (string)@file_get_contents($web . '/pq/index.html');
+check('switched off, the page no longer shows the block (it stays saved) and the CSS is gone', !empty($r['json']['success']) && strpos($pq, 'cc-pkg-pull-quote') === false && strpos($pq, 'Unknown element') !== false && (($ed->api('pkg_list')['json']['packages'] ?? ['x']) === []));
+check('…the saved page still holds the block', strpos((string)db()->query("SELECT content_json FROM pages WHERE id = 'p-pq'")->fetchColumn(), $PT) !== false && (($own->api('pkg_info')['json']['packages'][0]['used'] ?? 0) >= 1));
+$own->api('pkg_set_enabled', ['id' => 'pull-quote', 'enabled' => true]);
+$r = $own->api('pkg_remove', ['id' => 'pull-quote']);
+check('an admin removes it: its files and its images go', !empty($r['json']['success']) && !is_dir($data . '/packages/pull-quote') && !is_dir($web . '/canvascore-blocks/pull-quote') && $own->req('GET', '/canvascore-blocks/pull-quote/quote.svg')['code'] === 404 && ($own->api('pkg_info')['json']['packages'] ?? ['x']) === []);
+$own->api('delete_page', ['id' => 'p-pq']); $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
 $kp = sodium_crypto_sign_keypair(); $tsk = sodium_crypto_sign_secretkey($kp);
