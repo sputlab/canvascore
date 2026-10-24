@@ -54,6 +54,11 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('pkg_set_enabled')) { const b = JSON.parse(init.body); PKG_CALLS.push(['enable', b]); const p = PKGS.find((x) => x.id === b.id); if (p) p.enabled = b.enabled; return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_remove')) { const b = JSON.parse(init.body); PKG_CALLS.push(['remove', b]); PKGS.splice(PKGS.findIndex((x) => x.id === b.id), 1); return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_list')) return new Response(JSON.stringify({ success: true, packages: [], css: '' }));
+  if (u.includes('wp_info')) return new Response(JSON.stringify({ success: true, demo: false, curl: true, xml: true, max_mb: 200, upload_mb: 64, collections: [{ id: 'col_1', name: 'News' }] }));
+  if (u.includes('wp_analyze')) { WP_CALLS.push(['analyze', init.body.get('file').name]); return new Response(JSON.stringify(WP_ANALYZE)); }
+  if (u.includes('wp_start')) { WP_CALLS.push(['start', JSON.parse(init.body)]); return new Response(JSON.stringify(WP_STEPS.shift())); }
+  if (u.includes('wp_step')) { WP_CALLS.push(['step']); return new Response(JSON.stringify(WP_STEPS.length ? WP_STEPS.shift() : { success: false, message: 'no more steps' })); }
+  if (u.includes('wp_discard')) { WP_CALLS.push(['discard', JSON.parse(init.body)]); return new Response(JSON.stringify({ success: true })); }
   if (u.includes('update_info')) return new Response(JSON.stringify({ success: true, current: '0.21.0', demo: false, last_check: null,
     requirements: [{ id: 'sodium', label: 'Signature check (PHP sodium extension)', ok: true }, { id: 'zip', label: 'ZIP packages (PHP zip extension)', ok: true }],
     history: [{ at: 1791900000, from: '0.20.0', to: '0.21.0', by: 'ann', result: 'updated', message: 'ok' }] }));
@@ -118,6 +123,9 @@ const BACKUPS = [
 const BACKUP_OPTS = [];
 const UPDATE_INSTALLS = [];
 const PKG_INSTALLS = []; const PKG_CALLS = [];
+const WP_CALLS = []; let WP_ANALYZE = { success: false, message: 'This does not look like a WordPress export file.' };
+const WP_PROG = (phase, done, finished, extra = {}) => ({ success: true, phase, finished, totals: { media: 2, pages: 1, posts: 2 }, done, created: { pages: done.pages, posts: done.posts, media: done.media, terms: 3, redirects: 0 }, failed: { media: 0, pages: 0, posts: 0 }, ...extra });
+const WP_STEPS = [];
 const PKGS = [{ id: 'pull-quote', name: 'Pull Quote', version: '1.0.0', author: 'Ann', description: 'A quote block.', license: 'CC0-1.0', enabled: true, valid: true, blocks: [{ type: 'X_PULL_QUOTE__PULL_QUOTE', name: 'pull-quote', label: 'Pull Quote' }], used: 2 }];
 let PKG_NEXT = { success: false, message: 'The package was not installed.', errors: ['blocks/x.json: template: it uses <script>', 'assets/a.png is not a valid image'] };
 const LONG_COL = 'Recipes and seasonal stories from our kitchen, collected over many many years';
@@ -787,6 +795,37 @@ try {
     await waitFor(() => PKG_CALLS.length > 1);
     await waitFor(() => !row());
     check('…then removes it', JSON.stringify(PKG_CALLS[1]) === '["remove",{"id":"pull-quote"}]' && !row());
+  }
+
+  console.log('\nWORDPRESS IMPORT (admin page)');
+  {
+    useStore.setState({ currentView: 'wpimport', userRole: 'admin' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/ImportWordPress.jsx')).default)));
+    await waitFor(() => btnHas('Choose the export'));
+    check('the page asks for the export file and says it only reads it', /nothing in your site changes until you start/.test(doc.body.textContent) && !btnHas('Start the import'));
+    const file = $('input[type="file"]'); const F = globalThis.File || w.File;
+    const pick = (name) => { Object.defineProperty(file, 'files', { configurable: true, value: [new F([new Uint8Array(10)], name, { type: 'text/xml' })] }); file.dispatchEvent(new w.Event('change', { bubbles: true })); };
+    pick('notwp.xml');
+    const err = await waitFor(() => $('[data-testid="wp-error"]'));
+    check('a file that is not an export shows the server\'s message and nothing else happens', !!err && /does not look like a WordPress export/.test(err.textContent) && !btnHas('Start the import'));
+    WP_ANALYZE = { success: true, job: '0123456789abcdef', summary: { site: { title: 'Old Shop', url: 'https://old.example.com' }, counts: { pages: 1, posts: 2, media: 2, categories: 2, tags: 1 },
+      skipped: { 'password-protected posts': 1 }, sample_pages: ['About us'], sample_posts: ['Hello world', 'Draft thoughts'] } };
+    pick('export.xml');
+    const sum = await waitFor(() => $('[data-testid="wp-summary"]'));
+    check('the summary lists what the file holds, with examples and what is left out', !!sum && /Pages \(1\)/.test(sum.textContent) && /Posts \(2\) with 2 categories and 1 tag/.test(sum.textContent) && /Pictures \(2\)/.test(sum.textContent) && /About us/.test(sum.textContent) && /1 password-protected posts/.test($('[data-testid="wp-skipped"]').textContent) && /Old Shop/.test(doc.body.textContent));
+    check('drafts are the default and forwarding is off until pages go online', $$('input[type="checkbox"]').find((c) => /drafts/.test(c.closest('label').textContent)).checked && $$('input[type="checkbox"]').find((c) => /Forward/.test(c.closest('label').textContent)).disabled);
+    check('a collection is chosen for the posts, a new one by default', !!$('select[aria-label="Collection for the posts"]') && $('select[aria-label="Collection for the posts"]').value === '' && $('input[aria-label="Name of the new collection"]').value === 'Blog');
+    click($$('input[type="checkbox"]').find((c) => /Pictures/.test(c.closest('label').textContent)));
+    WP_STEPS.push(WP_PROG('pages', { media: 0, pages: 0, posts: 0 }, false), WP_PROG('done', { media: 0, pages: 1, posts: 2 }, true, { warnings: ['shortcode [x] was left out'], collection: { id: 'c', name: 'Blog', slug: 'blog' }, published: 0 }));
+    click(btnHas('Start the import'));
+    const done = await waitFor(() => $('[data-testid="wp-result"]'), 4000);
+    const start = WP_CALLS.find((c) => c[0] === 'start');
+    check('starting sends the chosen options with the job', !!start && start[1].job === '0123456789abcdef' && start[1].options.media === false && start[1].options.drafts === true && start[1].options.posts === true, JSON.stringify(start));
+    check('the page keeps asking for steps until the server says it is finished', WP_CALLS.filter((c) => c[0] === 'step').length === 1 && !!done);
+    check('the result says what was added, that everything is a draft, and lists what to check', /1 page, 2 posts, 3 categories and tags imported/.test(done.textContent) && /Everything is a draft/.test(done.textContent) && /shortcode \[x\] was left out/.test(done.textContent));
+    click(btnHas('Import another file'));
+    await waitFor(() => btnHas('Choose the export'));
+    check('another file can be imported afterwards (the finished job is discarded)', WP_CALLS.some((c) => c[0] === 'discard' && c[1].job === '0123456789abcdef'));
   }
 
   console.log('\nSTYLES PER DEVICE');

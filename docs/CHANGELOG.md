@@ -34,6 +34,29 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
     out of a page instead of stopping a publish, and a package can never replace a core block.
   - **Developer tool**: `php scripts/block-package.php check <folder|zip>` runs the install checks; `… pack <folder>` makes the
     ZIP. A complete example is in `docs/examples/block-packages/pull-quote`.
+- **WordPress importer** (Administration › **Import from WordPress**, admins): pages, posts, categories, tags and pictures from a
+  WordPress export file (Tools › Export › All content, a `.xml`). Three steps: the file is read and summarised (nothing in the
+  site changes), you choose what to bring over, and the import runs in slices with a progress bar that can be left open.
+  - Posts become the items of a new or an existing collection, with their date, excerpt, featured picture (cover image), SEO
+    title and description (Yoast / Rank Math), and their categories and tags in the collection's Categories and Tags. Pages become
+    pages; every address is made unique (a clash with a page you already have gets `-2`). Password-protected entries, the trash and
+    other WordPress entries (menus, products, …) are left out and listed.
+  - Content is converted to blocks: paragraphs, headings, lists, quotes and tables become Text blocks; pictures Image blocks (a
+    gallery shortcode becomes its pictures); YouTube and Vimeo links and embeds Video blocks; `<pre>` Code Snippet blocks with
+    their language; rules Dividers; layout wrappers are unwrapped. Scripts, forms, other iframes and shortcodes are left out and
+    reported. Everything goes through the same cleaning as a normal save. Links between imported pages and posts point to the new
+    addresses.
+  - Pictures are copied into the Media library from the old site: only public web addresses (no private or reserved networks, no
+    credentials, usual ports; every redirect is checked again and the connection is pinned to the checked address), 25 MB each, and
+    the checks of an upload (real image, safe SVG). Without it pictures stay on the old site.
+  - Imported as **drafts** by default; optionally as published, with the old addresses forwarded to the new ones (never from an
+    address a page of the site already uses).
+  - The export file is read as a stream with no entities and no network access; a file with a document type is refused. Nothing is
+    deleted or replaced: everything is added.
+
+### Fixed
+- A link to a page chosen in the rich-text link dialog (`{{BASE_URL}}about/`) was stored with its braces percent-encoded
+  (`%7B%7BBASE_URL%7D%7D`) after a save, so the published link broke. The placeholder is now kept.
 
 ## [0.21.1] - 2026-10-24 — Collection List label on the canvas
 

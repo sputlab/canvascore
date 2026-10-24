@@ -89,7 +89,7 @@ $GLOBALS['CC_HT_ADMIN'] =
     "  Header always set Referrer-Policy \"same-origin\"\n" .
     "  Header always set Cross-Origin-Opener-Policy \"same-origin\"\n" .
     "</IfModule>\n" .
-    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|update|update-keys|update-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
+    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|update|update-keys|update-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
     "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
     "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n" .
     "</FilesMatch>\n" .
@@ -1226,7 +1226,8 @@ function cc_sanitize_html($html) {
 
     $out = '';
     foreach ($root->childNodes as $c) $out .= $dom->saveHTML($c);
-    return $out;
+    // libxml percent-encodes the braces of an address ("{{BASE_URL}}about/", what the link dialog inserts): restore the placeholder
+    return str_replace('%7B%7BBASE_URL%7D%7D', '{{BASE_URL}}', $out);
 }
 
 

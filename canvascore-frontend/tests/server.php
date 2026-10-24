@@ -647,5 +647,110 @@ check('…and when rendered', ($o = render_block(['id' => 'n', 'type' => 'X_RT__
 unset($GLOBALS['CC_PACKAGES_DIR'], $GLOBALS['CC_SITE_ROOT'], $GLOBALS['CC_PKG_APP_VERSION']); cc_block_defs(true);
 cc_backup_rrmdir($pt);
 
+echo "\nWORDPRESS IMPORT\n";
+require_once __DIR__ . '/../../canvascore-admin/wpimport.php';
+require_once __DIR__ . '/../../canvascore-admin/migrations.php';
+$wd = sys_get_temp_dir() . '/cc_wp_' . getmypid();
+@mkdir($wd, 0755, true);
+$GLOBALS['CC_WP_DIR'] = $wd . '/imports'; $GLOBALS['CC_WP_UPLOADS'] = $wd . '/uploads'; $GLOBALS['CC_WP_BASE_DIR'] = '';
+$wpdb = new PDO('sqlite:' . $wd . '/t.sqlite'); $wpdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+cc_migrate($wpdb);
+$wpdb->exec("INSERT INTO pages (id, title, slug, clean_slug, status, is_draft_copy) VALUES ('p0', 'Old about', 'about-us', 'about-us', 'published', 0)");
+$fx = __DIR__ . '/fixtures/wordpress.xml';
+$wpFetched = [];
+$GLOBALS['CC_WP_FETCH'] = function ($u) use (&$wpFetched) {
+    $wpFetched[] = $u; $t = tempnam(sys_get_temp_dir(), 'x');
+    file_put_contents($t, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
+    return [$t, ''];
+};
+$an = cc_wp_analyze($fx);
+check('the export is read: pages, posts, images, categories and tags are counted', isset($an['job']) && $an['summary']['counts'] === ['pages' => 1, 'posts' => 2, 'media' => 2, 'categories' => 2, 'tags' => 1], json_encode($an));
+check('…password-protected and trashed entries and menu items are named as skipped, not imported', isset($an['summary']['skipped']['password-protected posts']) && isset($an['summary']['skipped']['post in the trash']) && isset($an['summary']['skipped']['nav_menu_item entries']));
+check('…the site address is read', $an['summary']['site']['url'] === 'https://old.example.com' && $an['summary']['site']['title'] === 'Old Shop');
+$job = $an['job'];
+check('nothing is changed in the site by reading the file', (int)$wpdb->query("SELECT COUNT(*) FROM collection_items")->fetchColumn() === 0 && (int)$wpdb->query("SELECT COUNT(*) FROM pages")->fetchColumn() === 1);
+check('a step before the start is refused', isset(cc_wp_step($wpdb, $job)['error']));
+$st = cc_wp_start($wpdb, $job, ['drafts' => false, 'collection_name' => 'Journal']);
+check('the import starts', !empty($st['ok']), json_encode($st));
+check('…and cannot be started twice', isset(cc_wp_start($wpdb, $job, [])['error']));
+$n = 0; do { $pg = cc_wp_step($wpdb, $job, 5); $n++; } while (empty($pg['finished']) && $n < 50);
+check('the import finishes', !empty($pg['finished']) && $pg['created']['pages'] === 1 && $pg['created']['posts'] === 2 && $pg['created']['media'] === 2 && $pg['failed'] === ['media' => 0, 'pages' => 0, 'posts' => 0], json_encode($pg));
+$col = $wpdb->query("SELECT * FROM collections")->fetch(PDO::FETCH_ASSOC);
+check('the posts go to a new collection with the chosen name', $col && $col['name'] === 'Journal' && $col['slug'] === 'journal');
+$tx = $wpdb->query("SELECT slug FROM collection_taxonomies ORDER BY position")->fetchAll(PDO::FETCH_COLUMN);
+$tm = $wpdb->query("SELECT slug FROM collection_terms ORDER BY slug")->fetchAll(PDO::FETCH_COLUMN);
+check('Categories and Tags are made with their terms', $tx === ['categories', 'tags'] && $tm === ['diy', 'guides', 'news'], json_encode([$tx, $tm]));
+$pageRows = $wpdb->query("SELECT * FROM pages WHERE id != 'p0'")->fetchAll(PDO::FETCH_ASSOC);
+check('the page is added; its address does not clash with the page that was already there', count($pageRows) === 1 && $pageRows[0]['clean_slug'] === 'about-us-2' && $pageRows[0]['status'] === 'published');
+check('…its SEO title and description come from Yoast', $pageRows[0]['seo_title'] === 'About - Old Shop' && $pageRows[0]['seo_description'] === 'Who we are');
+$pb = json_decode($pageRows[0]['content_json'], true);
+$types = array_column($pb, 'type');
+check('page content: text, picture, text, divider, video and code become blocks', $types === ['TEXT', 'IMAGE', 'TEXT', 'DIVIDER', 'VIDEO', 'CODE_SNIPPET'], json_encode($types));
+check('…the picture was copied into the uploads folder and the page points to it', preg_match('#^/uploads/\d+_team\.jpg$#', $pb[1]['content']['src']) && is_file($wd . '/uploads/' . basename($pb[1]['content']['src'])) && $pb[1]['content']['alt'] === 'The team');
+check('…the caption stays as text, headings are kept', strpos($pb[2]['content']['text'], '<em>Our team</em>') !== false && strpos($pb[2]['content']['text'], '<h2>Our story</h2>') !== false);
+check('…the video is a YouTube link and the code block knows its language', $pb[4]['content']['url'] === 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' && $pb[5]['content']['language'] === 'php' && $pb[5]['content']['code'] === 'echo "hi";');
+$all = json_encode($pb);
+check('…scripts, other iframes and shortcodes are left out and reported', strpos($all, 'alert(1)') === false && strpos($all, 'evil.example') === false && strpos($all, 'contact-form') === false && in_array('shortcode [contact-form-7] was left out', $pg['warnings'], true));
+check('…a link to another imported post points to its new address, other links stay', strpos($pb[0]['content']['text'], 'href="{{BASE_URL}}journal/hello-world/"') !== false && strpos($pb[0]['content']['text'], 'href="https://elsewhere.org/x"') !== false, $pb[0]['content']['text']);
+$items = $wpdb->query("SELECT * FROM collection_items ORDER BY date")->fetchAll(PDO::FETCH_ASSOC);
+check('the posts are items, in their order, with the date, the excerpt without tags and the status', count($items) === 2 && $items[0]['slug'] === 'hello-world' && $items[0]['date'] === '2023-05-04' && $items[0]['excerpt'] === 'A short intro' && $items[0]['status'] === 'published' && $items[1]['status'] === 'draft' && $items[1]['slug'] === 'draft-thoughts');
+check('the featured picture is the cover image', preg_match('#^/uploads/\d+_team\.jpg$#', $items[0]['cover_image']) === 1);
+$tj = json_decode($items[0]['terms_json'], true);
+check('categories and tags are set on the item (one term each, in their own taxonomy)', count($tj) === 2 && count(array_merge(...array_values($tj))) === 2);
+$ib = json_decode($items[0]['content_json'], true);
+check('a post without paragraph tags is split at blank lines; the gallery becomes pictures', array_column($ib, 'type') === ['TEXT', 'IMAGE', 'IMAGE'] && substr_count($ib[0]['content']['text'], '<p>') === 2 && strpos($ib[0]['content']['text'], 'href="{{BASE_URL}}about-us-2/"') !== false, json_encode($ib[0]));
+check('a link to the imported page uses its new address', strpos($ib[0]['content']['text'], '{{BASE_URL}}about-us-2/') !== false);
+check('the old address of a published post redirects to the new one', $wpdb->query("SELECT to_path FROM redirects WHERE from_path = '/2023/05/hello-world/'")->fetchColumn() === '/journal/hello-world/' && $pg['created']['redirects'] === 1);
+check('…but never from an address a live page already uses (the new page took another address, the old one must keep showing the page that was there)', (int)$wpdb->query("SELECT COUNT(*) FROM redirects WHERE from_path = '/about-us/'")->fetchColumn() === 0 && count(array_filter($pg['warnings'], function ($w) { return strpos($w, 'no redirect was made') === 0; })) === 1, json_encode($pg['warnings']));
+check('revisions are kept for what was imported', (int)$wpdb->query("SELECT COUNT(*) FROM page_revisions")->fetchColumn() === 3);
+check('the content files of a finished job are removed', !is_file(cc_wp_job_path($job, 'posts.jsonl')) && cc_wp_discard($job) && !is_dir(cc_wp_job_path($job)));
+
+// as drafts, into an existing collection, without downloading images
+$an2 = cc_wp_analyze($fx); $wpFetched = [];
+$st = cc_wp_start($wpdb, $an2['job'], ['drafts' => true, 'media' => false, 'pages' => false, 'collection' => $col['id']]);
+$n = 0; do { $pg2 = cc_wp_step($wpdb, $an2['job'], 5); $n++; } while (empty($pg2['finished']) && $n < 50);
+$items2 = $wpdb->query("SELECT slug, status, cover_image, content_json FROM collection_items WHERE collection_id = '" . $col['id'] . "' ORDER BY updated_at, slug")->fetchAll(PDO::FETCH_ASSOC);
+check('into an existing collection, as drafts, without images, without pages', count($items2) === 4 && $wpFetched === [] && (int)$wpdb->query("SELECT COUNT(*) FROM pages")->fetchColumn() === 2 && $pg2['created']['posts'] === 2 && $pg2['published'] === 0);
+check('…addresses that exist in the collection get a number', (int)$wpdb->query("SELECT COUNT(*) FROM collection_items WHERE slug = 'hello-world-2'")->fetchColumn() === 1);
+cc_wp_discard($an2['job']);
+
+// what is refused
+$bad = function ($xml) { $f = tempnam(sys_get_temp_dir(), 'wx'); file_put_contents($f, $xml); $r = cc_wp_analyze($f); @unlink($f); return $r; };
+check('a file with a document type (XML entity tricks) is refused', isset($bad('<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY x SYSTEM "file:///etc/passwd">]><rss><channel><item><title>&x;</title></item></channel></rss>')['error']));
+check('something that is not an export is refused', isset($bad('<html><body>' . str_repeat('x', 100) . '</body></html>')['error']) && isset($bad('{"a": 1}' . str_repeat(' ', 80))['error']));
+check('broken XML is refused with a message', isset($bad('<?xml version="1.0"?><rss><channel><title>x</title><item><title>a</wp:b></item>' . str_repeat(' ', 80))['error']));
+check('an export without content is refused', isset($bad('<?xml version="1.0"?><rss xmlns:wp="http://wordpress.org/export/1.2/"><channel><title>Empty</title><link>https://a.example</link></channel></rss>' . str_repeat(' ', 40))['error']));
+check('job ids are checked (no path tricks)', cc_wp_job_id('../../etc') === '' && cc_wp_job_id('0123456789abcdef') === '0123456789abcdef' && cc_wp_job_path('../x') === '');
+foreach (['http://127.0.0.1/a.jpg', 'http://localhost/a.jpg', 'http://10.0.0.5/a.jpg', 'http://192.168.1.1/a.jpg', 'http://169.254.169.254/latest/meta-data', 'http://[::1]/a.jpg', 'ftp://example.com/a.jpg', 'file:///etc/passwd', 'http://user:pw@8.8.8.8/a.jpg', 'http://8.8.8.8:22/a.jpg', 'gopher://8.8.8.8/x', 'javascript:alert(1)', '//8.8.8.8/a.jpg', 'http://0.0.0.0/a.jpg', 'http://100.64.0.1/a.jpg'] as $u) {
+    check("images are not downloaded from $u", cc_wp_url_check($u)[0] === false);
+}
+$GLOBALS['CC_WP_RESOLVE'] = function ($h) { return $h === 'rebind.example' ? ['127.0.0.1'] : ['93.184.216.34']; };
+check('a name that resolves to a private address is refused; a public one passes', cc_wp_url_check('https://rebind.example/a.jpg')[0] === false && cc_wp_url_check('https://cdn.example/a.jpg') === [true, '93.184.216.34']);
+unset($GLOBALS['CC_WP_RESOLVE']);
+$tmpf = tempnam(sys_get_temp_dir(), 'im');
+file_put_contents($tmpf, '<?php echo 1;');
+check('a download that is not an image is not stored (PHP renamed to .jpg)', cc_wp_store_image($tmpf, 'https://a.example/x.jpg', $wd . '/uploads', '')[0] === null);
+check('…nor a file of a type the library refuses (.php, .html)', cc_wp_store_image($tmpf, 'https://a.example/x.php', $wd . '/uploads', '')[0] === null && cc_wp_store_image($tmpf, 'https://a.example/x.html', $wd . '/uploads', '')[0] === null);
+file_put_contents($tmpf, '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+check('…nor an SVG with a script', cc_wp_store_image($tmpf, 'https://a.example/x.svg', $wd . '/uploads', '')[0] === null);
+file_put_contents($tmpf, '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1"/></svg>');
+check('…a plain SVG is fine', preg_match('#^/uploads/\d+_x\.svg$#', cc_wp_store_image($tmpf, 'https://a.example/x.svg', $wd . '/uploads', '')[0]) === 1);
+@unlink($tmpf);
+// content conversion on its own
+$cv = function ($h) { return cc_wp_blocks($h, ['media' => function ($u) { return null; }, 'link' => function ($u) { return null; }, 'warn' => function () {}]); };
+$b = $cv('<p>One</p><p><img src="https://a.example/p.jpg" alt="x"></p><ul><li>a</li></ul><blockquote>q</blockquote><table><tr><td>c</td></tr></table>');
+check('lists, quotes and tables stay in the text; a picture alone in a paragraph is an Image block', array_column($b, 'type') === ['TEXT', 'IMAGE', 'TEXT'] && strpos($b[2]['content']['text'], '<ul>') !== false && strpos($b[2]['content']['text'], '<table>') !== false);
+$b = $cv('<div class="wp-block-group"><div><p>Deep</p></div></div>');
+check('wrapper divs of layout blocks are unwrapped', count($b) === 1 && $b[0]['content']['text'] === '<p>Deep</p>');
+$b = $cv('<p onclick="x()">Hi <img src=x onerror=alert(1)></p><a href="javascript:alert(1)">bad</a>');
+cc_sanitize_blocks($b);
+check('imported content is cleaned like a normal save (event attributes, javascript: links)', strpos(json_encode($b), 'onclick') === false && strpos(json_encode($b), 'onerror') === false && strpos(json_encode($b), 'javascript:') === false, json_encode($b));
+check('empty content gives no blocks', $cv('') === [] && $cv('<p>&nbsp;</p>') === [] && $cv('<!-- wp:more --><!--more-->') === []);
+check('a YouTube address alone in a paragraph, and a Vimeo iframe, become Video blocks', ($v = $cv('<p>https://youtu.be/abcDEF12345</p><iframe src="https://player.vimeo.com/video/123456789"></iframe>')) && $v[0]['content']['url'] === 'https://www.youtube.com/watch?v=abcDEF12345' && $v[1]['content']['url'] === 'https://vimeo.com/123456789');
+check('a link in rich text to a page keeps its placeholder through the sanitizer', cc_sanitize_html('<p><a href="{{BASE_URL}}about/">x</a></p>') === '<p><a href="{{BASE_URL}}about/">x</a></p>');
+check('the image address key ignores the host and the size suffix', cc_wp_pathkey('https://old.example.com/wp-content/uploads/2023/01/team-300x200.jpg') === cc_wp_pathkey('http://cdn.other.net/wp-content/uploads/2023/01/Team.jpg') && cc_wp_pathkey('https://x/wp-content/uploads/a/b-scaled.png') === 'a/b.png');
+cc_backup_rrmdir($wd);
+unset($GLOBALS['CC_WP_DIR'], $GLOBALS['CC_WP_UPLOADS'], $GLOBALS['CC_WP_BASE_DIR'], $GLOBALS['CC_WP_FETCH']);
+
 echo "\n" . ($fails === 0 ? 'SERVER OK' : "$fails checks failed") . " ($total checks)\n";
 exit($fails === 0 ? 0 : 1);
