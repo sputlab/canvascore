@@ -102,6 +102,7 @@ canvascore-frontend/         React editor
 | `update.php` | One-click updates: release check, signed package, backup, folder swap, health check, rollback (section 7) |
 | `update-keys.php` | The public keys (Ed25519) that releases are signed with; the private key is never in the repository |
 | `blockdef.php` | The PHP engine of the shared block definitions: setting cleaning, the template language, transforms, behaviour scripts (section 5) |
+| `library.php` | The template library: the signed index, kit reading and checks, cleaning, installing and undo (sections 7 and 8.4) |
 | `roles.php` | Roles and review: what each role may do, ownership, per-collection access and the review flow (section 7) |
 | `blockpkg.php` | Block packages: the format, the install checks, the registry in the data folder, the scoped CSS (sections 7 and 8.3) |
 | `wpimport.php` | The WordPress importer: export reader, HTML to blocks, image download, the resumable import (section 7) |
@@ -122,6 +123,7 @@ canvascore-frontend/         React editor
 | `vite.config.js` | Injects `__APP_VERSION__`, `__APP_BUILD__`, `__BLOCK_DEFS__`, `__EFFECTS_CSS__` from `../canvascore-admin/`; the `canvascore-editor-csp` plugin adds the editor's Content Security Policy (`script-src 'self'`) and `referrer` / `robots` metas to the **built** `index.html` (not in the dev server, which needs inline scripts) |
 | `public/menu-preview.html` | Menu Builder live preview: a page of its own, loaded in a sandboxed iframe (`allow-scripts`, no same origin) and fed the menu HTML by `postMessage`, so the menu's scripts run there and not under the editor's CSP |
 | `scripts/bump.mjs` | `prebuild` hook: increments `build` in `version.json`, syncs `package.json` version |
+| `scripts/library-kit.php`, `scripts/library-index.php` | Template library tools: `library-kit.php check` or `pack <folder>` for kit authors; `library-index.php --key … --kits … --base-url …` builds and signs the index (section 8.4) |
 | `scripts/block-package.php` | Developer tool for block packages: `check <folder or zip>` runs the install checks, `pack <folder>` makes the ZIP (section 8.3) |
 | `scripts/release-keygen.php`, `scripts/release-package.php` | Release tooling: make the signing key pair; pack and sign the update package of a release (section 13) |
 | `.oxlintrc.json` | Lint config (react + oxc plugins) |
@@ -157,6 +159,7 @@ canvascore-frontend/         React editor
 | `src/session/permissions.js` | The role table for the editor (`ROLES`, `canCreate`, `canPublishDirect`, `canPublishSite`, `canManageSite`, `canReview`, `reviewOf`): the twin of `roles.php`, so no button is offered that the server would refuse |
 | `src/components/ReviewQueue.jsx`, `ReviewBar.jsx`, `CollectionAccess.jsx` | Reviews / My submissions; the review banner of the page editor; Collections › Who can work here |
 | `src/components/ImageTools.jsx`, `src/editor/imageTools.js`, `mediaActions.js` | The media library's Crop and Focal point dialog and its pure maths (frame, handles, aspect, focal point); an image from a web address |
+| `src/components/TemplateLibrary.jsx` | Administration › Template library: cards, filters, the install dialog, results, installed kits and Restore |
 | `src/components/BlockPackages.jsx`, `src/editor/blockPackages.js` | Administration › Block packages; and the editor side of packages: `registerPackages()` registers their definitions, catalog entries and CSS, `loadBlockPackages()` fetches `pkg_list` after sign-in |
 | `src/components/ImportWordPress.jsx` | Administration › Import from WordPress: choose, options, progress and report (drives `wp_analyze`, `wp_start`, `wp_step`) |
 | `src/components/Updates.jsx` | Administration › Updates: check, update, requirements, history |
@@ -273,7 +276,7 @@ How they work:
   and load the real modules with `vite.ssrLoadModule('/src/...')`, then mount them with `react-dom` and drive
   them with DOM events. `__BLOCK_DEFS__` etc. are passed via `define`. `fetch` is stubbed or replaced by a
   fake backend.
-- **`tests/security.php`** also covers block packages (install by upload, refusals, images served, an editor using a block) and the WordPress import (who may use it, a hostile file, a full import) over HTTP, and the updates over real HTTP: a fake release feed (`update-source.php` and a test
+- **`tests/security.php`** also covers the template library (a signed test index, a hostile kit, a wrong checksum, a changed index, undo) over HTTP, block packages (install by upload, refusals, images served, an editor using a block) and the WordPress import (who may use it, a hostile file, a full import) over HTTP, and the updates over real HTTP: a fake release feed (`update-source.php` and a test
   `update-keys.php` in the temporary install) serves signed and tampered packages; an untrusted signature, a changed package,
   a path outside the admin folder, a wrong version, a file PHP can't parse and a new version that fails its first check must
   all be refused or rolled back with the old version intact, and a signed release must install.
@@ -311,6 +314,7 @@ the web root can be written. It contains:
 | `media-folders.json` | Array of media folder paths, so empty folders exist too (parents of listed folders are implied) |
 | `backups/` | Backup ZIPs: `backup-…zip` (kept by hand), `before-restore-…zip` (safety copies, newest 5), `download-…zip` and `upload-….part` (temporary, removed after an hour); deny-all `.htaccess` |
 | `packages/` | Installed block packages: `<id>/` (the package's files, as installed) and `index.json` (the registry: id, version, enabled, installer, date) |
+| `library/` | Template library: `index.json` (the verified index and when it was fetched), `previews/`, `installed.json` (the log of installs), `undo-<id>.json` (the safety copy of a site kit's design) |
 | `imports/` | WordPress import jobs, one folder per job (`meta.json`, `state.json`, `slugs.json`, `terms.json`, `pages.jsonl`, `posts.jsonl`, `media.jsonl`, `mediamap.json`, `lock`); deleted on discard and after 7 days; deny-all `.htaccess` |
 | `updates/` | One-click updates (`update.php`): `db-<version>-…sqlite` and `code-<version>-…zip` copies taken before each update (newest 3 of each), `history.json`, `last-check.json`, `health.json` (the one-time token of the running check); deny-all `.htaccess` |
 | `published_files.json` | Manifest of files the last successful publish wrote (`…/index.html` and `…/feed.xml`, relative to the site root); used to delete pages and feeds no longer published |
@@ -856,6 +860,26 @@ memory limit can't handle the image). The original is never changed.
 | `cc_media_move($names, $folder)` | Sets `folder` for the given files (creating the folder). **Folders are labels**: files never move on disk, so image URLs never change |
 | `cc_media_usage($pdo, $names)` | Where each file is used: searches the stored content of pages, draft copies (`Page draft`), items (incl. `cover_image`), `site_parts`, `master_components`, and `settings.json` / `menu.json`, by bare file name; returns `name => ["Page: Home", …]` |
 
+### `library.php` (template library)
+
+Loaded by `api.php` when a `library_*` action is called (admins; installs are off in the demo). It reuses the downloader of `update.php`
+(`cc_update_fetch()`, `cc_update_url_ok()`). The admin-facing description is section 12.3 of the [Administrator Guide](ADMIN-GUIDE.md#12-block-packages-and-the-wordpress-importer); the kit format is 8.4 here.
+
+| Function | What it does |
+| --- | --- |
+| `cc_lib_source()` | The feed: `index`, `sig`, `hosts` (the only hosts a download may use) and `https`; overridden by `library-source.php` (kept across updates: `CC_UPDATE_KEEP_FILES`) |
+| `cc_lib_index($force)` | The verified index (cached an hour in `library/index.json`): the signature over `"canvascore-library-v1\n" . sha256(index.json)` is checked against `cc_update_keys()` before anything is believed; entries are cleaned (`cc_lib_entry_clean()`: slug id, known type, a sha256, an allowed https address) and a failed download falls back to the last good copy, marked `stale` |
+| `cc_lib_download($entry)` / `cc_lib_preview($entry)` | The kit ZIP (8 MB at most), refused unless its sha256 is the index's; the preview picture, validated as a real raster image (300 KB) and cached, served by `library_preview` |
+| `cc_lib_read($source)` | Reads a ZIP or a folder with the real size of every file, name rules, `kit.json` and `content.json` checks, the block types (`blocks.json` plus package blocks), the images the content points to, SVG and raster checks. Returns the kit and a list of `errors` |
+| `cc_lib_prepare_blocks($blocks, $assetUrls, &$dropped)` | What a kit's blocks become: image addresses swapped in, then `cc_keep_code_surfaces($blocks, [])` (no code), `cc_sanitize_blocks()` and fresh block ids |
+| `cc_lib_menu_clean()`, `cc_lib_design_clean()`, `cc_lib_page_fields()` | A menu (labels and plain addresses, three levels), a design (the cleaners of Global Options, a safe font family) and a page's fields |
+| `cc_lib_install($pdo, $kit, $opts, $user, $baseDir)` | Copies the images (`Library/<name>` in the media library) and adds draft pages (free addresses), templates or the pages of a site kit in one transaction; `design` also applies the header, footer, menu and colours after saving `library/undo-<id>.json`; logs to `installed.json` |
+| `cc_lib_undo($pdo, $installId)` | Puts the saved header, footer, menu and settings back (once) |
+
+Test overrides: `$GLOBALS['CC_LIB_DIR']`, `CC_LIB_DATA_DIR` (where `menu.json` and `settings.json` are), `CC_LIB_UPLOADS`, `CC_LIB_KEYS`, `CC_LIB_FETCH` (a stub downloader) and
+`CC_LIB_APP_VERSION` (also an environment variable of the tools). `tests/server.php` covers the library (valid and hostile kits, cleaning, installs, undo, the signed index),
+`tests/ui-shell.mjs` the page, and `tests/security.php` the whole flow over HTTP against a fake feed.
+
 ### `roles.php` (roles and review)
 
 Loaded by `api.php`. The roles are `CC_ROLES` (`config.php`: `admin`, `editor`, `reviewer`, `author`; `cc_role_clean()` turns anything else into `editor`, as before
@@ -1049,6 +1073,33 @@ CC_PKG_APP_VERSION=0.22.0 php canvascore-frontend/scripts/block-package.php chec
 
 `check` is the same code as an install, so a package that passes it installs. Both engines render a package block from the same template, which
 is why a package has no PHP or JS to write; what a package can't do (read the database, hold other blocks, run a script) is a block for 8.2.
+
+### 8.4 As a library kit
+
+A **template library kit** is a ZIP anyone can propose to the community library (the `sputlab/canvascore-library` repository): a starter page, a few sections or
+a whole site. It is data, not code. The examples are in `docs/examples/library-kits`.
+
+```
+bistro-site/
+├── kit.json         id, name, version, type (page | section | site), author, description, license, tags, minVersion, homepage
+├── content.json     the pages, sections or site (below)
+├── preview.png      optional (png, jpg or webp, 300 KB at most)
+├── assets/logo.svg  images the content uses: png, jpg, gif, webp, avif, svg
+└── README.md, LICENSE   allowed, ignored
+```
+
+- **`content.json`**: for a **page** `{ "page": { title, slug, layout, bg_color, boxed_width, seo_title, seo_description }, "blocks": [...] }`; for **sections**
+  `{ "sections": [ { "name": "Hero", "block": { …one block… } } ] }`; for a **site** `{ "pages": [ { title, slug, home, layout, …, blocks } ], "header": [...],
+  "footer": [...], "menu": { "items": [ { label, url, children } ] }, "design": { brandColor, fontFamily, colors, typography, buttonStyles, fieldStyle } }`.
+  Blocks are the stored block objects (`type`, `content`, `styles`, `children`); ids are made again on install. Write an image as `kit:assets/<file>`.
+- **Limits**: 8 MB, 300 entries, 30 pages, 40 sections, 3000 blocks, nesting 14 deep, 3 MB per file. Only blocks the site has (core or package) may be used.
+- **What an install drops**: Custom HTML code, a form's receiving email and custom CSS/JS (the cleaning of an editor's save), unsafe rich text, menu items with
+  addresses that are not plain, and design values that are not valid. So a kit cannot carry code, and its forms need an email address set after the install.
+
+Tools (repository root): `php canvascore-frontend/scripts/library-kit.php check <folder|zip>` runs the install checks, `… pack <folder> [out.zip]` makes the ZIP
+(`CC_LIB_APP_VERSION=0.24.0` checks `minVersion` against another version). The **maintainers** publish with `php canvascore-frontend/scripts/library-index.php --key=<secret-key>
+--kits=<folder of ZIPs> --base-url=https://raw.githubusercontent.com/sputlab/canvascore-library/main/ --out=<folder>`: it checks every kit, writes `index.json` (id, name,
+type, version, author, description, tags, size, sha256, url, preview) and `index.json.sig`, copies the previews, and refuses a key that is not in `update-keys.php`.
 
 ### 8.2 With code
 
@@ -1320,6 +1371,11 @@ Recently added actions:
 | `media_crop` | POST `{ name, x, y, w, h, mode }` | `mode` `copy` or `replace`; returns `{ name, replaced }`. Not for authors or reviewers |
 | `media_replace` | POST multipart `name`, `file` | Replaces a library file's content under its name. Not for authors or reviewers |
 | `media_import_url` | POST `{ url, folder }` | Downloads an image into the library (the importer's downloader); not in the demo. `save_media_meta` also takes `focal` (`{ x, y }` or `null`) and `get_media` returns it |
+| `library_index` | GET `?refresh=1` | Admins: `{ kits, installed, fetched, stale, warning, error, demo, zip, sodium }`; kits without their download address or checksum, `installed` = the version installed |
+| `library_preview` | GET `?id=` | Admins: a kit's preview as an image (cached; `nosniff`), 404 when there is none |
+| `library_install` | POST `{ id, options: { design } }` | Admins, not in the demo: downloads the kit of the signed index, checks its sha256, reads it and installs it; returns `{ success, message, result: { pages, templates, design, images, dropped_code, install_id } }` or `errors` |
+| `library_install_file` | POST multipart `kit`, `options` (JSON) | Admins, not in the demo: the same for a ZIP the admin sends |
+| `library_undo` | POST `{ install_id }` | Admins: puts back the design an install replaced (once) |
 | `pkg_list` | GET | Any signed-in user: `{ packages, css }`, the enabled packages' block definitions, catalog entries and scoped CSS (`cc_pkg_editor_payload()`) |
 | `pkg_info` | GET | Admins: `{ zip, demo, max_mb, packages }` with `used` (where the blocks are used) |
 | `pkg_install` | POST multipart `package` | Admins, not in the demo: `cc_pkg_install()`; returns `{ success, message, errors, id, types }` (`errors` lists every problem) |

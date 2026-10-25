@@ -74,7 +74,7 @@ Every screen except the page editor has a sidebar on the left. On a narrow scree
 - **Publish Site**: rebuilds and publishes the whole site (see [Publish vs Publish Site](#publish-vs-publish-site)).
 - **Content**: **Pages**, **Collections**, **Reviews** (for authors: **My submissions**), **Templates**, **Media**. Authors and reviewers do not see Templates, or the Site group (Menu, Global Options).
 - **Site**: **Menu**, **Global Options**.
-- **Administration** (admins only): **Submissions**, **Accounts**, **Backup**, **Updates**, **Block packages**, **Import from WordPress**.
+- **Administration** (admins only): **Submissions**, **Accounts**, **Backup**, **Updates**, **Block packages**, **Template library**, **Import from WordPress**.
 
 At the bottom you see your name, your role, two icons (the key, **Change your password**, and the arrow leaving a box, **Log out**) and the CanvasCore version. The **ⓘ** next to the version opens **About CanvasCore**: the version and build, and links to the CanvasCore website, the source code on GitHub, the Discord community, the address for bugs and suggestions (bug@sputlab.com) and the donation page. If it says "Editor v… / server v…: reload the page after updating", CanvasCore was just updated. Reload the page in your browser.
 
@@ -592,6 +592,16 @@ When you save a restored version, it becomes a new version in the list, so the o
 
 **Templates** in the sidebar (or **From a template** on the Pages screen) lists ready-made page layouts. **Use template** creates a new draft page from one. See [Creating a page](#creating-a-page).
 
+### The online template library (admins)
+
+Under **Administration › Template library** (or **Browse the online library** on the Templates screen) you find starter pages, sections and whole-site kits shared by the community. Filter by kind, search, then **Install**:
+
+- a **page** kit adds one **draft page** (it opens from the result with **Open**);
+- a **sections** kit adds its sections under **Add › My templates** in the page editor;
+- a **site kit** adds several draft pages. Tick **Also apply its design** to replace your header, footer, menu and colours with the kit's: your current ones are saved first, and **Restore the previous design** (in *Installed kits*) brings them back.
+
+Nothing you have is replaced: pages arrive as drafts with free addresses, and a kit cannot bring code (any Custom HTML in it is left empty, form email addresses are removed). Images go to the Media library, folder **Library**. To use a kit's home page as your Home, open it and set it as home. **Install from a file…** installs a kit ZIP you have.
+
 ### My templates (saved blocks)
 
 A saved block is a copy of a block, including everything inside it, that you can reuse on any page.
@@ -1050,6 +1060,7 @@ These sections appear under **Administration** in the sidebar only for admins. D
 - **Backup**: **Download backup (.zip)** saves the whole site in one file: pages and their drafts, collections and items, templates, masters, the global header and footer, redirects, Global Options, the menu and every uploaded image, audio and video file (with its description and folder). Version history and form messages are optional. User accounts and passwords are never included. **Keep a copy on the server** stores it on the server instead, where it can later be downloaded, restored or deleted. **Restore** (from a file, or from a copy on the server) **replaces** the whole site with the backup; user accounts are kept, a safety copy of the current site is saved first, and the site is published again afterwards. Older `.json` backups can still be imported.
 - **Block packages**: **Choose a package (.zip)…** adds blocks made by other people; they appear in the Add tab under **Block packages** and work like any other block (Content, Style and Advanced tabs, copy, templates). The page lists what is installed, with an **On** switch (off: the blocks leave the Add tab and the published pages, but stay saved in your pages) and **Remove**, which first tells you how many pages use the package's blocks. A package cannot run code and is checked before it is installed, but install packages only from people you trust. Packages are not part of a backup: keep the `.zip` files.
 - **Import from WordPress**: brings pages, posts, categories, tags and pictures over from a WordPress site. In WordPress choose **Tools › Export › All content** and keep the `.xml` file, then **Choose the export (.xml)…**: you see how much it holds (nothing changes yet), tick **Pages**, **Posts** (into a new collection or an existing one) and **Pictures**, and **Start the import**. Everything arrives as **drafts** (tick it off to import published entries as published, optionally forwarding the old addresses), so you can open each page and post, check it and publish when you are happy. Nothing you already have is changed or deleted. The report at the end lists what was left out or could not be copied (for example a contact-form shortcode or a picture that could not be downloaded). Menus are not imported: build yours in **Menu**.
+- **Template library**: browse and install starter pages, sections and site kits (see [The online template library](#the-online-template-library-admins)); **Install from a file…**, **Refresh**, and **Restore the previous design** after a site kit.
 - **Updates**: **Check for updates** looks for a newer CanvasCore release on GitHub and shows its version and release notes. **Update to …** downloads it, checks its signature, saves a backup (a safety copy of the content, the database and the code), installs it and checks that it starts; if any check fails, the previous version is put back and the page says why. Keep the page open while it works (about a minute), tell the other people in the editor to save first, then click **Reload the editor** and **Publish Site**. The page also lists what the server needs and the history of the updates. Details and what to do when an update is refused are in the [Administrator Guide](ADMIN-GUIDE.md#5-updating-to-a-new-version).
 
 ---

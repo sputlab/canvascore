@@ -25,7 +25,7 @@ const CC_UPDATE_KEEP_COPIES = 3;                    // database and code copies 
 const CC_UPDATE_REQUIRED = ['api.php', 'config.php', 'compiler.php', 'migrations.php', 'publish.php', 'backup.php', 'media.php',
     'install.php', 'update.php', 'update-keys.php', 'version.json', 'blocks.json', 'blockdef.php', 'blockpkg.php', 'wpimport.php', 'roles.php', 'library.php', 'blocks/text.json', 'index.html'];
 // What belongs to this site, not to the release: moved or copied into the new admin folder
-const CC_UPDATE_KEEP_FILES = ['.htaccess', 'update-source.php'];
+const CC_UPDATE_KEEP_FILES = ['.htaccess', 'update-source.php', 'library-source.php'];
 
 // ---------------------------------------------------------------------------
 // Source, keys, working folder

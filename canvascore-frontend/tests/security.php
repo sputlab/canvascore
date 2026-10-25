@@ -938,7 +938,6 @@ $countBefore = (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn();
 $r = $ru($own, $kPage);
 check('a good kit file installs like one from the library', !empty($r['json']['success']) && (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $countBefore + 1, $r['body']);
 check('the library code answers 404 when opened directly', $own->req('GET', '/canvascore-admin/library.php', null, [], false)['code'] === 404);
-@unlink($admin . '/library-source.php');
 
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
@@ -1029,7 +1028,7 @@ $r = $own->api('update_install', ['version' => '9.9.9']);
 check('a signed release installs: downloaded, verified, backed up, swapped and checked', !empty($r['json']['success']) && ($r['json']['to'] ?? '') === '9.9.9' && count($r['json']['steps'] ?? []) >= 7, $r['body']);
 check('…the server now runs the new version, and the session goes on', ($own->api('version')['json']['app'] ?? '') === '9.9.9' && strpos((string)file_get_contents($admin . '/index.html'), 'editor 9.9.9') !== false);
 check('…the content is untouched and the old folder is gone from the site', (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $pagesBefore && !$leftovers());
-check('…the site\'s own files in the admin folder are kept', is_file($admin . '/update-source.php') && strpos((string)file_get_contents($admin . '/.htaccess'), 'CanvasCore') !== false);
+check('…the site\'s own files in the admin folder are kept (update-source.php and library-source.php)', is_file($admin . '/update-source.php') && is_file($admin . '/library-source.php') && strpos((string)file_get_contents($admin . '/.htaccess'), 'CanvasCore') !== false);
 check('…the history records it', ($own->api('update_info')['json']['history'][0]['result'] ?? '') === 'updated');
 check('…and checking again finds nothing newer', ($own->api('update_check')['json']['release']['available'] ?? null) === false);
 

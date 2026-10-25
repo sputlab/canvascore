@@ -24,7 +24,7 @@ web root (the folder the domain serves). Replace both with your own values.
 9. [Forms and email](#9-forms-and-email)
 10. [Security](#10-security)
 11. [Troubleshooting](#11-troubleshooting)
-12. [Block packages and the WordPress importer](#12-block-packages-and-the-wordpress-importer) (installing packages, importing a WordPress site)
+12. [Block packages and the WordPress importer](#12-block-packages-and-the-wordpress-importer) (installing packages, importing a WordPress site, the template library)
 13. [License](#13-license)
 
 ---
@@ -84,6 +84,8 @@ root, and published pages are written to the folder above it (the web root itsel
 │   │                             history and the last check; deny-all .htaccess
 │   ├── packages/                 Installed block packages (section 12.1), one folder each, and the
 │   │                             list of them (index.json)
+│   ├── library/                  Template library (section 12.3): the cached index, previews, the log of installs and the safety
+│   │                             copies of a site kit's design (undo-….json)
 │   ├── imports/                  WordPress imports in progress or just finished (section 12.2); a job
 │   │                             folder is removed when you discard it and after 7 days; deny-all .htaccess
 │   └── .htaccess                 "Deny all" (safety net)
@@ -108,7 +110,7 @@ root, and published pages are written to the folder above it (the web root itsel
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
         ├── blocks/               Definitions of the blocks (settings and template, one file per block)
         ├── update.php, update-keys.php   One-click updates and the public keys of the releases
-        ├── blockpkg.php, wpimport.php, roles.php   Block packages, the WordPress importer, roles and review (libraries)
+        ├── blockpkg.php, wpimport.php, roles.php, library.php   Block packages, the WordPress importer, roles and review, the template library (libraries)
         ├── .htaccess             Security headers and access rules (Apache, written automatically)
         └── version.json          Version of the installed release
 ```
@@ -251,7 +253,7 @@ instead (section 7.4).
 `# CanvasCore: written automatically…`). If you replace it with a file of your own (for example to
 add HTTP basic auth), CanvasCore leaves it alone: copy CanvasCore's rules into it, or the security
 headers and deny rules are lost. Whatever the server, the library files (`config.php`, `compiler.php`,
-`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `update.php`, `update-keys.php`) answer 404
+`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `library.php`, `update.php`, `update-keys.php`) answer 404
 when opened directly.
 
 ### 4.2 Nginx
@@ -286,7 +288,7 @@ server {
 
         location ^~ /canvascore-admin/data/ { deny all; return 404; }
         location ~ /\. { deny all; return 404; }
-        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|update|update-keys|update-source)\.php$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|update|update-keys|update-source|library-source)\.php$ { deny all; return 404; }
         location ~ ^/canvascore-admin/([^/]+/)?[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
 
         # The Menu Builder's live preview is framed by the editor itself
@@ -349,7 +351,7 @@ order, so keep the deny rules above it. `add_header` inside a `location` replace
 the outer block, which is why the preview's block repeats all four. If the site lives in a
 sub-folder (`example.com/site/`), prefix the paths: `/site/canvascore-admin/`, `/site/uploads/`,
 `/site/canvascore-blocks/`. **Updating from before 0.22.0:** add the `canvascore-blocks` block and
-`blockpkg|wpimport|roles` to the library-file rule shown above (one-click updates do not change your server configuration).
+`blockpkg|wpimport|roles|library` and `library-source` to the library-file rule shown above (one-click updates do not change your server configuration).
 
 **Redirects on Nginx.** Nginx ignores the `.htaccess` block of 301s. The old addresses still
 work, because publishing also writes a small redirect page at each old address (it sends the
@@ -427,7 +429,7 @@ installs it.
       directory (the newest 3 of each are kept).
    5. Unpacks the new version next to the admin folder, checks that its PHP files can be read, and
       swaps the two folders. Your data folder (if it is inside the admin folder), the admin
-      folder's own `.htaccess` and `update-source.php` come along.
+      folder's own `.htaccess`, `update-source.php` and `library-source.php` come along.
    6. Calls the new version once, with a one-time token. It opens the database, runs its
       migrations (section 5.2, step 6) and answers with its version.
    7. **Rolls back if any step after the swap fails**: the previous folder and the database copy
@@ -442,7 +444,7 @@ the updates made from here, with the ones that were rolled back.
 Things to know:
 
 - **Files you added yourself** inside `canvascore-admin/` are not carried over: only the data
-  folder, `.htaccess` and `update-source.php` are. They stay in the code copy in `updates/`.
+  folder, `.htaccess`, `update-source.php` and `library-source.php` are. They stay in the code copy in `updates/`.
 - **Other people in the editor** should save their work first: the editor is replaced while it
   runs. Everyone reloads afterwards.
 - **A server that can't call itself** (for example one that blocks requests to its own address, or
@@ -497,7 +499,8 @@ so always restore both together. The Backup page's safety copy restores the cont
    | 14 | Scheduled publishing: `publish_at` and `unpublish_at` on pages and items (section 7.9) |
    | 15 | Roles and review (0.23.0, section 6.6): `created_by` and the review columns (`review_state`, `review_note`, `review_by`, `review_at`, `reviewed_by`) on pages and items, `collections.access_json`; existing pages get their author as creator |
 
-   0.23.0 adds migration 15 (the schema becomes 15); nothing else needs doing by hand. Existing accounts keep their role (admin or editor). New in 0.22.0: the `packages/` and `imports/`
+   0.23.0 added migration 15 (the schema is 15); 0.24.0 adds no migration. Existing accounts keep their role (admin or editor). The `library/` folder of
+   the data directory is created when the template library is first used (section 12.3). New in 0.22.0: the `packages/` and `imports/`
    folders of the data directory and the `canvascore-blocks/` folder of the site are created when first
    used (section 12), and the Nginx rules of section 4.2 gain `canvascore-blocks` (Apache writes its
    own rules).
@@ -1127,6 +1130,9 @@ What CanvasCore does for you:
   actions (settings, menu, templates, masters, media management, bulk actions, scheduling), an author sees and changes only their own pages
   and items and cannot publish, a reviewer publishes only what was submitted, and a collection can be limited to chosen people: all of it is
   checked by the server on every request, whatever the editor shows. Authors cannot publish the site (`rebuild_all.php` refuses them).
+- **Template library**: admins only. The index is signed (Ed25519, the release keys) and a kit's download must match the checksum in it; downloads only from
+  the library's https hosts. A kit is cleaned like an editor's save (no code), cannot replace anything (pages are drafts with new addresses), and a site
+  kit's design is applied only when asked, after a safety copy (section 12.3).
 - **Updates**: only admins can check for or install an update. A package is installed only if its
   Ed25519 signature matches a public key in `canvascore-admin/update-keys.php` (so a changed or
   forged package, or a hijacked download, is refused); it is downloaded over HTTPS from GitHub's
@@ -1431,6 +1437,16 @@ The author submitted it, so it is locked for them until a reviewer sends it back
 **Someone does not see a collection**
 The collection is limited to chosen people (Collections › Who can work here). Add them there, or choose *Everyone*. An author also sees only the items they made.
 
+**The template library says it could not be reached, or that the index is not signed**
+Your server could not download the index from GitHub (a firewall, no outbound HTTPS, or the library is not published yet), or the file does not carry the
+CanvasCore signature (a mirror that changed it, or a library signed with another key). The last good list is shown when there is one. You can still install a
+kit from a file. The PHP `zip` and `sodium` extensions must be enabled.
+
+**A kit is refused**
+The message lists every problem: a block your site does not have (update CanvasCore or install the block package), an image the kit points to but does not
+hold, an SVG with a script, a file name that is not allowed, a checksum that differs from the library's index (download again later), or a kit that needs a
+newer CanvasCore.
+
 **Version mismatch warning in the sidebar**
 `Editor vX / server vY: reload the page after updating`: reload the tab (hard refresh). If it
 persists, upload the new `dist/` contents into `canvascore-admin/` and make sure no cache or CDN
@@ -1520,6 +1536,34 @@ What happens to the content:
 The import keeps a working folder in `imports/` of the data folder (the converted content, deleted when you discard the import or finish and click
 *Import another file*, and after 7 days). The file you upload is read as a stream with XML entities and network access off, and a file that
 declares a document type is refused. The importer needs the PHP `xml` and `dom` extensions.
+
+### 12.3 Template library (Administration › Template library)
+
+The library offers **starter pages, sections and full-site kits** made and shared by the community. Install one and change it like anything you made.
+Admins only (a kit can change the whole site); turned off in the demo. It needs the PHP `zip` and `sodium` extensions (sodium checks the signature) and
+outbound HTTPS to GitHub (`raw.githubusercontent.com`, `github.com`).
+
+- **The list.** The library is an index (`index.json`, with its signature) kept by the CanvasCore maintainers in the `sputlab/canvascore-library` repository.
+  Your site downloads it, checks the signature against the public keys of `canvascore-admin/update-keys.php`, and keeps it for an hour (**Refresh** asks
+  again). An index that is not signed, or was changed after signing, is refused; when the library cannot be reached you see the last good list, marked.
+  Cards show a preview (fetched by your server and shown from your own site: your editor never talks to GitHub), the kind, author, version and licence.
+- **Kinds.** A **page** kit installs one draft page. A **sections** kit adds its sections to **Add › My templates** (one entry each). A **site kit** adds
+  several draft pages and, **only if you tick it**, its design: the header, footer, menu items and the colours, text and button styles. Before a design
+  is applied a safety copy of your header, footer, menu and global colours is kept; **Restore the previous design** (in *Installed kits*) puts them back
+  once. The pages a kit added stay (delete them in Pages).
+- **Nothing is replaced.** Pages arrive as **drafts**, made by you, with a free address (a clash with a page or collection you have gets a number, like
+  `home-2`). A kit's home page is a draft: to use it as your Home, open it and set it as home. The kit's images are added to the Media library, in the
+  folder `Library/<kit name>`. Every install is listed under *Installed kits*, with what it made.
+- **A kit is untrusted content.** It is checked and cleaned like an editor's save: **no code gets in** (Custom HTML blocks are left empty, form email
+  addresses and custom CSS and JavaScript are removed, rich text is sanitized; the result says how many HTML blocks were emptied), a kit may only use the
+  blocks your site has (a kit that needs a newer CanvasCore or a block package you do not have is refused, naming the block), images must be real images
+  (an SVG with a script is refused), file names and sizes are limited, a menu keeps labels and plain addresses, and a design keeps valid colours, styles and a
+  plain font only. A download is accepted only if its checksum is the one in the signed index.
+- **Install from a file.** *Install from a file…* installs a kit ZIP you have (a kit you are writing, or one from a friend). The same checks apply, but
+  nothing vouches for the file: install only kits from people you trust.
+- **Another library.** `canvascore-admin/library-source.php` (not part of a release; kept when you update) can point the page to another index, for a
+  mirror or your own agency's library: `<?php return ['index' => 'https://…/index.json', 'sig' => 'https://…/index.json.sig', 'hosts' => ['…']];`. The index
+  must be signed with a key listed in `update-keys.php`. On Nginx keep the rule of section 4.2 that hides `library-source.php`.
 
 ---
 

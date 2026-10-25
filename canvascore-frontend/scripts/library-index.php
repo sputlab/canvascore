@@ -9,6 +9,7 @@ $fail = function ($m) { fwrite(STDERR, $m . "\n"); exit(1); };
 if (empty($opt['key']) || empty($opt['kits']) || empty($opt['base-url']) || !is_file($opt['key']) || !is_dir($opt['kits'])) $fail('Usage: php scripts/library-index.php --key=<secret-key-file> --kits=<folder of .zip kits> --base-url=<https://…/> [--out=<folder>]');
 $sk = base64_decode(trim((string)file_get_contents($opt['key'])), true);
 if ($sk === false || strlen($sk) !== SODIUM_CRYPTO_SIGN_SECRETKEYBYTES) $fail('Not a secret key made by release-keygen.php.');
+if (getenv('CC_LIB_APP_VERSION')) $GLOBALS['CC_LIB_APP_VERSION'] = getenv('CC_LIB_APP_VERSION');   // check kits against another CanvasCore version
 require __DIR__ . '/../../canvascore-admin/compiler.php';
 require __DIR__ . '/../../canvascore-admin/library.php';
 if (!in_array(sodium_crypto_sign_publickey_from_secretkey($sk), cc_update_keys(), true)) $fail('This key is not listed in canvascore-admin/update-keys.php: sites would refuse the index.');

@@ -29,6 +29,7 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   - **Install from a file**: an admin can install a kit ZIP they have (same checks).
   - **Developer tools**: `php scripts/library-kit.php check|pack <folder>` for kit authors, `php scripts/library-index.php --key … --kits … --base-url …`
     for the maintainers (builds and signs the index), and three example kits in `docs/examples/library-kits` (a page, a section kit and a site kit).
+  - `library-source.php` is kept when a site updates itself (like `update-source.php`), and answers nothing when opened directly on Apache (the admin `.htaccess` hides it).
   - The default library is `github.com/sputlab/canvascore-library` (the index and kits are served from raw.githubusercontent.com); a site can point
     to another with `library-source.php` in the admin folder, like `update-source.php`.
 
