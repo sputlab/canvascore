@@ -10,6 +10,28 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **Online template library** (Administration › **Template library**, admins; also *Browse the online library* on the Templates page): starter
+  pages, sections and full-site kits shared by the community, installed from the admin.
+  - **Kinds of kit**: a **page** (one draft page), **sections** (each becomes an entry of *Add › My templates*) and a **site kit** (several
+    draft pages and, if you tick it, its header, footer, menu and colours). Cards show a preview, the kind, author, version and licence; filter
+    by kind, search names, descriptions and tags; installed kits are marked; every install is listed.
+  - **Curated and checked**: the library is an index kept by the CanvasCore maintainers and **signed** (Ed25519, the release keys); a site
+    uses it only if the signature verifies, downloads a kit only from the library's hosts over https, and checks its sha256 against the
+    index. The last good list is kept when the library cannot be reached. Previews are fetched by the server and shown from the site itself.
+  - **A kit is untrusted content**: it passes the cleaning of an editor's save. Custom HTML is emptied, form email addresses and custom
+    CSS/JavaScript are removed, rich text is sanitized, a menu keeps labels and plain addresses only, a design keeps valid colours, text and
+    button styles and a safe font only, images must be real images (SVG without scripts), file names and sizes are checked, and a kit may
+    only use blocks the site has. The page says how many Custom HTML blocks were left empty.
+  - **Nothing is replaced**: pages arrive as drafts with free addresses (a clash gets a number), made by the installer; images go to the
+    Media library (folder *Library*). A site kit's design is applied only when asked, after a **safety copy** that **Restore the previous
+    design** puts back.
+  - **Install from a file**: an admin can install a kit ZIP they have (same checks).
+  - **Developer tools**: `php scripts/library-kit.php check|pack <folder>` for kit authors, `php scripts/library-index.php --key … --kits … --base-url …`
+    for the maintainers (builds and signs the index), and three example kits in `docs/examples/library-kits` (a page, a section kit and a site kit).
+  - The default library is `github.com/sputlab/canvascore-library` (the index and kits are served from raw.githubusercontent.com); a site can point
+    to another with `library-source.php` in the admin folder, like `update-source.php`.
+
 ## [0.23.0] - 2026-10-25 — Roles and review, and image tools
 
 ### Added

@@ -1,0 +1,14 @@
+{
+    "id": "coming-soon-page",
+    "name": "Coming Soon",
+    "version": "1.0.0",
+    "type": "page",
+    "author": "CanvasCore examples",
+    "description": "A one-screen \"we are launching soon\" page with a logo, a message and a sign-up. An example of a page kit.",
+    "license": "CC0-1.0",
+    "tags": [
+        "launch",
+        "landing"
+    ],
+    "minVersion": "0.24.0"
+}

@@ -371,6 +371,127 @@ check('a draft copy belongs to the page it is a copy of', cc_owner_of_page($rdb,
 check('the migration added the review and ownership columns to pages and items, and the access to collections', (function ($db) { foreach (['pages', 'collection_items'] as $t) { $cols = array_column($db->query("PRAGMA table_info($t)")->fetchAll(PDO::FETCH_ASSOC), 'name'); foreach (['created_by', 'review_state', 'review_note', 'review_by', 'review_at', 'reviewed_by'] as $c) if (!in_array($c, $cols, true)) return false; } return in_array('access_json', array_column($db->query("PRAGMA table_info(collections)")->fetchAll(PDO::FETCH_ASSOC), 'name'), true); })($rdb));
 check('existing pages get their author as creator', (function () { $d = new PDO('sqlite::memory:'); $ms = cc_db_migrations(); ksort($ms); foreach ($ms as $v => $m) { if ($v === 15) { $d->exec("INSERT INTO pages (id, title, author) VALUES ('old', 'Old', 'sam')"); } $m($d); } return $d->query("SELECT created_by FROM pages WHERE id = 'old'")->fetchColumn() === 'sam'; })());
 
+echo "\nTEMPLATE LIBRARY\n";
+require_once __DIR__ . '/../../canvascore-admin/library.php';
+$lt = sys_get_temp_dir() . '/cc_lib_' . getmypid(); @mkdir($lt . '/data', 0755, true); @mkdir($lt . '/uploads', 0755, true);
+$GLOBALS['CC_LIB_DIR'] = $lt . '/lib'; $GLOBALS['CC_LIB_DATA_DIR'] = $lt . '/data'; $GLOBALS['CC_LIB_UPLOADS'] = $lt . '/uploads'; $GLOBALS['CC_MEDIA_META_FILE'] = $lt . '/media.json'; $GLOBALS['CC_MEDIA_FOLDERS_FILE'] = $lt . '/folders.json';
+$GLOBALS['CC_LIB_APP_VERSION'] = '0.24.0';
+$kitsDir = realpath(__DIR__ . '/../../docs/examples/library-kits');
+$cp = function ($from, $to) use (&$cp) { @mkdir($to, 0755, true); foreach (array_diff(scandir($from), ['.', '..']) as $f) is_dir("$from/$f") ? $cp("$from/$f", "$to/$f") : copy("$from/$f", "$to/$f"); };
+$kitN = 0;
+// a kit folder made from an example, changed by $edit(dir)
+$mk = function ($example, $edit = null) use ($kitsDir, $lt, $cp, &$kitN) { $d = $lt . '/k' . (++$kitN); $cp("$kitsDir/$example", $d); if ($edit) $edit($d); return $d; };
+$jr = function ($f) { return json_decode(file_get_contents($f), true); };
+$jw = function ($f, $v) { file_put_contents($f, json_encode($v)); };
+$pk = cc_lib_read($kitsDir . '/coming-soon-page'); $sk = cc_lib_read($kitsDir . '/landing-sections'); $ik = cc_lib_read($kitsDir . '/bistro-site');
+check('the three example kits (page, section, site) are valid', !$pk['errors'] && !$sk['errors'] && !$ik['errors'] && $pk['type'] === 'page' && $sk['type'] === 'section' && $ik['type'] === 'site', json_encode([$pk['errors'], $sk['errors'], $ik['errors']]));
+check('…with their pages, images and preview counted', $pk['pages'] === 1 && count($pk['assets']) === 1 && !empty($pk['preview']) && $ik['pages'] === 3 && count($sk['content']['sections']) === 3);
+$bad = function ($edit, $example = 'coming-soon-page') use ($mk) { $k = cc_lib_read($mk($example, $edit)); return $k['errors']; };
+check('a kit needs kit.json and content.json', count($bad(function ($d) { unlink("$d/kit.json"); })) > 0 && count($bad(function ($d) { unlink("$d/content.json"); })) > 0);
+check('an id, a version and a type are checked', count($bad(function ($d) use ($jr, $jw) { $m = $jr("$d/kit.json"); $m['id'] = 'Bad Id!'; $jw("$d/kit.json", $m); })) > 0 && count($bad(function ($d) use ($jr, $jw) { $m = $jr("$d/kit.json"); $m['version'] = 'x'; $jw("$d/kit.json", $m); })) > 0 && count($bad(function ($d) use ($jr, $jw) { $m = $jr("$d/kit.json"); $m['type'] = 'plugin'; $jw("$d/kit.json", $m); })) > 0);
+$e = $bad(function ($d) use ($jr, $jw) { $m = $jr("$d/kit.json"); $m['minVersion'] = '9.0.0'; $jw("$d/kit.json", $m); });
+check('a kit that needs a newer CanvasCore is refused, saying which', count($e) === 1 && strpos($e[0], '9.0.0') !== false, json_encode($e));
+check('files a kit may not hold (a script, a hidden file) are refused', count($bad(function ($d) { file_put_contents("$d/evil.php", '<?php echo 1;'); })) > 0 && count($bad(function ($d) { file_put_contents("$d/.htaccess", 'x'); })) > 0 && count($bad(function ($d) { mkdir("$d/assets/sub"); file_put_contents("$d/assets/sub/a.png", 'x'); })) > 0);
+$e = $bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['blocks'][] = ['type' => 'NOT_A_BLOCK', 'content' => []]; $jw("$d/content.json", $c); });
+check('a block this site does not have is refused, by name', count($e) === 1 && strpos($e[0], 'NOT_A_BLOCK') !== false, json_encode($e));
+$e = $bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['blocks'][0]['content']['src'] = 'kit:assets/missing.png'; $jw("$d/content.json", $c); });
+check('an image the content points to must be in the kit', count($e) === 1 && strpos($e[0], 'missing.png') !== false, json_encode($e));
+check('an SVG with a script and a file that is not an image are refused', count($bad(function ($d) { file_put_contents("$d/assets/logo.svg", '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'); })) > 0 && count($bad(function ($d) { file_put_contents("$d/assets/photo.png", 'not a png'); })) > 0);
+check('a preview that is too big or not an image is refused', count($bad(function ($d) { file_put_contents("$d/preview.png", str_repeat('x', 400000)); })) > 0 && count($bad(function ($d) { file_put_contents("$d/preview.png", 'nope'); })) > 0);
+check('a page kit with no blocks, a site kit with no pages, a section kit with no sections are refused', count($bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['blocks'] = []; $jw("$d/content.json", $c); })) > 0 && count($bad(function ($d) use ($jw) { $jw("$d/content.json", ['pages' => []]); }, 'bistro-site')) > 0 && count($bad(function ($d) use ($jw) { $jw("$d/content.json", ['sections' => []]); }, 'landing-sections')) > 0);
+check('too many pages and too deep nesting are refused', count($bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['pages'] = array_fill(0, CC_LIB_MAX_PAGES + 1, $c['pages'][0]); $jw("$d/content.json", $c); }, 'bistro-site')) > 0 && count($bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $b = ['type' => 'TEXT', 'content' => ['text' => 'x']]; for ($i = 0; $i < 20; $i++) $b = ['type' => 'SECTION', 'content' => [], 'children' => [$b]]; $c['blocks'] = [$b]; $jw("$d/content.json", $c); })) > 0);
+// ZIPs: layout and real sizes
+$zipOf = function ($names) use ($lt, &$kitN) { $zf = $lt . '/z' . (++$kitN) . '.zip'; $z = new ZipArchive(); $z->open($zf, ZipArchive::CREATE); foreach ($names as $n => $c) $z->addFromString($n, $c); $z->close(); return $zf; };
+$good = ['kit.json' => json_encode(['id' => 'tiny', 'name' => 'Tiny', 'version' => '1.0.0', 'type' => 'page']), 'content.json' => json_encode(['blocks' => [['type' => 'TEXT', 'content' => ['text' => '<p>x</p>']]]])];
+check('a ZIP kit is read', !cc_lib_read($zipOf($good))['errors']);
+check('a ZIP with a path outside the kit (../) or an absolute path is refused', count(cc_lib_read($zipOf($good + ['../evil.json' => '{}']))['errors']) > 0 && count(cc_lib_read($zipOf($good + ['/etc/x.json' => '{}']))['errors']) > 0);
+check('a file that unpacks larger than it should is refused (the declared size is not trusted)', count(cc_lib_read($zipOf(['kit.json' => $good['kit.json'], 'content.json' => json_encode(['blocks' => [['type' => 'TEXT', 'content' => ['text' => str_repeat('a', CC_LIB_MAX_FILE + 10)]]]])]))['errors']) > 0);
+check('something that is not a ZIP is refused', count(cc_lib_read(__FILE__)['errors']) > 0);
+
+// what a kit's blocks become
+$hostile = [['id' => 'x1', 'type' => 'HTML', 'content' => ['code' => '<script>steal()</script>', 'customCss' => 'body{display:none}']],
+            ['id' => 'x2', 'type' => 'FORM', 'content' => ['email' => 'attacker@evil.com', 'title' => '<img src=x onerror=alert(1)>']],
+            ['id' => 'x3', 'type' => 'TEXT', 'content' => ['text' => '<p onclick="x()">Hi<script>bad()</script></p>', 'customJs' => 'alert(1)']],
+            ['id' => 'x4', 'type' => 'SECTION', 'content' => [], 'children' => [['id' => 'x5', 'type' => 'IMAGE', 'content' => ['src' => 'kit:assets/p.png']], ['id' => 'x6', 'type' => 'HTML', 'content' => ['code' => '<b>nested</b>']]]]];
+$dropped = 0; $prep = cc_lib_prepare_blocks($hostile, ['p.png' => '/uploads/1_p.png'], $dropped); $pj = json_encode($prep);
+check('code a kit carries is dropped: Custom HTML is emptied (also nested), form emails and custom CSS/JS removed', $prep[0]['content']['code'] === '' && !isset($prep[0]['content']['customCss']) && $prep[1]['content']['email'] === '' && !isset($prep[2]['content']['customJs']) && $prep[3]['children'][1]['content']['code'] === '' && $dropped === 2, $pj);
+check('…rich text is sanitized, and the kit\'s image addresses become library addresses', strpos($pj, 'onerror') === false && strpos($pj, 'onclick') === false && strpos($pj, '<script') === false && strpos($pj, 'kit:assets') === false && $prep[3]['children'][0]['content']['src'] === '/uploads/1_p.png');
+check('every block gets an id of its own', !in_array('x1', array_column($prep, 'id'), true) && count(array_unique(array_merge(array_column($prep, 'id'), [$prep[3]['children'][0]['id']]))) === 5);
+$mn = cc_lib_menu_clean(['items' => [['label' => '<b>Home</b>', 'url' => ''], ['label' => 'Bad', 'url' => 'javascript:alert(1)'], ['label' => 'Docs', 'url' => 'docs/', 'children' => [['label' => 'A', 'url' => 'https://example.com/a', 'children' => [['label' => 'B', 'url' => '/b', 'children' => [['label' => 'C', 'url' => '/c']]]]]]], ['label' => '', 'url' => '/x']]]);
+check('a menu from a kit keeps labels and plain addresses only (no javascript:, no markup), three levels at most', count($mn) === 3 && $mn[0]['label'] === 'Home' && $mn[1]['url'] === '' && $mn[2]['url'] === 'docs/' && $mn[2]['children'][0]['children'][0]['label'] === 'B' && !isset($mn[2]['children'][0]['children'][0]['children']), json_encode($mn));
+$ds = cc_lib_design_clean(['brandColor' => 'red;}', 'fontFamily' => 'Georgia; background:url(x)', 'colors' => [['id' => 'primary', 'name' => 'Main', 'value' => '#112233'], ['id' => 'bad id', 'value' => 'red']], 'unknown' => 1, 'typography' => 'x']);
+check('a kit\'s design keeps valid colours only; a font family with code in it, and unknown settings, are dropped', ($ds['brandColor'] ?? '') === '#112233' && !isset($ds['fontFamily']) && !isset($ds['unknown']) && strpos(json_encode($ds), 'url(') === false, json_encode($ds));
+check('a font family and a plain brand colour pass', cc_lib_design_clean(['fontFamily' => "Georgia, 'Times New Roman', serif", 'brandColor' => '#b45309'])['fontFamily'] === "Georgia, 'Times New Roman', serif" && cc_lib_design_clean(['brandColor' => '#b45309'])['brandColor'] === '#b45309');
+
+// installing
+$ldb = new PDO('sqlite:' . $lt . '/t.sqlite'); $ldb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+require_once __DIR__ . '/../../canvascore-admin/migrations.php'; cc_migrate($ldb);
+$ldb->exec("INSERT INTO pages (id, title, slug, clean_slug, status, is_draft_copy, is_home) VALUES ('old', 'Coming', 'coming-soon', 'coming-soon', 'published', 0, 1)");
+$ldb->exec("INSERT INTO site_parts (name, content_json) VALUES ('header', '[{\"id\":\"h\",\"type\":\"TEXT\",\"content\":{\"text\":\"<p>Old header</p>\"}}]')");
+file_put_contents($lt . '/data/menu.json', json_encode(['items' => [['id' => 'm', 'label' => 'Old', 'url' => 'old/']], 'settings' => ['theme' => 'dark']]));
+file_put_contents($lt . '/data/settings.json', json_encode(['siteName' => 'Mine', 'brandColor' => '#111111']));
+$r = cc_lib_install($ldb, cc_lib_read($kitsDir . '/coming-soon-page'), [], 'ann', '/site');
+$pg = $ldb->query("SELECT * FROM pages WHERE id != 'old'")->fetch(PDO::FETCH_ASSOC);
+check('a page kit installs as a DRAFT page with a free address, made by the installer; its image is in the library', !empty($r['success']) && $pg['status'] === 'draft' && $pg['clean_slug'] === 'coming-soon-2' && $pg['created_by'] === 'ann' && $pg['title'] === 'Coming Soon' && $pg['layout'] === 'full' && preg_match('#"/site/uploads/\d+_coming-soon-page-logo\.svg"|\\\\/site\\\\/uploads\\\\/\d+_coming-soon-page-logo\.svg#', $pg['content_json']) && count(glob($lt . '/uploads/*logo.svg')) === 1, json_encode($r));
+check('…the image goes into the Media folder Library/<kit>, and the page has a first version in its history', (cc_media_meta_all()[basename(glob($lt . '/uploads/*logo.svg')[0])]['folder'] ?? '') === 'Library/Coming Soon' && (int)$ldb->query("SELECT COUNT(*) FROM page_revisions WHERE owner = '" . $pg['id'] . "'")->fetchColumn() === 1);
+check('the home page was not touched', (int)$ldb->query("SELECT is_home FROM pages WHERE id = 'old'")->fetchColumn() === 1 && (int)$ldb->query("SELECT COUNT(*) FROM pages WHERE is_home = 1")->fetchColumn() === 1);
+$r = cc_lib_install($ldb, cc_lib_read($kitsDir . '/landing-sections'), [], 'ann', '');
+check('a section kit adds its sections to My templates, one entry each', !empty($r['success']) && $r['result']['templates'] === 3 && (int)$ldb->query("SELECT COUNT(*) FROM templates WHERE name LIKE 'Landing sections: %'")->fetchColumn() === 3 && json_decode($ldb->query("SELECT content_json FROM templates WHERE name = 'Landing sections: Hero'")->fetchColumn(), true)['type'] === 'SECTION');
+$r = cc_lib_install($ldb, cc_lib_read($kitsDir . '/bistro-site'), [], 'ann', '');
+check('a site kit without its design adds its pages as drafts and changes nothing else', !empty($r['success']) && count($r['result']['pages']) === 3 && !$r['result']['design'] && (int)$ldb->query("SELECT COUNT(*) FROM pages WHERE created_by = 'ann' AND status = 'draft'")->fetchColumn() === 4 && strpos((string)$ldb->query("SELECT content_json FROM site_parts WHERE name = 'header'")->fetchColumn(), 'Old header') !== false && strpos(file_get_contents($lt . '/data/menu.json'), 'Old') !== false);
+check('…its home page is a draft that is not the Home page (the admin chooses)', (int)$ldb->query("SELECT COUNT(*) FROM pages WHERE is_home = 1")->fetchColumn() === 1 && $r['result']['pages'][0]['home'] === true);
+$r = cc_lib_install($ldb, cc_lib_read($kitsDir . '/bistro-site'), ['design' => true], 'ann', '');
+$hdr = (string)$ldb->query("SELECT content_json FROM site_parts WHERE name = 'header'")->fetchColumn();
+$menu = json_decode(file_get_contents($lt . '/data/menu.json'), true); $set = json_decode(file_get_contents($lt . '/data/settings.json'), true);
+check('with its design: header, footer, menu items and colours are replaced (a second copy of the pages gets numbered addresses)', !empty($r['result']['design']) && strpos($hdr, 'Bistro') !== false && (int)$ldb->query("SELECT COUNT(*) FROM site_parts WHERE name = 'footer'")->fetchColumn() === 1 && $menu['items'][1]['label'] === 'About' && ($menu['settings']['theme'] ?? '') === 'dark' && $set['brandColor'] === '#b45309' && $set['siteName'] === 'Mine' && (int)$ldb->query("SELECT COUNT(*) FROM pages WHERE clean_slug = 'home-3' OR clean_slug = 'home-2'")->fetchColumn() >= 1, json_encode([$menu, $set]));
+$inst = cc_lib_installed();
+check('every install is logged, newest first, with the pages it made and how to undo the design', count($inst) === 4 && $inst[0]['id'] === 'bistro-site' && $inst[0]['design'] === true && preg_match('/^undo-[0-9a-f]{12}\.json$/', $inst[0]['undo']) && count($inst[0]['pages']) === 3 && $inst[1]['design'] === false);
+[$ok, $msg] = cc_lib_undo($ldb, $inst[0]['install_id']);
+$menu2 = json_decode(file_get_contents($lt . '/data/menu.json'), true); $set2 = json_decode(file_get_contents($lt . '/data/settings.json'), true);
+check('undo puts back the previous header, no footer, the old menu and the old colours', $ok && strpos((string)$ldb->query("SELECT content_json FROM site_parts WHERE name = 'header'")->fetchColumn(), 'Old header') !== false && (int)$ldb->query("SELECT COUNT(*) FROM site_parts WHERE name = 'footer'")->fetchColumn() === 0 && $menu2['items'][0]['label'] === 'Old' && $set2['brandColor'] === '#111111' && !is_file($lt . '/lib/' . $inst[0]['undo']), $msg);
+check('…and cannot be done twice, nor for an install that did not change the design, nor with a made-up id', !cc_lib_undo($ldb, $inst[0]['install_id'])[0] && !cc_lib_undo($ldb, $inst[1]['install_id'])[0] && !cc_lib_undo($ldb, '../../x')[0]);
+$r = cc_lib_install($ldb, cc_lib_read($mk('coming-soon-page', function ($d) { unlink("$d/kit.json"); })), [], 'ann', '');
+check('an invalid kit is not installed and nothing is added', empty($r['success']) && !empty($r['errors']) && (int)$ldb->query("SELECT COUNT(*) FROM pages")->fetchColumn() === 8);
+$r = cc_lib_install($ldb, cc_lib_read($mk('coming-soon-page', function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['blocks'][] = ['type' => 'HTML', 'content' => ['code' => '<script>alert(1)</script>']]; $jw("$d/content.json", $c); })), [], 'ann', '');
+$last = (string)$ldb->query("SELECT content_json FROM pages ORDER BY rowid DESC LIMIT 1")->fetchColumn();
+check('a kit with Custom HTML installs without the code, and says so', !empty($r['success']) && $r['result']['dropped_code'] === 1 && strpos($last, 'alert(1)') === false);
+
+// the signed index
+$pair = sodium_crypto_sign_keypair(); $GLOBALS['CC_LIB_KEYS'] = [sodium_crypto_sign_publickey($pair)];
+$zipK = $lt . '/index-kit.zip'; $z = new ZipArchive(); $z->open($zipK, ZipArchive::CREATE); foreach ($good as $n => $c) $z->addFromString($n, $c); $z->close();
+$sha = hash_file('sha256', $zipK);
+$entry = ['id' => 'tiny', 'name' => 'Tiny <b>kit</b>', 'type' => 'page', 'version' => '1.0.0', 'author' => 'Ann', 'description' => 'A tiny kit', 'tags' => ['a', 'b'], 'sha256' => $sha, 'url' => 'https://raw.githubusercontent.com/sputlab/canvascore-library/main/tiny.zip', 'size' => filesize($zipK), 'pages' => 1];
+$indexBytes = json_encode(['version' => 1, 'kits' => [$entry, ['id' => 'evil-host', 'type' => 'page', 'sha256' => $sha, 'url' => 'https://evil.example/x.zip'], ['id' => 'no-sha', 'type' => 'page', 'url' => 'https://github.com/x.zip'], ['id' => 'bad type', 'type' => 'plugin', 'sha256' => $sha, 'url' => 'https://github.com/x.zip']]]);
+$signed = base64_encode(sodium_crypto_sign_detached(cc_lib_signed_message($indexBytes), sodium_crypto_sign_secretkey($pair)));
+$fetches = 0; $serve = ['index' => $indexBytes, 'sig' => $signed, 'zip' => file_get_contents($zipK)];
+$GLOBALS['CC_LIB_FETCH'] = function ($u, $max) use (&$fetches, &$serve) { $fetches++; if (substr($u, -10) === 'index.json') return $serve['index']; if (substr($u, -4) === '.sig') return $serve['sig']; if (substr($u, -8) === 'tiny.zip') return $serve['zip']; return null; };
+$ix = cc_lib_index(true);
+check('a library index signed with a trusted key is accepted; entries from another host, without a checksum or with a bad type are dropped', count($ix['kits']) === 1 && $ix['kits'][0]['id'] === 'tiny' && $ix['kits'][0]['sha256'] === $sha, json_encode($ix));
+check('…its text is cleaned (no markup in a name)', strpos($ix['kits'][0]['name'], '<') === false);
+$f0 = $fetches; cc_lib_index(false);
+check('the index is kept for an hour: no new download', $fetches === $f0);
+$serve['index'] = $indexBytes . ' ';
+$thrown = ''; try { cc_lib_index(true); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('an index that was changed after signing is refused (the last good copy is not replaced)', strpos($thrown, 'not signed') !== false && cc_lib_read_json($lt . '/lib/index.json')['kits'][0]['id'] === 'tiny');
+$other = sodium_crypto_sign_keypair(); $serve['index'] = $indexBytes; $serve['sig'] = base64_encode(sodium_crypto_sign_detached(cc_lib_signed_message($indexBytes), sodium_crypto_sign_secretkey($other)));
+$thrown = ''; try { cc_lib_index(true); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('…and so is one signed with another key; garbage as a signature too', strpos($thrown, 'not signed') !== false);
+$serve['sig'] = 'xx'; $thrown = ''; try { cc_lib_index(true); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('…garbage as a signature', strpos($thrown, 'not signed') !== false);
+$GLOBALS['CC_LIB_FETCH'] = function () { return null; };
+$st = cc_lib_index(true);
+check('when the library cannot be reached the last good copy is shown, marked as stale', !empty($st['stale']) && $st['kits'][0]['id'] === 'tiny' && !empty($st['error']));
+@unlink($lt . '/lib/index.json'); $thrown = ''; try { cc_lib_index(true); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('…and with no copy at all it says so', $thrown !== '');
+$GLOBALS['CC_LIB_FETCH'] = function ($u, $max) use (&$serve) { return substr($u, -8) === 'tiny.zip' ? $serve['zip'] : null; };
+$tmpZip = cc_lib_download($entry);
+check('a downloaded kit matching the index checksum is used', is_file($tmpZip) && !cc_lib_read($tmpZip)['errors']); @unlink($tmpZip);
+$serve['zip'] .= 'x'; $thrown = ''; try { cc_lib_download($entry); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('a download that differs from the index is refused', strpos($thrown, 'checksum') !== false);
+check('addresses are limited to the library\'s hosts, over https', cc_update_url_ok('https://raw.githubusercontent.com/a/b', cc_lib_source()) && !cc_update_url_ok('http://raw.githubusercontent.com/a/b', cc_lib_source()) && !cc_update_url_ok('https://evil.example/a', cc_lib_source()) && !cc_update_url_ok('https://user:pw@github.com/a', cc_lib_source()));
+unset($GLOBALS['CC_LIB_FETCH'], $GLOBALS['CC_LIB_KEYS'], $GLOBALS['CC_LIB_DIR'], $GLOBALS['CC_LIB_DATA_DIR'], $GLOBALS['CC_LIB_UPLOADS'], $GLOBALS['CC_MEDIA_META_FILE'], $GLOBALS['CC_MEDIA_FOLDERS_FILE'], $GLOBALS['CC_LIB_APP_VERSION']);
+cc_backup_rrmdir($lt);
+
 echo "\nREDIRECTS, COOKIE BANNER, SEARCH\n";
 check('redirect paths are normalized and validated', cc_redirect_path('old-page') === null && cc_redirect_path('/Old-Page') === '/old-page/' && cc_redirect_path('/') === null && cc_redirect_path('/a b/') === null && cc_redirect_target('https://x.com/a') === 'https://x.com/a');
 $rdb = new PDO('sqlite::memory:'); $rdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

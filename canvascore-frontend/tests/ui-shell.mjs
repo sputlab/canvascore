@@ -54,6 +54,10 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('pkg_set_enabled')) { const b = JSON.parse(init.body); PKG_CALLS.push(['enable', b]); const p = PKGS.find((x) => x.id === b.id); if (p) p.enabled = b.enabled; return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_remove')) { const b = JSON.parse(init.body); PKG_CALLS.push(['remove', b]); PKGS.splice(PKGS.findIndex((x) => x.id === b.id), 1); return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_list')) return new Response(JSON.stringify({ success: true, packages: [], css: '' }));
+  if (u.includes('library_index')) return new Response(JSON.stringify(LIB_INDEX));
+  if (u.includes('library_install_file')) { LIB_CALLS.push(['file', init.body.get('kit').name, init.body.get('options')]); return new Response(JSON.stringify(LIB_NEXT)); }
+  if (u.includes('library_install')) { const b = JSON.parse(init.body); LIB_CALLS.push(['install', b]); return new Response(JSON.stringify(LIB_NEXT)); }
+  if (u.includes('library_undo')) { const b = JSON.parse(init.body); LIB_CALLS.push(['undo', b]); return new Response(JSON.stringify({ success: true, message: 'The header, footer, menu and colours from before the install are back.' })); }
   if (u.includes('get_users')) return new Response(JSON.stringify(USERS));
   if (u.includes('set_role')) { const b = JSON.parse(init.body); ROLE_CALLS.push(b); const x = USERS.find((y) => y.id === b.id); if (x) x.role = b.role; return new Response(JSON.stringify({ success: true, message: 'Role changed.' })); }
   if (u.includes('review_queue')) return new Response(JSON.stringify({ success: true, items: REVIEWS }));
@@ -126,6 +130,14 @@ const MEDIA_FOLDERS = ['Products', 'Products/Shoes'];
 const MEDIA_REPLACED = [];
 const USERS = [{ id: 1, username: 'ann', role: 'admin' }, { id: 2, username: 'bob', role: 'author' }, { id: 3, username: 'cy', role: 'reviewer' }];
 const ROLE_CALLS = []; const REVIEW_CALLS = [];
+const LIB_CALLS = [];
+let LIB_INDEX = { success: true, demo: false, zip: true, sodium: true, fetched: 1, installed: [{ install_id: 'i1', id: 'bistro-site', name: 'Bistro', version: '1.0.0', type: 'site', at: '2026-10-25 10:00:00', user: 'ann', pages: ['a', 'b', 'c'], templates: 0, design: true, undo: 'undo-aaaaaaaaaaaa.json' }],
+  kits: [
+    { id: 'coming-soon-page', name: 'Coming Soon', type: 'page', version: '1.0.0', author: 'Ann', description: 'A launch page.', license: 'CC0-1.0', tags: ['launch'], pages: 1, preview: true, installed: null },
+    { id: 'landing-sections', name: 'Landing sections', type: 'section', version: '1.0.0', author: 'Bob', description: 'Three sections.', license: '', tags: [], pages: 0, preview: false, installed: null },
+    { id: 'bistro-site', name: 'Bistro', type: 'site', version: '1.0.0', author: 'Cy', description: 'A restaurant site.', license: '', tags: ['restaurant'], pages: 3, preview: true, installed: '1.0.0' },
+  ] };
+let LIB_NEXT = { success: true, message: '"Coming Soon" is installed: a draft page.', result: { pages: [{ id: 'np1', title: 'Coming Soon', slug: 'coming-soon', home: false }], templates: 0, design: false, images: 1, dropped_code: 1, install_id: 'i2' } };
 const REVIEWS = [
   { kind: 'page', id: 'rp1', parent_id: null, title: 'Spring offer', state: 'pending', note: 'Please check the tone', by: 'bob', at: '2026-10-25 09:30:00', collection: '' },
   { kind: 'item', id: 'ri1', parent_id: null, title: 'Launch post', state: 'pending', note: '', by: 'bob', at: '2026-10-25 10:00:00', collection: 'News', collection_id: 'c1' },
@@ -1045,6 +1057,79 @@ try {
     check('an editor with nothing submitted sees no banner and no Submit button', !$('[data-testid="review-bar"]') && !btn('Submit for review', top) && !!btn('Publish', top));
     top = await open('author', { ...base, __item: true, collection_id: 'c1', status: 'published' });
     check('an item that is already published cannot be submitted either', !btn('Submit for review', top));
+  }
+
+  console.log('\nTEMPLATE LIBRARY (admin page)');
+  {
+    useStore.setState({ currentView: 'library', userRole: 'admin', username: 'ann', pages: PAGES });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/TemplateLibrary.jsx')).default)));
+    await waitFor(() => $('article[data-kit="bistro-site"]'));
+    check('the sidebar has the Template library for admins only', !!btn('Template library', $('nav.ui-nav')) && (useStore.setState({ userRole: 'editor' }), true));
+    await sleep(30);
+    check('…editors do not see it', !btn('Template library', $('nav.ui-nav')) && (useStore.setState({ userRole: 'admin' }), true));
+    await sleep(30);
+    const cards = () => $$('article[data-kit]').map((a) => a.getAttribute('data-kit'));
+    check('the library lists its kits as cards with kind, author, version, a preview when there is one', cards().join() === 'coming-soon-page,landing-sections,bistro-site' && !!$('article[data-kit="coming-soon-page"] img[src*="library_preview"]') && !$('article[data-kit="landing-sections"] img') && /Site kit/.test($('article[data-kit="bistro-site"]').textContent) && /by Ann/.test($('article[data-kit="coming-soon-page"]').textContent));
+    check('…installed kits are marked, and the button says "Install again"', /Installed 1\.0\.0/.test($('article[data-kit="bistro-site"]').textContent) && !!btn('Install again', $('article[data-kit="bistro-site"]')) && !!btn('Install', $('article[data-kit="coming-soon-page"]')));
+    click(btn('Sections')); await sleep(30);
+    check('the kind filter narrows the list', cards().join() === 'landing-sections');
+    click(btn('All')); setVal2($('input[aria-label="Search kits"]') || $('input[type="search"]'), 'restaurant'); await sleep(30);
+    check('search looks in names, descriptions and tags', cards().join() === 'bistro-site');
+    setVal2($('input[aria-label="Search kits"]') || $('input[type="search"]'), ''); await sleep(30);
+
+    click(btn('Install', $('article[data-kit="coming-soon-page"]')));
+    const dlg = await waitFor(() => $('[aria-labelledby="cc-kit-title"]'));
+    check('installing asks first: what it adds, that pages are drafts, and that code in a kit is left out', !!dlg && /Install “Coming Soon”\?/.test(dlg.textContent) && /one draft page/.test(dlg.textContent) && /drafts/.test(dlg.textContent) && /code/.test(dlg.textContent) && !dlg.querySelector('input[type="checkbox"]'));
+    LIB_CALLS.length = 0;
+    click(btn('Install the kit', dlg));
+    const res = await waitFor(() => $('[data-testid="lib-result"]'));
+    check('the install is sent by kit id, and the result lists the page it made, the image and the code that was left out', JSON.stringify(LIB_CALLS[0]) === '["install",{"id":"coming-soon-page","options":{"design":false}}]' && /Coming Soon/.test(res.textContent) && /coming-soon/.test(res.textContent) && /1 image added/.test(res.textContent) && /1 Custom HTML block was left empty/.test(res.textContent), JSON.stringify(LIB_CALLS));
+    click(btn('Open', $('[aria-label="Pages added"]'))); await sleep(60);
+    check('"Open" opens the new page in the editor', st().currentView === 'editor' || st().currentView === 'manager');
+    useStore.setState({ currentView: 'library' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/TemplateLibrary.jsx')).default)));
+    await waitFor(() => $('article[data-kit="bistro-site"]'));
+
+    click(btn('Install again', $('article[data-kit="bistro-site"]')));
+    const sd = await waitFor(() => $('[aria-labelledby="cc-kit-title"]'));
+    const box = sd.querySelector('input[type="checkbox"]');
+    check('a site kit asks whether to apply its design, off by default, with the warning', !!box && !box.checked && /stay as they are/.test(sd.textContent));
+    click(box); await sleep(20);
+    check('…and says what ticking it does (a safety copy that Restore puts back)', /replaced/.test(sd.textContent) && /Restore/.test(sd.textContent));
+    LIB_NEXT = { success: true, message: '"Bistro" is installed: 3 draft pages, the header, footer, menu and colours.', result: { pages: [{ id: 'b1', title: 'Home', slug: 'home', home: true }], templates: 0, design: true, images: 0, dropped_code: 0, install_id: 'i3' } };
+    LIB_CALLS.length = 0;
+    click(btn('Install the kit', sd));
+    const res2 = await waitFor(() => $('[data-testid="lib-result"]'));
+    check('the choice is sent with the install, and its home page is pointed out', JSON.stringify(LIB_CALLS[0]) === '["install",{"id":"bistro-site","options":{"design":true}}]' && /its home page/.test(res2.textContent) && /Set as home/.test(res2.textContent));
+
+    const row = $('li[data-install="i1"]');
+    check('installed kits are listed with what they made, and a design that can be restored', !!row && /Bistro/.test(row.textContent) && /3 draft pages/.test(row.textContent) && /design applied/.test(row.textContent) && !!btnHas('Restore the previous design', row));
+    LIB_CALLS.length = 0;
+    click(btnHas('Restore the previous design', row));
+    const cd = await waitFor(() => $('[role="alertdialog"]'));
+    check('restoring asks first, saying the pages stay', !!cd && /previous header, footer, menu and colours/.test(cd.textContent) && /pages the kit added stay/.test(cd.textContent));
+    click(btn('Restore', cd)); await sleep(60);
+    check('…then restores that install', JSON.stringify(LIB_CALLS[0]) === '["undo",{"install_id":"i1"}]');
+
+    // a file
+    LIB_NEXT = { success: false, message: 'The kit was not installed.', errors: ['content.json refers to assets/x.png, which is not in the kit', 'a file name that is not allowed: ../evil.php'] };
+    const file = $('input[aria-label="Kit file"]'); const F = globalThis.File || w.File;
+    Object.defineProperty(file, 'files', { configurable: true, value: [new F([new Uint8Array(10)], 'mine.zip', { type: 'application/zip' })] });
+    file.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const fd = await waitFor(() => $('[aria-labelledby="cc-kit-title"]'));
+    check('a kit file asks first too, naming the file', /Install “mine\.zip”\?/.test(fd.textContent) && /what the file holds/.test(fd.textContent));
+    LIB_CALLS.length = 0;
+    click(btn('Install the kit', fd));
+    const bad = await waitFor(() => $('[aria-label="Problems found"]'));
+    check('a refused kit shows every problem and the file was sent', LIB_CALLS[0][0] === 'file' && LIB_CALLS[0][1] === 'mine.zip' && $$('li', bad).length === 2 && /evil\.php/.test(bad.textContent));
+
+    // unreachable library and the demo
+    LIB_INDEX = { success: true, demo: false, zip: true, kits: [], installed: [], error: 'The library index is not signed by the CanvasCore key, so it was not used.' };
+    click(btn('Refresh')); await waitFor(() => $('[data-testid="lib-error"]'));
+    check('a library that cannot be used says why, and the file install stays available', /not signed/.test($('[data-testid="lib-error"]').textContent) && /install a kit from a file/i.test(doc.body.textContent) && !btn('Install from a file…').disabled);
+    LIB_INDEX = { success: true, demo: true, zip: true, kits: [], installed: [], warning: '' };
+    click(btn('Refresh')); await sleep(60);
+    check('in the demo it is turned off', /turned off in the demo/.test(doc.body.textContent) && btn('Install from a file…').disabled);
   }
 
   console.log('\nSTYLES PER DEVICE');

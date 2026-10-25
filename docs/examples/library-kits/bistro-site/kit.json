@@ -1,0 +1,14 @@
+{
+    "id": "bistro-site",
+    "name": "Bistro",
+    "version": "1.0.0",
+    "type": "site",
+    "author": "CanvasCore examples",
+    "description": "A small restaurant site: Home, About and Contact, with a header, a footer, a menu and warm colours. An example of a site kit.",
+    "license": "CC0-1.0",
+    "tags": [
+        "restaurant",
+        "small business"
+    ],
+    "minVersion": "0.24.0"
+}

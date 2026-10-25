@@ -193,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
-if (in_array($action, ['get_users', 'add_user', 'set_role', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard']) && !$is_admin) {
+if (in_array($action, ['get_users', 'add_user', 'set_role', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard', 'library_index', 'library_install', 'library_install_file', 'library_undo', 'library_preview']) && !$is_admin) {
     echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
@@ -1486,6 +1486,76 @@ if (strpos($action, 'wp_') === 0) {
     if ($action === 'wp_step') {
         $res = cc_wp_step($pdo, $job, 15);
         echo json_encode(isset($res['error']) ? ['success' => false, 'message' => $res['error']] : ['success' => true] + $res); exit;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Template library (library.php): starter pages, sections and site kits shared by the community. Admins only: a kit can change the
+// whole site. The index is signed and each kit checked against it; whatever a kit holds is cleaned like an editor's save.
+// ---------------------------------------------------------------------------
+if (strpos($action, 'library_') === 0) {
+    require_once __DIR__ . '/library.php';
+    $libBase = function () { $b = dirname($_SERVER['SCRIPT_NAME'], 2); return $b === '\\' || $b === '/' || $b === '.' ? '' : $b; };
+    if ($action === 'library_index') {
+        $installed = cc_lib_installed();
+        $out = ['success' => true, 'demo' => cc_demo_on(), 'zip' => class_exists('ZipArchive'), 'sodium' => function_exists('sodium_crypto_sign_verify_detached'), 'installed' => array_slice($installed, 0, 30), 'kits' => []];
+        try {
+            $idx = cc_lib_index(!empty($_GET['refresh']));
+            $latest = [];
+            foreach ($installed as $row) if (!isset($latest[$row['id']])) $latest[$row['id']] = $row['version'];
+            foreach ($idx['kits'] as $k) {
+                unset($k['url'], $k['sha256']);
+                $k['preview'] = !empty($k['preview']);
+                $k['installed'] = $latest[$k['id']] ?? null;
+                $out['kits'][] = $k;
+            }
+            $out['fetched'] = (int)($idx['fetched'] ?? 0); $out['stale'] = !empty($idx['stale']);
+            if (!empty($idx['error'])) $out['warning'] = 'The library could not be reached; this is the last copy: ' . $idx['error'];
+        } catch (Throwable $e) { $out['error'] = $e->getMessage(); }
+        echo json_encode($out); exit;
+    }
+    if ($action === 'library_preview') {
+        $id = (string)($_GET['id'] ?? '');
+        try { $idx = cc_lib_index(false); } catch (Throwable $e) { http_response_code(404); echo json_encode(['success' => false]); exit; }
+        $entry = null; foreach ($idx['kits'] as $k) if ($k['id'] === $id) $entry = $k;
+        $pv = $entry ? cc_lib_preview($entry) : null;
+        if (!$pv) { http_response_code(404); echo json_encode(['success' => false]); exit; }
+        header_remove('Content-Type'); header('Content-Type: ' . $pv[1]); header('X-Content-Type-Options: nosniff'); header('Cache-Control: private, max-age=86400');
+        echo $pv[0]; exit;
+    }
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') { echo json_encode(['success' => false, 'message' => 'Not found.']); exit; }
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'The template library is turned off in the demo.']); exit; }
+    session_write_close();
+    @set_time_limit(120);
+    if ($action === 'library_undo') {
+        $d = json_decode(file_get_contents('php://input'), true) ?: [];
+        [$ok, $msg] = cc_lib_undo($pdo, (string)($d['install_id'] ?? ''));
+        echo json_encode(['success' => $ok, 'message' => $msg]); exit;
+    }
+    $kitFile = null; $cleanup = null; $opts = [];
+    if ($action === 'library_install') {
+        $d = json_decode(file_get_contents('php://input'), true) ?: [];
+        $opts = is_array($d['options'] ?? null) ? $d['options'] : [];
+        try {
+            $idx = cc_lib_index(false);
+            $entry = null; foreach ($idx['kits'] as $k) if ($k['id'] === (string)($d['id'] ?? '')) $entry = $k;
+            if (!$entry) { echo json_encode(['success' => false, 'message' => 'That kit is not in the library.']); exit; }
+            $app = cc_version()['app'];
+            if ($entry['minVersion'] !== '' && version_compare($app, $entry['minVersion'], '<')) { echo json_encode(['success' => false, 'message' => 'This kit needs CanvasCore ' . $entry['minVersion'] . ' or newer (this site runs ' . $app . ').']); exit; }
+            $kitFile = cc_lib_download($entry); $cleanup = $kitFile;
+        } catch (Throwable $e) { echo json_encode(['success' => false, 'message' => $e->getMessage()]); exit; }
+    } elseif ($action === 'library_install_file') {
+        $f = $_FILES['kit'] ?? null;
+        if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) { echo json_encode(['success' => false, 'message' => 'The kit did not arrive' . (in_array($f['error'] ?? null, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) ? ' (larger than this server accepts)' : '') . '. Try again.', 'errors' => []]); exit; }
+        $opts = json_decode((string)($_POST['options'] ?? '{}'), true) ?: [];
+        $kitFile = $f['tmp_name'];
+    }
+    if ($kitFile !== null) {
+        $kit = cc_lib_read($kitFile);
+        if ($cleanup) @unlink($cleanup);
+        if (!empty($kit['errors'])) { echo json_encode(['success' => false, 'message' => 'The kit was not installed.', 'errors' => $kit['errors']]); exit; }
+        $res = cc_lib_install($pdo, $kit, ['design' => !empty($opts['design'])], $username, $libBase());
+        echo json_encode($res); exit;
     }
 }
 

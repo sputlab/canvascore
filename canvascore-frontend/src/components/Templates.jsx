@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { notify } from '../ui/notify';
 import { uniqueSlug } from '../utils/slug';
-import { LayoutTemplate, Plus, FileText } from 'lucide-react';
+import { LayoutTemplate, Plus, FileText, Store } from 'lucide-react';
 import { Button, PageHeader, EmptyState } from '../ui/kit';
 import { fetchStarters, starterBlocks, starterOutline } from '../editor/starters';
 
 const newPageId = () => 'page-' + Date.now();
 
 export default function Templates() {
-  const { setView, setActivePage, setBlocks, setSelectedBlockId, pages, setPages } = useStore();
+  const { setView, setActivePage, setBlocks, setSelectedBlockId, pages, setPages, userRole } = useStore();
   const [starters, setStarters] = useState([]);
   const [busy, setBusy] = useState(false);
 
@@ -47,7 +47,8 @@ export default function Templates() {
   return (
     <>
       <PageHeader icon={LayoutTemplate} title="Start from a template"
-        description="Pick a starting point. It creates a new draft page you can fully edit." />
+        description="Pick a starting point. It creates a new draft page you can fully edit."
+        actions={userRole === 'admin' && <Button icon={Store} onClick={() => setView('library')}>Browse the online library</Button>} />
       {starters.length === 0 ? (
         <EmptyState icon={LayoutTemplate} title="No templates available" />
       ) : (

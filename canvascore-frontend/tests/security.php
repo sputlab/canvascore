@@ -852,6 +852,94 @@ $own->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => 
 check('"everyone" opens it again', in_array('Roles blog', $names($ed2), true));
 check('a role never gives access to the admin-only areas', empty($au1->api('get_users')['json']['success'] ?? null) && strpos((string)($au1->api('get_users')['json']['message'] ?? ''), 'Only admins') !== false && empty($rv->api('backup_info')['json']['success']) && empty($au1->api('pkg_info')['json']['success']) && empty($au1->api('wp_info')['json']['success']));
 
+echo "\nTEMPLATE LIBRARY (over HTTP)\n";
+$lkp = sodium_crypto_sign_keypair(); $lsk = sodium_crypto_sign_secretkey($lkp);
+file_put_contents($admin . '/update-keys.php', "<?php\nreturn ['" . base64_encode(sodium_crypto_sign_publickey($lkp)) . "'];\n");
+file_put_contents($admin . '/library-source.php', "<?php\nreturn ['index' => 'http://127.0.0.1:$port/libfeed/index.json', 'sig' => 'http://127.0.0.1:$port/libfeed/index.json.sig', 'hosts' => ['127.0.0.1'], 'https' => false];\n");
+@mkdir($web . '/libfeed');
+$exDir = realpath(__DIR__ . '/../../docs/examples/library-kits');
+$kitZip = function ($example, $id, $edit = null) use ($exDir, $web) {
+    $files = [];
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$exDir/$example", FilesystemIterator::SKIP_DOTS)) as $f) $files[str_replace('\\', '/', substr($f->getPathname(), strlen("$exDir/$example") + 1))] = file_get_contents($f->getPathname());
+    $m = json_decode($files['kit.json'], true); $m['id'] = $id; unset($m['minVersion']); $files['kit.json'] = json_encode($m);
+    if ($edit) $files = $edit($files);
+    $zf = "$web/libfeed/$id.zip"; @unlink($zf); $z = new ZipArchive(); $z->open($zf, ZipArchive::CREATE);
+    foreach ($files as $n => $c) $z->addFromString($n, $c);
+    $z->close();
+    return $zf;
+};
+$publish = function (array $kits, $tamperSha = []) use ($web, $port, $lsk, $exDir) {
+    $entries = [];
+    foreach ($kits as $id => [$zf, $type, $name]) {
+        $e = ['id' => $id, 'name' => $name, 'type' => $type, 'version' => '1.0.0', 'author' => 'Test', 'description' => "The $name kit", 'tags' => ['t'], 'pages' => 1, 'size' => filesize($zf),
+              'sha256' => $tamperSha[$id] ?? hash_file('sha256', $zf), 'url' => "http://127.0.0.1:$port/libfeed/$id.zip", 'preview' => "http://127.0.0.1:$port/libfeed/preview.png"];
+        $entries[] = $e;
+    }
+    copy("$exDir/coming-soon-page/preview.png", "$web/libfeed/preview.png");
+    $bytes = json_encode(['version' => 1, 'kits' => $entries]);
+    file_put_contents("$web/libfeed/index.json", $bytes);
+    file_put_contents("$web/libfeed/index.json.sig", base64_encode(sodium_crypto_sign_detached("canvascore-library-v1\n" . hash('sha256', $bytes), $lsk)));
+    return $bytes;
+};
+$kPage = $kitZip('coming-soon-page', 'lib-page'); $kSite = $kitZip('bistro-site', 'lib-site'); $kSec = $kitZip('landing-sections', 'lib-sections');
+$kEvil = $kitZip('coming-soon-page', 'lib-evil', function ($f) {
+    $c = json_decode($f['content.json'], true);
+    $c['blocks'][] = ['type' => 'HTML', 'content' => ['code' => '<script>steal()</script>', 'customCss' => 'body{display:none}']];
+    $c['blocks'][] = ['type' => 'FORM', 'content' => ['email' => 'attacker@evil.com']];
+    $c['blocks'][] = ['type' => 'TEXT', 'content' => ['text' => '<p onclick="x()">Hello<script>bad()</script></p>']];
+    $f['content.json'] = json_encode($c); return $f;
+});
+$bytes = $publish(['lib-page' => [$kPage, 'page', 'Coming Soon'], 'lib-site' => [$kSite, 'site', 'Bistro'], 'lib-sections' => [$kSec, 'section', 'Landing sections'], 'lib-evil' => [$kEvil, 'page', 'Evil']]);
+
+check('nobody signed out can use the library', (new Client())->api('library_index')['code'] === 401);
+check('an editor cannot browse, install or undo', strpos((string)($ed->api('library_index')['json']['message'] ?? ''), 'Only admins') !== false && strpos((string)($ed->api('library_install', ['id' => 'lib-page'])['json']['message'] ?? ''), 'Only admins') !== false && strpos((string)($ed->api('library_undo', ['install_id' => 'x'])['json']['message'] ?? ''), 'Only admins') !== false);
+$r = $own->api('library_index&refresh=1');
+$ids = array_column($r['json']['kits'] ?? [], 'id');
+check('an admin sees the kits of the signed index, without their download addresses or checksums', !empty($r['json']['success']) && count($ids) === 4 && in_array('lib-site', $ids, true) && strpos($r['body'], '/libfeed/') === false && strpos($r['body'], 'sha256') === false && ($r['json']['kits'][0]['preview'] ?? null) === true, $r['body']);
+$pv = $own->req('GET', '/canvascore-admin/api.php?action=library_preview&id=lib-page', null, [], false);
+check('a kit\'s preview is served from the site itself, as an image, with no sniffing', $pv['code'] === 200 && stripos($pv['head'], 'content-type: image/png') !== false && stripos($pv['head'], 'x-content-type-options: nosniff') !== false && substr($pv['body'], 1, 3) === 'PNG');
+check('…and an unknown kit has none', $own->req('GET', '/canvascore-admin/api.php?action=library_preview&id=nope', null, [], false)['code'] === 404 && $ed->req('GET', '/canvascore-admin/api.php?action=library_preview&id=lib-page', null, [], false)['json']['success'] === false);
+$before = (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn();
+$r = $own->api('library_install', ['id' => 'lib-page']);
+$np = db()->query("SELECT * FROM pages ORDER BY rowid DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+check('installing a page kit adds a draft page made by the admin, and says what it did', !empty($r['json']['success']) && (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $before + 1 && $np['status'] === 'draft' && $np['title'] === 'Coming Soon' && $np['created_by'] !== '' && count($r['json']['result']['pages'] ?? []) === 1, $r['body']);
+check('…its image is in the Media library (folder Library/…)', count(glob($web . '/uploads/*lib-page-logo.svg')) === 1);
+check('a kit that is not in the library cannot be installed', empty($own->api('library_install', ['id' => 'nope'])['json']['success']) && empty($own->api('library_install', ['id' => '../../x'])['json']['success']));
+$r = $own->api('library_install', ['id' => 'lib-sections']);
+check('a section kit adds its sections to My templates', !empty($r['json']['success']) && ($r['json']['result']['templates'] ?? 0) === 3 && count(array_filter($own->api('get_templates')['json'] ?? [], function ($t) { return strpos($t['name'], 'Landing sections: ') === 0; })) === 3, $r['body']);
+$brandBefore = $own->api('get_settings')['json']['brandColor'] ?? '';
+$r = $own->api('library_install', ['id' => 'lib-site', 'options' => ['design' => true]]);
+$iid = $r['json']['result']['install_id'] ?? '';
+check('a site kit adds its pages as drafts and, when asked, its header, footer, menu and colours', !empty($r['json']['success']) && count($r['json']['result']['pages'] ?? []) === 3 && !empty($r['json']['result']['design']) && ($own->api('get_settings')['json']['brandColor'] ?? '') === '#b45309' && (($own->api('get_menu')['json']['items'] ?? [])[1]['label'] ?? '') === 'About' && strpos(json_encode($own->api('get_parts')['json'] ?? []), 'Bistro') !== false, $r['body']);
+$inst = $own->api('library_index')['json']['installed'] ?? [];
+check('the install is listed, and installed kits are marked in the library', ($inst[0]['id'] ?? '') === 'lib-site' && !empty($inst[0]['design']) && count($inst) === 3 && count(array_filter($own->api('library_index')['json']['kits'], function ($k) { return $k['id'] === 'lib-site' && $k['installed'] === '1.0.0'; })) === 1);
+$r = $own->api('library_undo', ['install_id' => $iid]);
+check('undo puts back the colours, the menu, the header and the footer from before', !empty($r['json']['success']) && ($own->api('get_settings')['json']['brandColor'] ?? '') === $brandBefore && (($own->api('get_menu')['json']['items'] ?? [])[1]['label'] ?? '') !== 'About' && strpos(json_encode($own->api('get_parts')['json'] ?? []), 'Bistro') === false, $r['body']);
+check('…once only', empty($own->api('library_undo', ['install_id' => $iid])['json']['success']));
+$r = $own->api('library_install', ['id' => 'lib-evil']);
+$all = json_encode($own->api('get_pages')['json'] ?? []);
+check('a kit with code in it installs WITHOUT the code: no script, no handler, no form email, no custom CSS', !empty($r['json']['success']) && ($r['json']['result']['dropped_code'] ?? 0) === 1 && strpos($all, 'steal()') === false && strpos($all, 'bad()') === false && strpos($all, 'onclick') === false && strpos($all, 'attacker@evil.com') === false && strpos($all, 'display:none') === false, $r['body']);
+$pagesNow = (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn();
+$bytes = $publish(['lib-page' => [$kPage, 'page', 'Coming Soon']], ['lib-page' => str_repeat('0', 64)]);
+$own->api('library_index&refresh=1');
+$r = $own->api('library_install', ['id' => 'lib-page']);
+check('a kit whose download differs from the index checksum is refused, and nothing is added', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'checksum') !== false && (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $pagesNow, $r['body']);
+$bytes = $publish(['lib-page' => [$kPage, 'page', 'Coming Soon']]);
+file_put_contents($web . '/libfeed/index.json', $bytes . ' ');
+$r = $own->api('library_index&refresh=1');
+check('an index changed after it was signed is refused; the last good list stays', strpos((string)($r['json']['error'] ?? '') . (string)($r['json']['warning'] ?? ''), 'not signed') !== false, $r['body']);
+file_put_contents($web . '/libfeed/index.json', $bytes);
+$ru = function ($client, $zf, $opts = []) { return $client->req('POST', '/canvascore-admin/api.php?action=library_install_file', ['kit' => new CURLFile($zf, 'application/zip', 'kit.zip'), 'options' => json_encode($opts)], [], false); };
+check('only an admin can install a kit from a file', strpos((string)($ru($ed, $kPage)['json']['message'] ?? ''), 'Only admins') !== false && $ru(new Client(), $kPage)['code'] === 401);
+$trav = $web . '/libfeed/trav.zip'; $z = new ZipArchive(); $z->open($trav, ZipArchive::CREATE); $z->addFromString('kit.json', json_encode(['id' => 'trav', 'name' => 'T', 'version' => '1.0.0', 'type' => 'page'])); $z->addFromString('content.json', json_encode(['blocks' => [['type' => 'TEXT', 'content' => ['text' => 'x']]]])); $z->addFromString('../../evil.php', '<?php echo 1;'); $z->close();
+$r = $ru($own, $trav);
+check('a kit file with a path outside the kit, or a script in it, is refused with the reasons, and nothing is installed or written', empty($r['json']['success']) && !empty($r['json']['errors']) && !is_file($web . '/../evil.php') && !is_file($web . '/evil.php'), $r['body']);
+$countBefore = (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn();
+$r = $ru($own, $kPage);
+check('a good kit file installs like one from the library', !empty($r['json']['success']) && (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $countBefore + 1, $r['body']);
+check('the library code answers 404 when opened directly', $own->req('GET', '/canvascore-admin/library.php', null, [], false)['code'] === 404);
+@unlink($admin . '/library-source.php');
+
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
 $kp = sodium_crypto_sign_keypair(); $tsk = sodium_crypto_sign_secretkey($kp);

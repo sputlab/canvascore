@@ -89,7 +89,7 @@ $GLOBALS['CC_HT_ADMIN'] =
     "  Header always set Referrer-Policy \"same-origin\"\n" .
     "  Header always set Cross-Origin-Opener-Policy \"same-origin\"\n" .
     "</IfModule>\n" .
-    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|update|update-keys|update-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
+    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|update|update-keys|update-source|library-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
     "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
     "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n" .
     "</FilesMatch>\n" .
