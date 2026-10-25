@@ -24,7 +24,7 @@ web root (the folder the domain serves). Replace both with your own values.
 9. [Forms and email](#9-forms-and-email)
 10. [Security](#10-security)
 11. [Troubleshooting](#11-troubleshooting)
-12. [Block packages and the WordPress importer](#12-block-packages-and-the-wordpress-importer) (installing packages, importing a WordPress site, the template library)
+12. [Block packages and the WordPress importer](#12-block-packages-and-the-wordpress-importer) (installing packages, importing a WordPress site, the template library, integrations)
 13. [License](#13-license)
 
 ---
@@ -84,6 +84,8 @@ root, and published pages are written to the folder above it (the web root itsel
 │   │                             history and the last check; deny-all .htaccess
 │   ├── packages/                 Installed block packages (section 12.1), one folder each, and the
 │   │                             list of them (index.json)
+│   ├── integrations.json         Integrations (section 12.4): webhooks, newsletter services, analytics, Stripe key and links. Holds
+│   │                             API keys: written readable by the web user only (0600)
 │   ├── library/                  Template library (section 12.3): the cached index, previews, the log of installs and the safety
 │   │                             copies of a site kit's design (undo-….json)
 │   ├── imports/                  WordPress imports in progress or just finished (section 12.2); a job
@@ -110,7 +112,7 @@ root, and published pages are written to the folder above it (the web root itsel
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
         ├── blocks/               Definitions of the blocks (settings and template, one file per block)
         ├── update.php, update-keys.php   One-click updates and the public keys of the releases
-        ├── blockpkg.php, wpimport.php, roles.php, library.php   Block packages, the WordPress importer, roles and review, the template library (libraries)
+        ├── blockpkg.php, wpimport.php, roles.php, library.php, integrations.php   Block packages, the WordPress importer, roles and review, the template library, integrations (libraries)
         ├── .htaccess             Security headers and access rules (Apache, written automatically)
         └── version.json          Version of the installed release
 ```
@@ -253,7 +255,7 @@ instead (section 7.4).
 `# CanvasCore: written automatically…`). If you replace it with a file of your own (for example to
 add HTTP basic auth), CanvasCore leaves it alone: copy CanvasCore's rules into it, or the security
 headers and deny rules are lost. Whatever the server, the library files (`config.php`, `compiler.php`,
-`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `library.php`, `update.php`, `update-keys.php`) answer 404
+`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `library.php`, `integrations.php`, `update.php`, `update-keys.php`) answer 404
 when opened directly.
 
 ### 4.2 Nginx
@@ -288,7 +290,7 @@ server {
 
         location ^~ /canvascore-admin/data/ { deny all; return 404; }
         location ~ /\. { deny all; return 404; }
-        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|update|update-keys|update-source|library-source)\.php$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|update|update-keys|update-source|library-source|integrations-source)\.php$ { deny all; return 404; }
         location ~ ^/canvascore-admin/([^/]+/)?[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
 
         # The Menu Builder's live preview is framed by the editor itself
@@ -351,7 +353,7 @@ order, so keep the deny rules above it. `add_header` inside a `location` replace
 the outer block, which is why the preview's block repeats all four. If the site lives in a
 sub-folder (`example.com/site/`), prefix the paths: `/site/canvascore-admin/`, `/site/uploads/`,
 `/site/canvascore-blocks/`. **Updating from before 0.22.0:** add the `canvascore-blocks` block and
-`blockpkg|wpimport|roles|library` and `library-source` to the library-file rule shown above (one-click updates do not change your server configuration).
+`blockpkg|wpimport|roles|library|integrations` and `library-source|integrations-source` to the library-file rule shown above (one-click updates do not change your server configuration).
 
 **Redirects on Nginx.** Nginx ignores the `.htaccess` block of 301s. The old addresses still
 work, because publishing also writes a small redirect page at each old address (it sends the
@@ -429,7 +431,7 @@ installs it.
       directory (the newest 3 of each are kept).
    5. Unpacks the new version next to the admin folder, checks that its PHP files can be read, and
       swaps the two folders. Your data folder (if it is inside the admin folder), the admin
-      folder's own `.htaccess`, `update-source.php` and `library-source.php` come along.
+      folder's own `.htaccess`, `update-source.php`, `library-source.php` and `integrations-source.php` come along.
    6. Calls the new version once, with a one-time token. It opens the database, runs its
       migrations (section 5.2, step 6) and answers with its version.
    7. **Rolls back if any step after the swap fails**: the previous folder and the database copy
@@ -444,7 +446,7 @@ the updates made from here, with the ones that were rolled back.
 Things to know:
 
 - **Files you added yourself** inside `canvascore-admin/` are not carried over: only the data
-  folder, `.htaccess`, `update-source.php` and `library-source.php` are. They stay in the code copy in `updates/`.
+  folder, `.htaccess`, `update-source.php`, `library-source.php` and `integrations-source.php` are. They stay in the code copy in `updates/`.
 - **Other people in the editor** should save their work first: the editor is replaced while it
   runs. Everyone reloads afterwards.
 - **A server that can't call itself** (for example one that blocks requests to its own address, or
@@ -499,8 +501,8 @@ so always restore both together. The Backup page's safety copy restores the cont
    | 14 | Scheduled publishing: `publish_at` and `unpublish_at` on pages and items (section 7.9) |
    | 15 | Roles and review (0.23.0, section 6.6): `created_by` and the review columns (`review_state`, `review_note`, `review_by`, `review_at`, `reviewed_by`) on pages and items, `collections.access_json`; existing pages get their author as creator |
 
-   0.23.0 added migration 15 (the schema is 15); 0.24.0 adds no migration. Existing accounts keep their role (admin or editor). The `library/` folder of
-   the data directory is created when the template library is first used (section 12.3). New in 0.22.0: the `packages/` and `imports/`
+   0.23.0 added migration 15 (the schema is 15); 0.24.0 adds no migration. Existing accounts keep their role (admin or editor). The `library/` folder and
+   the `integrations.json` file of the data directory are created when the template library and the integrations are first used (sections 12.3 and 12.4). New in 0.22.0: the `packages/` and `imports/`
    folders of the data directory and the `canvascore-blocks/` folder of the site are created when first
    used (section 12), and the Nginx rules of section 4.2 gain `canvascore-blocks` (Apache writes its
    own rules).
@@ -936,7 +938,7 @@ A backup contains:
 
 It never contains **installed block packages** (section 12.1; pages that use their blocks are saved, the
 blocks come back when you install the packages again, so keep the `.zip` files), the WordPress import
-folders, user accounts or passwords, sessions, login/rate-limit state, `forms.json` or
+folders, **integration settings and keys** (`integrations.json`, section 12.4: enter them again after restoring on a new server), user accounts or passwords, sessions, login/rate-limit state, `forms.json` or
 `published_files.json` (both rebuilt by publishing), files in `uploads/` that are not images,
 or the published HTML (regenerated by publishing).
 
@@ -1110,6 +1112,11 @@ spreadsheets do not run them as formulas.
 - The form endpoint starts no session, sends no `X-Mailer` header and never shows server errors
   to visitors.
 
+### 9.5 Sending submissions elsewhere
+
+Webhooks, Mailchimp and Brevo are set up under **Administration › Integrations** (section 12.4). They run in addition to the email and the
+stored submission, after the visitor has been answered.
+
 ---
 
 ## 10. Security
@@ -1130,6 +1137,9 @@ What CanvasCore does for you:
   actions (settings, menu, templates, masters, media management, bulk actions, scheduling), an author sees and changes only their own pages
   and items and cannot publish, a reviewer publishes only what was submitted, and a collection can be limited to chosen people: all of it is
   checked by the server on every request, whatever the editor shows. Authors cannot publish the site (`rebuild_all.php` refuses them).
+- **Integrations**: admins only. API keys are stored apart from the settings, readable by the web user only, never sent back to the editor (masked), and sent only to the service's own
+  address. Webhooks go only to public https addresses (private networks refused, the connection pinned to the checked address, no redirects), are signed, and run after the visitor is
+  answered; a newsletter service gets an email only with consent; analytics ids are checked strictly; a payment button links only to Stripe (section 12.4).
 - **Template library**: admins only. The index is signed (Ed25519, the release keys) and a kit's download must match the checksum in it; downloads only from
   the library's https hosts. A kit is cleaned like an editor's save (no code), cannot replace anything (pages are drafts with new addresses), and a site
   kit's design is applied only when asked, after a safety copy (section 12.3).
@@ -1437,6 +1447,18 @@ The author submitted it, so it is locked for them until a reviewer sends it back
 **Someone does not see a collection**
 The collection is limited to chosen people (Collections › Who can work here). Add them there, or choose *Everyone*. An author also sees only the items they made.
 
+**A webhook fails, or nobody is added to Mailchimp or Brevo**
+Open *Integrations › Activity*: each delivery shows its result. A webhook needs a public https address that answers with a 2xx code within a few seconds; fix the receiver and use *Send again*.
+For a newsletter service check the key and the audience or list id with *Test the connection*; and remember that a person is added only with consent (a ticked consent box, or a Newsletter block
+with no consent text) and only from the forms chosen for that service. The PHP `curl` extension and outbound HTTPS are required.
+
+**The analytics snippet does not run**
+Publish the site after saving it. With the cookie banner on, Google Analytics and Matomo wait for Accept (visitors who decline are not counted); check the banner is on in Global Options, or untick the wait.
+It is not added to a demo site, and an id with anything unexpected in it is dropped.
+
+**The Payment Button shows no button**
+Its link is empty or is not a Stripe payment link (`https://buy.stripe.com/…` or `https://donate.stripe.com/…`). Choose one from the list (Integrations › Stripe) or paste the link.
+
 **The template library says it could not be reached, or that the index is not signed**
 Your server could not download the index from GitHub (a firewall, no outbound HTTPS, or the library is not published yet), or the file does not carry the
 CanvasCore signature (a mirror that changed it, or a library signed with another key). The last good list is shown when there is one. You can still install a
@@ -1566,6 +1588,39 @@ outbound HTTPS to GitHub (`raw.githubusercontent.com`, `github.com`).
   must be signed with a key listed in `update-keys.php`. On Nginx keep the rule of section 4.2 that hides `library-source.php`.
 
 ---
+
+### 12.4 Integrations (Administration › Integrations)
+
+One page, admins only, with tabs for **Webhooks**, **Newsletter**, **Analytics**, **Stripe** and **Activity**. Turned off in the demo. Sending anything needs the
+PHP `curl` extension and outbound HTTPS from your server. The keys are stored in `integrations.json` in the data folder (readable by the web user only), never in
+`settings.json`, and the page only ever shows them masked: leave a key field empty to keep the saved key, and use *Remove the key* to delete it. They are not part of
+a backup (section 8.1): enter them again after a restore.
+
+- **Webhooks.** Send each submission of your forms (all, or the ones you choose) to an address of your own (Zapier, Make, n8n, your server…) as a JSON `POST`:
+  `event` (`form.submitted`), `form` (`id`, `type`: form, newsletter or wizard), `submission` (`id`, `page`, `fields` by label) and `site`. Each request is signed:
+  `X-CanvasCore-Signature: sha256=` followed by the HMAC-SHA256 of `<timestamp>.<body>` made with the webhook's secret, with the timestamp in
+  `X-CanvasCore-Timestamp` (refuse old ones). The secret is shown **once** when the webhook is created or renewed. The address must be a public https address: a
+  private or internal network, a name that resolves to one, a user name in the address or a redirect is never followed. *Send a test* posts a sample (`webhook.test`).
+  Delivery happens **after** the visitor has been answered, so a slow receiver does not slow the site; a failed delivery is listed in *Activity*, where it can be sent again.
+- **Mailchimp and Brevo.** The email (and the name, when the form has one) of a submission is added to an audience (Mailchimp) or a list (Brevo) **only with
+  consent**: the visitor ticked the form's consent box, or the form is a **Newsletter** block that has no consent text (the form itself is the signup). A plain
+  contact form is never a signup. Choose *Newsletter blocks only* (the default), *every form with a ticked consent box*, or chosen forms. Mailchimp can ask people to
+  confirm by email first (double opt-in). *Test the connection* shows the name of the audience or list it reached. The API key goes to the service's own
+  address only (`<server>.api.mailchimp.com`, `api.brevo.com`).
+- **Analytics.** Google Analytics 4 (a measurement ID such as `G-XXXXXXXXXX`), Plausible (your domain; a host if you run it yourself) or Matomo (its address and site id). The
+  snippet is added to the head of every published page at the next publish (not on a demo site). Google Analytics and Matomo use cookies: with the **cookie banner**
+  on (Global Options), their snippet only runs after the visitor presses Accept (untick the choice to run it for everyone); with no banner it always runs. Plausible does not
+  use cookies and never waits. An id or address with anything unexpected in it is dropped, so nothing with code can end up in your pages.
+- **Stripe.** Payment links send the visitor to Stripe's own page, so no card data touches your site. With a **secret or restricted key** (a restricted key that can write Products, Prices
+  and Payment Links is enough) *Create the link* makes the product, the price and the link at Stripe from a name, a price and a currency (the buyer can be allowed to change the quantity).
+  Without a key you can still *Add an existing link*: the address of one made in the Stripe dashboard (only `https://buy.stripe.com/…` and `https://donate.stripe.com/…`). A link can be
+  switched off (at Stripe too, when it was made here) and removed from the list. The list feeds the **Payment Button** block, whose panel also accepts a pasted link; a payment
+  button never links anywhere but Stripe. Money, receipts and refunds are handled in Stripe: a static site cannot receive Stripe's own notifications, so sales do not show in CanvasCore.
+- **Activity.** The latest 300 deliveries (webhooks and newsletter sign-ups) with the result. Only a failed one keeps what is needed to send it again (the webhook body, or the
+  address to subscribe); *Clear* forgets them all. Submissions themselves stay in **Submissions**.
+- **Mirrors and tests.** `canvascore-admin/integrations-source.php` (not part of a release; kept when you update) can point the services to other addresses and allow private ones, for a
+  test server: `<?php return ['mailchimp' => 'https://{dc}.example/3.0', 'brevo' => '…', 'stripe' => '…', 'allow_private' => false];`. Keep `allow_private` off on a real site, and keep the rule of
+  section 4.2 that hides this file.
 
 ## 13. License
 

@@ -25,6 +25,8 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 - **Publishing**: a static site of HTML files, with RSS feeds, a sitemap, a search index with filters, redirects, scheduled
   publishing (a page or item goes live and comes down at a time; `cron.php` for sites nobody edits), and images
   optimised to WebP with responsive sizes.
+- **Integrations**: webhooks for forms (signed), Mailchimp and Brevo sign-ups with consent, Google Analytics, Plausible or Matomo, and Stripe
+  payment links with a Payment Button block.
 - **Template library**: install starter pages, sections and whole-site kits shared by the community, from a signed library, as drafts you can edit
   (a kit cannot bring code).
 - **Roles and review**: authors write and submit for review, reviewers approve or send back with a note, editors publish directly, and a
@@ -59,6 +61,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 │   ├── wpimport.php       WordPress importer (export reader, HTML to blocks, image download)
 │   ├── roles.php          Roles and review: what each role may do, ownership, collection access
 │   ├── library.php        Template library: signed index, kit checks and cleaning, installs
+│   ├── integrations.php   Webhooks, newsletter services, analytics and Stripe payment links
 │   ├── blocks/            One definition per block (settings, template, panel), read by PHP and the editor
 │   ├── submit_form.php    Public endpoint for form submissions
 │   ├── install.php        Setup wizard with setup key (delete after use)
@@ -78,7 +81,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 ## Requirements
 
 - Node.js ≥ 20 (developed with 24) and npm
-- PHP ≥ 8 with `pdo_sqlite` and `dom` (`zip` for backups and block packages; `sodium`, `zip` and `curl` for one-click updates and `sodium` and `zip` for the template library; `xml` for the WordPress importer and `curl` for its picture download); the PHP CLI
+- PHP ≥ 8 with `pdo_sqlite` and `dom` (`zip` for backups and block packages; `sodium`, `zip` and `curl` for one-click updates and `sodium` and `zip` for the template library; `curl` for the integrations; `xml` for the WordPress importer and `curl` for its picture download); the PHP CLI
   is also needed for the tests (`test:security` also needs `curl` and `sodium`)
 
 ## Development

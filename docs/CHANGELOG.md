@@ -10,6 +10,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-25 — Template library and integrations
+
 ### Added
 - **Integrations** (Administration › **Integrations**, admins): webhooks, newsletter services, analytics and Stripe payment links.
   - **Webhooks for forms**: every submission of the forms you choose (all, or some) is sent to your own https address as a JSON POST
@@ -50,6 +52,14 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   - `library-source.php` is kept when a site updates itself (like `update-source.php`), and answers nothing when opened directly on Apache (the admin `.htaccess` hides it).
   - The default library is `github.com/sputlab/canvascore-library` (the index and kits are served from raw.githubusercontent.com); a site can point
     to another with `library-source.php` in the admin folder, like `update-source.php`.
+
+### Upgrade notes
+- No migration (the schema stays at 15). New in the data folder, created when first used: `library/` and `integrations.json` (it holds API keys and is written readable by the web user only).
+- **Nginx**: add `library|integrations` to the library-file rule and `library-source|integrations-source` to its deny list, in the example of the Administrator Guide (section 4.2); one-click updates do not
+  change your server configuration. Apache needs nothing.
+- The template library lists what the CanvasCore maintainers publish in `sputlab/canvascore-library`; until that repository exists the page says it could not be reached (you can still install a kit from a file).
+- Webhooks, Mailchimp, Brevo, analytics and Stripe need the PHP `curl` extension (the library needs `zip` and `sodium`). Integration settings are not part of a backup.
+- A form's kind and the positions of its email, name and consent fields are written to `forms.json` at the next publish: publish once for newsletter and consent rules to apply to existing forms.
 
 ## [0.23.0] - 2026-10-25 — Roles and review, and image tools
 
@@ -1332,7 +1342,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/sputlab/CanvasCore/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/sputlab/CanvasCore/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/sputlab/CanvasCore/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...v0.21.1

@@ -38,6 +38,12 @@ From 0.24.0, admins can install kits from a library whose index is signed with t
 Custom HTML, a form address, custom CSS or JavaScript) into a site through a kit, to write outside the kit's folders, to install a kit that is not in the signed
 index or whose checksum differs, to accept an index with a bad signature, or to use the library without being an admin, is a vulnerability: report it as described below.
 
+## Integrations
+
+From 0.24.0, admins can connect webhooks, Mailchimp, Brevo, analytics and Stripe. A way to read or change an integration key or secret without being an admin, to have the site call a private or internal address
+through a webhook, to forge or replay a signed delivery, to add someone to a newsletter without their consent, to inject script through an analytics id or a payment link, or to send a payment button anywhere but to Stripe,
+is a vulnerability: report it as described below.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue, pull request or Discord message for security problems.**
