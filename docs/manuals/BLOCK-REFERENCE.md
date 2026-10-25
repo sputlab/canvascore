@@ -178,7 +178,7 @@ One picture.
 - **Alt Text (SEO)**: a short description for screen readers and search engines. Always fill it in.
 - **Object-Fit Mode**: **Cover (Fill and crop)** (default), **Contain (Show full without crop)** or **Fill (Stretch to fit)**.
 - **Aspect Ratio**: **Auto (original)** (default), 1:1, 4:3, 3:2, 16:9, 21:9 or 2:3 (Portrait).
-- **Focus / Object Position**: which part stays visible when cropped: Center, Top, Bottom, Left, Right.
+- **Focus / Object Position**: which part stays visible when cropped: Center, Top, Bottom, Left, Right. Choosing an image that has a **focal point** in the Media library sets it to that point (shown as “Focal point (30% 70%)”).
 - **Zoom (Scale)**: a slider from 0.5 to 2. Above 1 zooms in (the edges are cropped).
 
 **Tips**

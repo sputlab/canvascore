@@ -10,6 +10,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-25 — Roles and review, and image tools
+
 ### Added
 - **Roles and review.** Two new roles next to admin and editor, chosen in **Accounts** (each account has a role menu; an admin can
   change a role at any time, never the last admin's).
@@ -41,6 +43,14 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   - **From a web address**: the library and the picker can add an image by its address. The server downloads it (public addresses
     only: never a private or internal network, no credentials in the address, usual ports, redirects re-checked, 25 MB) and checks
     it like an upload; the file's own type decides its extension, so an address without one works. Turned off in the demo.
+
+### Upgrade notes
+- Migration 15 (the schema becomes 15) runs by itself on the first request: it adds `created_by` and the review columns to pages and items and
+  `access_json` to collections. Existing accounts keep their role; pages keep their author as creator; items made before have no creator, so
+  only editors and admins change them and authors do not see them.
+- **Nginx**: add `roles` to the library-file rule of the example in the Administrator Guide (section 4.2); one-click updates do not change your
+  server configuration. Apache needs nothing.
+- The Image block's Focus can now hold a point such as `30% 70%` (from a focal point in the library): nothing to change.
 
 ## [0.22.0] - 2026-10-25 — Block packages and the WordPress importer
 
@@ -1281,7 +1291,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/sputlab/CanvasCore/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/sputlab/CanvasCore/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/sputlab/CanvasCore/compare/v0.20.0...v0.21.0

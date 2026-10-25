@@ -102,6 +102,7 @@ canvascore-frontend/         React editor
 | `update.php` | One-click updates: release check, signed package, backup, folder swap, health check, rollback (section 7) |
 | `update-keys.php` | The public keys (Ed25519) that releases are signed with; the private key is never in the repository |
 | `blockdef.php` | The PHP engine of the shared block definitions: setting cleaning, the template language, transforms, behaviour scripts (section 5) |
+| `roles.php` | Roles and review: what each role may do, ownership, per-collection access and the review flow (section 7) |
 | `blockpkg.php` | Block packages: the format, the install checks, the registry in the data folder, the scoped CSS (sections 7 and 8.3) |
 | `wpimport.php` | The WordPress importer: export reader, HTML to blocks, image download, the resumable import (section 7) |
 | `blocks/*.json` | One definition per block: settings, template, panel (45 files). Read by the editor at build time and by PHP at publish time |
@@ -153,6 +154,9 @@ canvascore-frontend/         React editor
 | `src/components/panel/` | `StyleTab`, `AdvancedTab`, `PageSettings`, `fields.jsx`, `helpers.js`, `constants.js` |
 | `src/components/panel/SchemaPanel.jsx`, `widgets.jsx`, `widgetRegistry.js` | The Content panel generated from a block definition, and the named widgets it can use (hotspot pins, search filters, opening hours, grid columns, button size and border, hero button looks) |
 | `src/components/panel/blocks/` | The hand-written Content panels of the blocks that are not (yet) definitions (`FlexRowPanel.jsx`, `FormPanel.jsx`…); `index.js` maps type → panel (`CONTENT_PANELS`) and adds a generated panel for every definition |
+| `src/session/permissions.js` | The role table for the editor (`ROLES`, `canCreate`, `canPublishDirect`, `canPublishSite`, `canManageSite`, `canReview`, `reviewOf`): the twin of `roles.php`, so no button is offered that the server would refuse |
+| `src/components/ReviewQueue.jsx`, `ReviewBar.jsx`, `CollectionAccess.jsx` | Reviews / My submissions; the review banner of the page editor; Collections › Who can work here |
+| `src/components/ImageTools.jsx`, `src/editor/imageTools.js`, `mediaActions.js` | The media library's Crop and Focal point dialog and its pure maths (frame, handles, aspect, focal point); an image from a web address |
 | `src/components/BlockPackages.jsx`, `src/editor/blockPackages.js` | Administration › Block packages; and the editor side of packages: `registerPackages()` registers their definitions, catalog entries and CSS, `loadBlockPackages()` fetches `pkg_list` after sign-in |
 | `src/components/ImportWordPress.jsx` | Administration › Import from WordPress: choose, options, progress and report (drives `wp_analyze`, `wp_start`, `wp_step`) |
 | `src/components/Updates.jsx` | Administration › Updates: check, update, requirements, history |
@@ -347,7 +351,10 @@ public by design), and uploads get their optimized copies in `uploads/_cc/`.
 - **`redirects`** (migration 7: `from_path` primary key, `to_path, auto, created_at`): old addresses that
   forward elsewhere. Paths are site paths with slashes (`/old-page/`, `/blog/old-post/`); `to_path` may also be a
   full `http(s)://` address. `auto = 1` for redirects made by a rename, `0` for ones added in Global Options.
-- **`admin`** (users: `id, username, password_hash, role` admin/editor, `must_change_pw`, `session_gen`; migration 8
+- **Roles and review** (migration 15): `pages` and `collection_items` carry `created_by`, `review_state` (`''`, `pending`, `changes`),
+  `review_note`, `review_by` (who submitted), `review_at` and `reviewed_by` (who last approved or sent back); `collections.access_json` is
+  `{ mode: all | selected, users: [names] }`. The review state of a published page being changed is on its **draft copy**.
+- **`admin`** (users: `id, username, password_hash, role` admin/editor/reviewer/author, `must_change_pw`, `session_gen`; migration 8
   adds a unique `NOCASE` index on `username` and `session_gen`, bumped by a password change or reset to end the
   account's other sessions), **`form_submissions`** (at most `CC_FORM_MAX_ROWS` = 20000 are stored),
   **`cc_meta`** (key/value: the applied `db_schema`, `installed_at`, `dummy_hash` for timing-safe sign-in,
@@ -423,12 +430,13 @@ undoable change.
 
 `api.php` runs `cc_migrate($pdo)` and `cc_migrate_content($pdo)` on every request (`migrations.php`).
 
-**DB schema** (currently 14; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
+**DB schema** (currently 15; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
 unique user names, old default account removed, pre-wizard sites marked installed, stored content sanitized, 9 = custom
 fields (`collections.fields`, `collection_items.field_values`), 10 = structured data (`collections.schema_json`), 11 = the
 collection design (`collections.design_json`), 12 = categories and tags (`collection_taxonomies`, `collection_terms`,
 `collection_items.terms_json`), 13 = listing and archives (`collections.archive_json`), 14 = scheduled publishing
-(`publish_at` / `unpublish_at` on pages and items)): add a numbered closure
+(`publish_at` / `unpublish_at` on pages and items), 15 = roles and review (`created_by` and the review columns on pages and
+items, `collections.access_json`)): add a numbered closure
 to `cc_db_migrations()`, then bump `db_schema` in `version.json` and note it in the CHANGELOG. Each migration
 runs once, in order, in a transaction, and the number is recorded in `cc_meta`.
 
@@ -837,6 +845,9 @@ memory limit can't handle the image). The original is never changed.
 | --- | --- |
 | `cc_media_process($uploads_dir, $name)` | Makes the copies and merges `{ w, h, bytes, variants, optimized }` into `media.json` (called by `upload_media` and `optimize_media`) |
 | `cc_optimize_images($html, $uploads_url, $meta = null)` | Publish time: adds `srcset`/`sizes` to `<img>`s of uploaded files that have copies, `loading="lazy"` (except the first image, which gets `fetchpriority="high"`), `decoding="async"` |
+| `cc_media_crop($uploads_dir, $name, $x, $y, $w, $h, $mode)` | Crops a JPEG, PNG or WebP (the upright image, pixels): `copy` saves a new `<time>_<name>-crop.<ext>` (description and folder carried), `replace` overwrites the original and makes its copies again. Returns `[name, error]` |
+| `cc_media_replace($uploads_dir, $name, $tmp, $size)` / `cc_media_check_file()` | Replaces a file's content under the same name: the new file must really be what the extension says (image type through `getimagesize`, SVG through `cc_svg_is_safe`, audio and video through `cc_media_sniff`); copies are made again and the focal point is cleared |
+| `cc_media_focal_clean($f)` / `cc_media_focal_css($f)` | A focal point `{ x, y }` in percent, kept in 0–100 with one decimal (or `null`), and its `object-position` ("30% 70%"). Stored in `media.json` as `focal` |
 | `cc_media_forget($uploads_dir, $name)` | Deletes a file's copies and metadata (`delete_media`) |
 | `cc_media_meta_all()` / `cc_media_meta_update($fn)` | Read / locked update of `media.json`; `cc_media_meta_file()` honours `$GLOBALS['CC_MEDIA_META_FILE']` (tests) |
 | `cc_media_folder_path($p)` | Normalizes a folder path (`" Products / Shoes "` → `"Products/Shoes"`); `''` = no folder, `null` = invalid (max 5 levels, segments of 1–50 letters, digits, spaces, `_ . ( ) & -`, no `.`/`..`) |
@@ -844,6 +855,22 @@ memory limit can't handle the image). The original is never changed.
 | `cc_media_folder_create($path)` / `cc_media_folder_rename($from, $to)` / `cc_media_folder_delete($path)` | Folder operations. Rename moves sub-folders and images' `folder` along (refused when the target exists or is inside the source); delete moves its images to the parent folder and deletes no file |
 | `cc_media_move($names, $folder)` | Sets `folder` for the given files (creating the folder). **Folders are labels**: files never move on disk, so image URLs never change |
 | `cc_media_usage($pdo, $names)` | Where each file is used: searches the stored content of pages, draft copies (`Page draft`), items (incl. `cover_image`), `site_parts`, `master_components`, and `settings.json` / `menu.json`, by bare file name; returns `name => ["Page: Home", …]` |
+
+### `roles.php` (roles and review)
+
+Loaded by `api.php`. The roles are `CC_ROLES` (`config.php`: `admin`, `editor`, `reviewer`, `author`; `cc_role_clean()` turns anything else into `editor`, as before
+roles existed). The admin-facing description is section 6 of the [Administrator Guide](ADMIN-GUIDE.md#6-accounts-and-roles).
+
+| Function | What it does |
+| --- | --- |
+| `CC_CONTRIBUTOR_DENIED` | The actions an author or a reviewer may not call (site-wide ones and bulk changes); `api.php` answers `{ success: false, code: 'forbidden' }` before the action runs. Everything else is checked inside the action |
+| `cc_can_create()`, `cc_can_publish_directly()`, `cc_can_publish_site()`, `cc_can_edit_any()`, `cc_is_contributor()` | The small table of what a role may do (`rebuild_all.php` uses `cc_can_publish_site()`) |
+| `cc_page_save_check()` / `cc_item_save_check()` | What `save_page` / `save_item` allow for this role and this row: an author edits only their own (a draft copy belongs to its page), never publishes (`needs_review`), is locked while the row waits (`in_review`), cannot change a published item (`published_locked`); a reviewer creates nothing and publishes only a row in `pending` |
+| `cc_collection_access_clean()` / `cc_collection_allowed()` / `cc_collections_denied_ids()` | Per-collection access: `get_collections`, `get_items`, `get_item`, `save_item`, `delete_item`, `bulk_items` and `get_taxonomies` honour it |
+| `cc_review_allowed()`, `cc_review_set()`, `cc_review_published()`, `cc_review_queue()` | The review flow behind `review_submit`, `review_back`, `review_withdraw` and `review_queue`; a publish clears the review (and records the approver) |
+
+An author's `get_pages` and `get_items` are filtered to their own work. Test overrides: none needed (`tests/server.php` calls the helpers on an in-memory
+database made from `cc_db_migrations()`; `tests/security.php` replays the whole flow over HTTP with an author, a reviewer, an editor and an admin).
 
 ### `update.php` (one-click updates)
 
@@ -1287,6 +1314,12 @@ Recently added actions:
 | `backup_download` | GET `?name=` | Streams a saved backup (or a `download-…` one, deleted after sending, named after the site) |
 | `backup_delete` | POST `{ name }` | Deletes a saved backup or safety copy |
 | `backup_upload_chunk` | POST multipart `{ id, index, chunk }` | Appends a piece to `backups/upload-<id>.part` (`id`: 16 hex characters; index 0 starts the file) |
+| `set_role` | POST `{ id, role }` | Admins: changes an account's role (not your own away from admin, not the last admin). Applies at the account's next request |
+| `review_queue` | GET | Review rows (`kind` page/item, `title`, `state`, `note`, `by`, `at`, `collection`): everything to review for reviewers, editors and admins; an author's own work |
+| `review_submit` / `review_back` / `review_withdraw` | POST `{ kind, id, note }` | Submit (the owner, or an editor), send back (a reviewer, editor or admin; the note is required) and withdraw (who submitted it, or a reviewer, editor or admin); return the row's review fields |
+| `media_crop` | POST `{ name, x, y, w, h, mode }` | `mode` `copy` or `replace`; returns `{ name, replaced }`. Not for authors or reviewers |
+| `media_replace` | POST multipart `name`, `file` | Replaces a library file's content under its name. Not for authors or reviewers |
+| `media_import_url` | POST `{ url, folder }` | Downloads an image into the library (the importer's downloader); not in the demo. `save_media_meta` also takes `focal` (`{ x, y }` or `null`) and `get_media` returns it |
 | `pkg_list` | GET | Any signed-in user: `{ packages, css }`, the enabled packages' block definitions, catalog entries and scoped CSS (`cc_pkg_editor_payload()`) |
 | `pkg_info` | GET | Admins: `{ zip, demo, max_mb, packages }` with `used` (where the blocks are used) |
 | `pkg_install` | POST multipart `package` | Admins, not in the demo: `cc_pkg_install()`; returns `{ success, message, errors, id, types }` (`errors` lists every problem) |

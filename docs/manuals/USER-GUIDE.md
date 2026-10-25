@@ -27,9 +27,11 @@ CanvasCore is where you build and update your website. You put pages together fr
 
 ### Roles
 
-There are two roles:
+There are four roles:
 
-- **editor**: builds and edits pages, collection items, media, the menu and most global options.
+- **author**: writes their own pages and collection items, saves drafts and **submits them for review**. They see only their own work, cannot publish, and cannot change the menu, global options or templates.
+- **reviewer**: reads and can edit everyone's work and **approves** what authors submit (approving publishes it) or sends it back with a note. Reviewers create nothing.
+- **editor**: builds and edits pages, collection items, media, the menu and most global options, and publishes directly.
 - **admin**: can do everything an editor can, and also manages accounts, backups, form submissions, collections and redirects, and can use custom code (the **Custom HTML** block and **Custom Code** settings).
 
 Your role is shown under your name at the bottom of the sidebar.
@@ -70,7 +72,7 @@ If the current password is wrong, or the two new ones don't match, the box tells
 Every screen except the page editor has a sidebar on the left. On a narrow screen, open it with the menu button at the top left. The top of the sidebar shows your site's name and icon, and the browser tab says "*Site name* · Admin". Both come from **Global Options** (see [Site identity & SEO](#site-identity--seo)); without a favicon, the default CanvasCore icon is shown.
 
 - **Publish Site**: rebuilds and publishes the whole site (see [Publish vs Publish Site](#publish-vs-publish-site)).
-- **Content**: **Pages**, **Collections**, **Templates**, **Media**.
+- **Content**: **Pages**, **Collections**, **Reviews** (for authors: **My submissions**), **Templates**, **Media**. Authors and reviewers do not see Templates, or the Site group (Menu, Global Options).
 - **Site**: **Menu**, **Global Options**.
 - **Administration** (admins only): **Submissions**, **Accounts**, **Backup**, **Updates**, **Block packages**, **Import from WordPress**.
 
@@ -514,6 +516,14 @@ Click **Save Draft** (or press **Ctrl/Cmd+S**) to save your work without changin
 
 On a Modified page, **Discard draft** throws away all unpublished changes and brings back the version that is online. CanvasCore asks you to confirm first.
 
+### Submitting for review (authors) and reviewing
+
+If you are an **author**, you do not publish: when a page or an item is ready, click **Submit for review** in the top bar (it saves first, and you can leave a note for the reviewer). The page then shows **Waiting for review** and you cannot change it meanwhile; **Withdraw** takes it back. Under **My submissions** you see what is waiting and what came back.
+
+A **reviewer** (and editors and admins) finds the submissions under **Reviews** and clicks **Open to review**. The page opens with a banner showing who sent it and the note. Edit it if you like, then either **Approve & publish** (the Publish button) or **Send back…** with a note saying what to change. The author sees the note on the page, changes it and clicks **Submit again**. A reviewer can only publish what was submitted. Page and item lists show a **Waiting for review** or **Changes requested** badge.
+
+An author can keep working on a page of their own that is already published: the changes are a draft until they are submitted and approved. A published *item* is changed by an editor.
+
 ### Publish vs Publish Site
 
 - **Publish** (in the editor) saves this page, puts it online, and then rebuilds the site so menus and lists stay up to date.
@@ -727,6 +737,10 @@ A page or an item can go live at a date and time, and come down at another one. 
 - Times are the **server's** local time. Ask your host which time zone the server uses.
 - A page that has unpublished edits waiting is not changed by its schedule: publish it by hand. An address that another live page or item already uses is skipped, and the change is reported.
 
+### Who can work in a collection (admins)
+
+Under **Who can work here**, an admin chooses **Everyone who can sign in** (the default) or **Only the people I choose**. Anyone not chosen (apart from admins) does not see the collection or its items and cannot add or change them. Authors still see only their own items.
+
 ### Editing an item
 
 An item opens in the same editor as a page, with a **Collection item** badge. Build its content with blocks as usual, unless the collection has a [design](#the-design-of-a-collection-admins): then the layout is read-only and the item has only its fields and settings. With no block selected, the panel shows **Item Settings** first:
@@ -842,6 +856,18 @@ Each image has a **Description (alt text)** field. Describe what the picture sho
 2. Press **Enter** or click elsewhere. The description is saved.
 
 When you later choose this image for a block, its description is filled into the block's description field for you, if that field is still empty.
+
+### Crop, focal point and replace
+
+Each image has buttons for **Crop or set the focal point**, **Replace the file**, copying its address, moving and deleting.
+
+- **Crop** (JPEG, PNG and WebP): drag the frame or its handles, or type the size in pixels, and choose a **Shape** (free, the image's own, 1:1, 4:3, 3:2, 16:9, 4:5, 9:16 or 3:1). **Save as a new image** keeps the original (the description and folder are copied). **Replace the original** changes the picture everywhere it is used: the dialog says where, and asks first. It cannot be undone.
+- **Focal point**: click the most important part of the picture (a face, a product), or type its position. Three previews (wide, square, portrait) show how it crops. Images with a focal point show a **Focal point** mark. When you then choose the image in an **Image** block, the block's **Focus** is set to that point, so the subject stays in view when the picture is cropped to fit. Change the focal point later and blocks already using the image keep the Focus they have: choose the image again, or set the Focus in the block.
+- **Replace the file**: put a new file in place of an existing one. The name, description and folder stay, so no page breaks, and every page shows the new file after the next publish. The new file must be the same kind of image (a PNG cannot replace a `.jpg`). Its focal point is cleared, and the old file is gone.
+
+### Adding an image from a web address
+
+**From a web address** (in the Media library and in the picker when you choose an image) downloads an image into your library, so it keeps working if the other site changes. Paste the address of the image itself (ending in `.jpg`, `.png`…, or any address that serves an image). Only public addresses work; use images you have the right to use.
 
 ### Faster images on phones
 
@@ -1020,7 +1046,7 @@ These sections appear under **Administration** in the sidebar only for admins. D
 
 - **Forms**: the **Form** block's **Form Settings** set the **Form Title**, the **Receiving Email** and the **Submit Button Text**, and **Form Fields** lists the fields (for example **Short Text**, **Email**, **Long Text**, **Number**). See the [Block Reference](BLOCK-REFERENCE.md).
 - **Submissions** (**Form Submissions**): messages visitors sent through your forms, including the **Multi-step Form** and **Newsletter Signup** blocks. You can search them, **Refresh** the list, **Export CSV**, delete single messages or **Clear all**.
-- **Accounts**: **Add a user** with a **Username** (3–32 letters, digits, `.`, `_`, `-` or `@`; `Anna` and `anna` count as the same name), **Password** and **Role**. In the list you can **Change password** of another account (it is signed out at once and must choose a new password at the next sign-in; for your own, use the key icon) or delete an account. You can't delete your own account or the last admin.
+- **Accounts**: **Add a user** with a **Username** (3–32 letters, digits, `.`, `_`, `-` or `@`; `Anna` and `anna` count as the same name), **Password** and **Role** (Administrator, Editor, Reviewer or Author: the page explains each). In the list you can change an account's **role** from its menu (not your own admin role, and never the last admin's), **Change password** of another account (it is signed out at once and must choose a new password at the next sign-in; for your own, use the key icon) or delete an account. You can't delete your own account or the last admin.
 - **Backup**: **Download backup (.zip)** saves the whole site in one file: pages and their drafts, collections and items, templates, masters, the global header and footer, redirects, Global Options, the menu and every uploaded image, audio and video file (with its description and folder). Version history and form messages are optional. User accounts and passwords are never included. **Keep a copy on the server** stores it on the server instead, where it can later be downloaded, restored or deleted. **Restore** (from a file, or from a copy on the server) **replaces** the whole site with the backup; user accounts are kept, a safety copy of the current site is saved first, and the site is published again afterwards. Older `.json` backups can still be imported.
 - **Block packages**: **Choose a package (.zip)…** adds blocks made by other people; they appear in the Add tab under **Block packages** and work like any other block (Content, Style and Advanced tabs, copy, templates). The page lists what is installed, with an **On** switch (off: the blocks leave the Add tab and the published pages, but stay saved in your pages) and **Remove**, which first tells you how many pages use the package's blocks. A package cannot run code and is checked before it is installed, but install packages only from people you trust. Packages are not part of a backup: keep the `.zip` files.
 - **Import from WordPress**: brings pages, posts, categories, tags and pictures over from a WordPress site. In WordPress choose **Tools › Export › All content** and keep the `.xml` file, then **Choose the export (.xml)…**: you see how much it holds (nothing changes yet), tick **Pages**, **Posts** (into a new collection or an existing one) and **Pictures**, and **Start the import**. Everything arrives as **drafts** (tick it off to import published entries as published, optionally forwarding the old addresses), so you can open each page and post, check it and publish when you are happy. Nothing you already have is changed or deleted. The report at the end lists what was left out or could not be copied (for example a contact-form shortcode or a picture that could not be downloaded). Menus are not imported: build yours in **Menu**.
