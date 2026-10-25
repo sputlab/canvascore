@@ -333,7 +333,8 @@ if ($action === 'get_media') {
         $m = is_array($meta[$f] ?? null) ? $meta[$f] : [];
         $media[] = ['name' => $f, 'kind' => cc_media_kind(pathinfo($f, PATHINFO_EXTENSION)), 'url' => $base_url . $f, 'folder' => (string)($m['folder'] ?? ''), 'mtime' => (int)@filemtime($uploads_dir . '/' . $f),
                     'alt' => (string)($m['alt'] ?? ''), 'w' => (int)($m['w'] ?? 0), 'h' => (int)($m['h'] ?? 0),
-                    'bytes' => (int)($m['bytes'] ?? @filesize($uploads_dir . '/' . $f)), 'optimized' => !empty($m['optimized']), 'variants' => array_values($m['variants'] ?? [])];
+                    'bytes' => (int)($m['bytes'] ?? @filesize($uploads_dir . '/' . $f)), 'optimized' => !empty($m['optimized']), 'variants' => array_values($m['variants'] ?? []),
+                    'focal' => cc_media_focal_clean($m['focal'] ?? null)];
     }
     echo json_encode($media); exit;
 }
@@ -342,9 +343,53 @@ if ($action === 'save_media_meta' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $name = basename((string)($data['name'] ?? ''));
     if ($name === '' || !is_file($uploads_dir . '/' . $name)) { echo json_encode(['success' => false, 'message' => 'Image not found.']); exit; }
-    $alt = trim(mb_substr((string)($data['alt'] ?? ''), 0, 300));
-    cc_media_meta_update(function (&$all) use ($name, $alt) { $all[$name] = array_merge(is_array($all[$name] ?? null) ? $all[$name] : [], ['alt' => $alt]); });
+    // Description (alt) and/or focal point: only what is sent changes ("focal": null clears it)
+    $focal = array_key_exists('focal', $data) ? cc_media_focal_clean($data['focal']) : false;
+    $alt = array_key_exists('alt', $data) ? trim(mb_substr((string)$data['alt'], 0, 300)) : null;
+    cc_media_meta_update(function (&$all) use ($name, $alt, $focal) {
+        $cur = is_array($all[$name] ?? null) ? $all[$name] : [];
+        if ($alt !== null) $cur['alt'] = $alt;
+        if ($focal === null) unset($cur['focal']); elseif ($focal !== false) $cur['focal'] = $focal;
+        $all[$name] = $cur;
+    });
     echo json_encode(['success' => true]); exit;
+}
+// Crop (a copy, or replacing the original), replace a file's content, and add an image from a web address
+if ($action === 'media_crop' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    @set_time_limit(60);
+    [$new, $err] = cc_media_crop($uploads_dir, $d['name'] ?? '', $d['x'] ?? null, $d['y'] ?? null, $d['w'] ?? null, $d['h'] ?? null, ($d['mode'] ?? 'copy') === 'replace' ? 'replace' : 'copy');
+    echo json_encode($new === null ? ['success' => false, 'message' => $err] : ['success' => true, 'name' => $new, 'replaced' => $new === basename((string)($d['name'] ?? '')),
+        'message' => $new === basename((string)($d['name'] ?? '')) ? 'The image was cropped.' : 'The cropped image was saved as a new file.']); exit;
+}
+if ($action === 'media_replace' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    session_write_close();
+    $f = $_FILES['file'] ?? null;
+    if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) { echo json_encode(['success' => false, 'message' => 'The file did not arrive (it may be larger than this server accepts).']); exit; }
+    [$meta, $err] = cc_media_replace($uploads_dir, $_POST['name'] ?? '', $f['tmp_name'], (int)$f['size']);
+    echo json_encode($meta === null ? ['success' => false, 'message' => $err] : ['success' => true, 'message' => 'The file was replaced: pages that use it show the new one after the next publish.', 'meta' => $meta]); exit;
+}
+if ($action === 'media_import_url' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Adding an image from a web address is turned off in the demo.']); exit; }
+    session_write_close();
+    @set_time_limit(60);
+    require_once __DIR__ . '/wpimport.php';
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    $url = trim((string)($d['url'] ?? ''));
+    if (strlen($url) > 2000 || !preg_match('#^https?://#i', $url)) { echo json_encode(['success' => false, 'message' => 'Enter the full address of an image, starting with http:// or https://.']); exit; }
+    [$tmp, $err] = cc_wp_fetch($url);
+    if (!$tmp) { echo json_encode(['success' => false, 'message' => 'The image could not be downloaded: ' . $err . '.']); exit; }
+    $base_dir = dirname($_SERVER['SCRIPT_NAME'], 2);
+    if ($base_dir === '\\' || $base_dir === '/') $base_dir = '';
+    if (!is_dir($uploads_dir)) mkdir($uploads_dir, 0755, true);
+    ensure_htaccess($uploads_dir, $GLOBALS['CC_HT_UPLOADS']);
+    [$local, $err] = cc_wp_store_image($tmp, $url, $uploads_dir, $base_dir);
+    @unlink($tmp);
+    if (!$local) { echo json_encode(['success' => false, 'message' => 'This address is not an image CanvasCore can use: ' . $err . '.']); exit; }
+    $fname = basename($local);
+    $upFolder = cc_media_folder_path($d['folder'] ?? '');
+    if ($upFolder) cc_media_move([$fname], $upFolder);
+    echo json_encode(['success' => true, 'message' => 'The image was added to the library.', 'url' => $local, 'filename' => $fname, 'kind' => 'image', 'meta' => cc_media_meta_all()[$fname] ?? []]); exit;
 }
 // Makes the optimized copies of images uploaded before (a batch at a time: call again while "remaining" > 0)
 if ($action === 'optimize_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {

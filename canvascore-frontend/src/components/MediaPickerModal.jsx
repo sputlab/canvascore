@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { notify } from '../ui/notify';
-import { Image as ImageIcon, X, Upload } from 'lucide-react';
+import { Image as ImageIcon, X, Upload, Link2 } from 'lucide-react';
+import { addImageFromUrl } from '../editor/mediaActions';
+import { focalCss } from '../editor/imageTools';
 import { SearchInput } from '../ui/kit';
 import { useUploader } from '../editor/useUploader';
 import { UploadPanel } from './UploadPanel';
@@ -9,7 +11,8 @@ import MediaThumb from './MediaThumb';
 
 // Media library picker (modal): choose an uploaded image (or audio / video file: `kind`) or upload new ones.
 // Used by the property panel and by the rich text editor. onSelect(url, alt): alt = the image's
-// description saved in the library (empty when none), so blocks can fill their alt field.
+// description saved in the library (empty when none), so blocks can fill their alt field; focal = the image's focal point as an
+// object-position ("30% 70%", empty when none), so an Image block can keep the subject in view.
 const NOUN = { image: ['an', 'image', 'images'], audio: ['an', 'audio file', 'audio files'], video: ['a', 'video', 'videos'] };
 const MediaPickerModal = ({ onClose, onSelect, kind = 'image' }) => {
   const [article, one, many] = NOUN[kind] || NOUN.image;
@@ -34,6 +37,8 @@ const MediaPickerModal = ({ onClose, onSelect, kind = 'image' }) => {
     uploader.start(files, folder === '\u0000all' ? '' : folder);
   };
 
+  const fromUrl = async () => { const d = await addImageFromUrl(folder === '\u0000all' ? '' : folder); if (d) fetchMedia(); };
+
   const q = query.trim().toLowerCase();
   const ofKind = (images || []).filter((img) => kindOf(img) === kind);
   const shown = ofKind.filter((img) => (folder === '\u0000all' || (img.folder || '') === folder) && (!q || `${img.name} ${img.alt || ''}`.toLowerCase().includes(q)))
@@ -53,6 +58,7 @@ const MediaPickerModal = ({ onClose, onSelect, kind = 'image' }) => {
               <Upload size={14} aria-hidden="true" /> {uploader.busy ? 'Uploading…' : 'Upload'}
               <input type="file" multiple style={{ display: 'none' }} accept={acceptFor(kind)} onChange={handleUpload} />
             </label>
+            {kind === 'image' && <button type="button" className="ui-btn ui-btn--sm" onClick={fromUrl}><Link2 size={14} aria-hidden="true" /> From a web address</button>}
             <button ref={closeRef} type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label="Close" onClick={onClose}><X size={16} /></button>
           </span>
         </div>
@@ -71,9 +77,9 @@ const MediaPickerModal = ({ onClose, onSelect, kind = 'image' }) => {
             : ofKind.length === 0 ? <p className="ui-hint">No {many} yet: upload one{kind === 'image' ? '' : ', or close this window and paste the address of a file hosted elsewhere'}.</p>
             : shown.length === 0 ? <p className="ui-hint">No {many} match your search.</p>
             : shown.map((img) => (
-              <button key={img.name} type="button" className="cc-picker__item" onClick={() => onSelect(img.url, img.alt || '')}
+              <button key={img.name} type="button" className="cc-picker__item" onClick={() => onSelect(img.url, img.alt || '', focalCss(img.focal))}
                 title={img.alt ? `${img.name} — ${img.alt}` : img.name} aria-label={`Choose ${img.alt || img.name}`}>
-                <MediaThumb item={img} />
+                <MediaThumb item={{ ...img, url: `${img.url}?v=${img.mtime || 0}` }} />
                 <span className="cc-picker__meta">{kind !== 'image' ? img.name.replace(/^\d+_/, '') : (img.w ? `${img.w}×${img.h}` : '')}{img.bytes ? ` · ${formatBytes(img.bytes)}` : ''}</span>
               </button>
             ))}

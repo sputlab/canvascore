@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Image as ImageIcon, Trash2, Upload, Copy, Zap, Folder, FolderOpen, FolderPlus, Pencil, Images, Inbox, MoveRight, X, CheckSquare } from 'lucide-react';
+import { Image as ImageIcon, Trash2, Upload, Copy, Zap, Folder, FolderOpen, FolderPlus, Pencil, Images, Inbox, MoveRight, X, CheckSquare, Crop, Crosshair, RefreshCw, Link2 } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, SearchInput, Badge, Select } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog, promptDialog } from '../ui/dialog';
@@ -8,6 +8,10 @@ import MediaThumb from './MediaThumb';
 import { useUploader } from '../editor/useUploader';
 import { UploadPanel } from './UploadPanel';
 import MoveToFolderDialog from './MoveToFolderDialog';
+import ImageTools from './ImageTools';
+import { CROPPABLE } from '../editor/imageTools';
+import { addImageFromUrl } from '../editor/mediaActions';
+import { postForm } from '../editor/upload';
 
 // Media library: images, audio and video. Folders (labels: the files never move, so addresses don't change), upload with
 // progress (button or drag & drop), search and sort, select several files (Shift+click for a range) to
@@ -33,6 +37,9 @@ export default function MediaManager() {
   const [moving, setMoving] = useState(null);           // names being moved (dialog open)
   const [optimizing, setOptimizing] = useState(null);
   const fileRef = useRef(null);
+  const replaceRef = useRef(null);
+  const replaceTarget = useRef(null);
+  const [tools, setTools] = useState(null);           // { image, start } while the image tools are open
 
   const fetchMedia = useCallback(() => {
     fetch('api.php?action=get_media').then((res) => res.json()).then((data) => { if (Array.isArray(data)) setImages(data); }).catch(console.error);
@@ -110,6 +117,28 @@ export default function MediaManager() {
     const text = urls.map((u) => (u.startsWith('http') ? u : window.location.origin + u)).join('\n');
     try { await navigator.clipboard.writeText(text); notify(urls.length === 1 ? 'Address copied.' : `${urls.length} addresses copied.`); }
     catch { await promptDialog({ title: 'Copy the address', message: 'Copying is blocked here: select it and copy it (Ctrl/Cmd+C).', defaultValue: text, readOnly: true, confirmLabel: 'Done', hideCancel: true }); }
+  };
+  // Image from a web address, and replacing the content of a file (the name and so every page that uses it stay)
+  const fromUrl = async () => { const d = await addImageFromUrl(uploadFolder); if (d) fetchMedia(); };
+  const askReplace = (img) => { replaceTarget.current = img; if (replaceRef.current) replaceRef.current.click(); };
+  const replaceWith = async (file) => {
+    const img = replaceTarget.current; replaceTarget.current = null;
+    if (!file || !img) return;
+    let usage = {};
+    try { usage = (await post('media_usage', { names: [img.name] })).usage || {}; } catch { usage = {}; }
+    const where = usage[img.name] || [];
+    const ok = await confirmDialog({
+      title: `Replace “${img.name.replace(/^\d+_/, '')}”?`,
+      message: `The file keeps its name, description and folder; its content becomes “${file.name}”. ${where.length ? `It is used in: ${where.slice(0, 6).join(', ')}${where.length > 6 ? '…' : ''}. They show the new file after the next publish.` : 'No page uses it.'}\n\nThe old content is gone: this cannot be undone. The new file must be the same kind (${(img.name.split('.').pop() || '').toUpperCase()}).`,
+      confirmLabel: 'Replace the file', danger: true,
+    });
+    if (!ok) return;
+    const form = new FormData(); form.append('name', img.name); form.append('file', file, file.name);
+    try {
+      const d = await postForm('media_replace', form, {});
+      notify((d && d.message) || 'Done.', d && d.success ? 'success' : 'error');
+      if (d && d.success) fetchMedia();
+    } catch { notify('The file was not replaced (connection problem).', 'error'); }
   };
   const saveAlt = async (img, alt) => {
     if ((img.alt || '') === alt) return;
@@ -209,6 +238,7 @@ export default function MediaManager() {
       <PageHeader icon={ImageIcon} title="Media Library" description="Images, audio and video you can use in any page. Drop files anywhere on this page to upload them into the open folder."
         actions={<>
           <Button icon={FolderPlus} onClick={newFolder}>New folder</Button>
+          <Button icon={Link2} onClick={fromUrl}>From a web address</Button>
           <Button variant="success" icon={Upload} onClick={() => fileRef.current && fileRef.current.click()}>{uploader.busy ? 'Uploading…' : 'Upload'}</Button>
           <input ref={fileRef} type="file" multiple accept={acceptFor('all')} style={{ display: 'none' }} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
         </>} />
@@ -274,7 +304,7 @@ export default function MediaManager() {
                   return (
                     <figure key={img.name} className="cc-media-card" data-selected={isSel ? 'true' : undefined} draggable onDragStart={(e) => dragStart(e, img)}>
                       <div className="cc-media-card__thumb" onClick={(e) => toggle(img.name, e)}>
-                        <MediaThumb item={img} draggable={false} />
+                        <MediaThumb item={{ ...img, url: `${img.url}?v=${img.mtime || 0}` }} draggable={false} />
                         <label className="cc-media-card__check" onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" checked={isSel} onChange={() => {}} onClick={(e) => toggle(img.name, e)} aria-label={`Select ${img.name}`} />
                         </label>
@@ -283,6 +313,8 @@ export default function MediaManager() {
                         <div className="cc-media-card__row">
                           <span className="cc-media-card__name" title={img.name}>{img.name}</span>
                           <span className="cc-media-card__actions">
+                            {kindOf(img) === 'image' && <IconButton icon={Crop} label={`Crop ${img.name} or set its focal point`} size="sm" onClick={() => setTools({ image: img, start: CROPPABLE.includes(img.name.split('.').pop().toLowerCase()) ? 'crop' : 'focal' })} />}
+                            <IconButton icon={RefreshCw} label={`Replace the file ${img.name}`} size="sm" onClick={() => askReplace(img)} />
                             <IconButton icon={Copy} label={`Copy the address of ${img.name}`} size="sm" onClick={() => copyUrls([img.url])} />
                             <IconButton icon={MoveRight} label={`Move ${img.name} to a folder`} size="sm" onClick={() => setMoving([img.name])} />
                             <IconButton icon={Trash2} label={`Delete ${img.name}`} size="sm" onClick={() => removeImages([img.name])} style={{ color: '#f87171' }} />
@@ -294,6 +326,7 @@ export default function MediaManager() {
                           {img.bytes ? <span>{formatBytes(img.bytes)}</span> : null}
                           {current === ALL && img.folder ? <span className="cc-media-card__folder" title={img.folder}><Folder size={11} aria-hidden="true" /> {leaf(img.folder)}</span> : null}
                           {kindOf(img) === 'image' && img.variants && img.variants.length ? <Badge tone="published">Optimized</Badge> : null}
+                          {img.focal ? <span className="cc-media-card__focal" title={`Focal point ${img.focal.x}% / ${img.focal.y}%`}><Crosshair size={11} aria-hidden="true" /> Focal point</span> : null}
                         </div>
                         {kindOf(img) === 'image' && <input className="ui-input cc-media-card__alt" aria-label={`Description of ${img.name}`} placeholder="Description (alt text)" defaultValue={img.alt || ''}
                           onBlur={(e) => saveAlt(img, e.target.value.trim())} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />}
@@ -309,6 +342,9 @@ export default function MediaManager() {
 
       {moving && <MoveToFolderDialog count={moving.length} folders={folders} initial={current === ALL ? '' : current}
         onClose={() => setMoving(null)} onMove={(f) => { const names = moving; setMoving(null); moveImages(names, f); }} />}
+      <input ref={replaceRef} type="file" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} aria-label="New file for the replaced image"
+        onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; replaceWith(f); }} />
+      {tools && <ImageTools image={tools.image} start={tools.start} onClose={() => setTools(null)} onDone={() => fetchMedia()} />}
       <UploadPanel uploader={uploader} />
     </div>
   );

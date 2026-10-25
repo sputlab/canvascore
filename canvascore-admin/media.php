@@ -129,6 +129,104 @@ function cc_media_process($uploads_dir, $name) {
     return $meta;
 }
 
+// ---------------------------------------------------------------------------
+// Image tools: focal point, crop, replace. All keep the file's address working.
+// ---------------------------------------------------------------------------
+const CC_MEDIA_EDITABLE = ['jpg', 'jpeg', 'png', 'webp'];   // formats GD can crop and write back
+
+// The focal point of an image: where the subject is, in percent of its width and height, or null
+function cc_media_focal_clean($f) {
+    if (!is_array($f) || !isset($f['x'], $f['y']) || !is_numeric($f['x']) || !is_numeric($f['y'])) return null;
+    return ['x' => round(max(0, min(100, (float)$f['x'])), 1), 'y' => round(max(0, min(100, (float)$f['y'])), 1)];
+}
+// "30% 70%" for an object-position, from a stored focal point
+function cc_media_focal_css($f) { $f = cc_media_focal_clean($f); return $f ? ($f['x'] + 0) . '% ' . ($f['y'] + 0) . '%' : ''; }
+
+// Writes a GD image in the format of $ext
+function cc_img_save($im, $path, $ext) {
+    switch ($ext) {
+        case 'jpg': case 'jpeg': return @imagejpeg($im, $path, 90);
+        case 'png': imagesavealpha($im, true); return @imagepng($im, $path, 6);
+        case 'webp': imagesavealpha($im, true); return function_exists('imagewebp') && @imagewebp($im, $path, 90);
+    }
+    return false;
+}
+
+// Crops an image (x, y, w, h in pixels of the upright image). $mode 'copy' saves a new file and leaves the original alone,
+// 'replace' overwrites the original (the same address, so every page that uses it shows the cropped image).
+// Returns [name, error]
+function cc_media_crop($uploads_dir, $name, $x, $y, $w, $h, $mode) {
+    $name = basename((string)$name);
+    $path = $uploads_dir . '/' . $name;
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    if ($name === '' || !is_file($path)) return [null, 'Image not found.'];
+    if (!in_array($ext, CC_MEDIA_EDITABLE, true)) return [null, 'Only JPEG, PNG and WebP images can be cropped.'];
+    foreach ([$x, $y, $w, $h] as $v) if (!is_numeric($v)) return [null, 'The crop area is not valid.'];
+    [$x, $y, $w, $h] = [(int)round($x), (int)round($y), (int)round($w), (int)round($h)];
+    $im = cc_img_load($path, $ext);
+    if (!$im) return [null, 'This image cannot be opened here (the server may lack the memory or the image library).'];
+    $sw = imagesx($im); $sh = imagesy($im);
+    if ($w < 1 || $h < 1 || $x < 0 || $y < 0 || $x + $w > $sw || $y + $h > $sh) return [null, 'The crop area is outside the image.'];
+    $out = imagecreatetruecolor($w, $h);
+    imagealphablending($out, false); imagesavealpha($out, true);
+    imagefill($out, 0, 0, imagecolorallocatealpha($out, 0, 0, 0, 127));
+    imagecopy($out, $im, 0, 0, $x, $y, $w, $h);
+    unset($im);
+    if ($mode === 'replace') {
+        $tmp = $path . '.tmp.' . $ext;
+        if (!cc_img_save($out, $tmp, $ext)) { @unlink($tmp); return [null, 'The cropped image could not be saved.']; }
+        if (!@rename($tmp, $path)) { @unlink($tmp); return [null, 'The original could not be replaced.']; }
+        foreach (CC_IMG_WIDTHS as $vw) @unlink($uploads_dir . '/' . CC_IMG_VARIANT_DIR . '/' . cc_variant_name($name, $vw));
+        cc_media_process($uploads_dir, $name);
+        cc_media_meta_update(function (&$all) use ($name) { if (isset($all[$name])) unset($all[$name]['focal']); });   // the subject moved
+        return [$name, ''];
+    }
+    $base = preg_replace('/^\d+_/', '', pathinfo($name, PATHINFO_FILENAME));
+    $base = preg_replace('/-crop(-[0-9a-f]{6})?$/', '', $base);
+    $new = time() . '_' . $base . '-crop.' . $ext;
+    if (file_exists($uploads_dir . '/' . $new)) $new = time() . '_' . $base . '-crop-' . bin2hex(random_bytes(3)) . '.' . $ext;
+    if (!cc_img_save($out, $uploads_dir . '/' . $new, $ext)) { @unlink($uploads_dir . '/' . $new); return [null, 'The cropped image could not be saved.']; }
+    $old = cc_media_meta_all()[$name] ?? [];
+    cc_media_process($uploads_dir, $new);
+    cc_media_meta_update(function (&$all) use ($new, $old) {
+        $all[$new] = array_merge(is_array($all[$new] ?? null) ? $all[$new] : [], array_filter(['alt' => $old['alt'] ?? '', 'folder' => $old['folder'] ?? ''], function ($v) { return $v !== ''; }));
+    });
+    return [$new, ''];
+}
+
+// Does an uploaded file hold what its extension says? Returns an error sentence or null.
+function cc_media_check_file($tmp, $ext, $size) {
+    $kind = cc_media_kind($ext);
+    if ($kind !== 'image') {
+        if (!cc_media_sniff($tmp, $ext)) return 'The file is not a valid ' . strtoupper($ext) . ' ' . $kind . ' file.';
+        if ($size > ($kind === 'video' ? CC_MEDIA_MAX_VIDEO : CC_MEDIA_MAX_AUDIO)) return 'This ' . $kind . ' file is too large.';
+        return null;
+    }
+    if ($ext === 'svg') return cc_svg_is_safe($tmp) ? null : 'This SVG contains scripts or other active content.';
+    $info = @getimagesize($tmp);
+    if ($info === false) return 'The file is not a valid image.';
+    $types = ['jpg' => [IMAGETYPE_JPEG], 'jpeg' => [IMAGETYPE_JPEG], 'png' => [IMAGETYPE_PNG], 'gif' => [IMAGETYPE_GIF], 'webp' => [IMAGETYPE_WEBP], 'bmp' => [IMAGETYPE_BMP], 'ico' => [IMAGETYPE_ICO]];
+    if (defined('IMAGETYPE_AVIF')) $types['avif'] = [IMAGETYPE_AVIF];
+    if (!isset($types[$ext]) || !in_array($info[2], $types[$ext], true)) return 'The new file must be the same kind of image (.' . $ext . ') so that every page keeps working.';
+    return null;
+}
+
+// Replaces the content of a library file, keeping its name (so every page that uses it shows the new file), its description and its
+// folder. Its optimized copies are made again and its focal point is cleared. Returns [meta, error]
+function cc_media_replace($uploads_dir, $name, $tmp, $size) {
+    $name = basename((string)$name);
+    $path = $uploads_dir . '/' . $name;
+    if ($name === '' || $name === '.htaccess' || !is_file($path)) return [null, 'File not found.'];
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    if ($err = cc_media_check_file($tmp, $ext, $size)) return [null, $err];
+    $stage = $path . '.tmp.' . $ext;
+    if (!@copy($tmp, $stage) || !@rename($stage, $path)) { @unlink($stage); return [null, 'The file could not be replaced.']; }
+    foreach (CC_IMG_WIDTHS as $vw) @unlink($uploads_dir . '/' . CC_IMG_VARIANT_DIR . '/' . cc_variant_name($name, $vw));
+    $meta = cc_media_process($uploads_dir, $name);
+    cc_media_meta_update(function (&$all) use ($name) { if (isset($all[$name])) unset($all[$name]['focal']); });
+    return [$meta, ''];
+}
+
 // Deletes a file's copies and metadata
 function cc_media_forget($uploads_dir, $name) {
     foreach (CC_IMG_WIDTHS as $w) @unlink($uploads_dir . '/' . CC_IMG_VARIANT_DIR . '/' . cc_variant_name($name, $w));

@@ -89,6 +89,9 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('action=branding')) return new Response(JSON.stringify({ siteName: 'Acme Bakery', faviconUrl: '/uploads/fav.png' }));
   if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
   if (u.includes('save_media_meta')) return new Response(JSON.stringify({ success: true }));
+  if (u.includes('media_crop')) return new Response(JSON.stringify({ success: true, name: '9_sky-crop.jpg', replaced: JSON.parse(init.body).mode === 'replace', message: 'The image was cropped.' }));
+  if (u.includes('media_replace')) { MEDIA_REPLACED.push([init.body.get('name'), init.body.get('file').name]); return new Response(JSON.stringify({ success: true, message: 'The file was replaced.' })); }
+  if (u.includes('media_import_url')) return new Response(JSON.stringify({ success: true, message: 'The image was added to the library.', url: '/uploads/5_photo.png', filename: '5_photo.png' }));
   if (u.includes('get_starters')) return new Response(JSON.stringify(STARTERS));
   if (u.includes('get_revisions')) return new Response(JSON.stringify([{ id: 2, title: 'P', kind: 'published', author: 'ann', created_at: '2026-10-12 10:00:00' }, { id: 1, title: 'P', kind: 'draft', author: 'bob', created_at: '2026-10-11 09:00:00' }]));
   if (u.includes('get_revision&')) return new Response(JSON.stringify({ id: 1, content_json: JSON.stringify([{ id: 'old1', type: 'TEXT', styles: {}, content: { text: '<p>Old version text</p>' } }]) }));
@@ -116,6 +119,7 @@ const MEDIA = [
   { name: LONG, url: '/uploads/' + LONG, folder: '', mtime: 300, alt: '', w: 10, h: 10, bytes: 900, optimized: true, variants: [] },
 ];
 const MEDIA_FOLDERS = ['Products', 'Products/Shoes'];
+const MEDIA_REPLACED = [];
 const BACKUPS = [
   { name: 'before-restore-20261012-090000-aa11.zip', kind: 'safety', bytes: 5 * 1048576, created: 1791795600, site_name: 'Acme', app: '0.13.0', counts: { pages: 12, collection_items: 4 }, uploads: { files: 37 } },
   { name: 'backup-20261011-090000-bb22.zip', kind: 'saved', bytes: 3 * 1048576, created: 1791709200, site_name: 'Acme', app: '0.13.0', counts: { pages: 1 }, uploads: { files: 1 } },
@@ -505,8 +509,8 @@ try {
     await waitFor(() => $$('figure').length === 3);
     const card = (name) => $$('figure').find((f) => f.querySelector('.cc-media-card__name').textContent === name);
     const lc = card(LONG);
-    check('a long file name is cut with "…" and its buttons stay inside the card (copy, move, delete)',
-      lc.querySelector('.cc-media-card__name').title === LONG && lc.querySelectorAll('.cc-media-card__actions button').length === 3
+    check('a long file name is cut with "…" and its buttons stay inside the card (crop, replace, copy, move, delete)',
+      lc.querySelector('.cc-media-card__name').title === LONG && lc.querySelectorAll('.cc-media-card__actions button').length === 5
       && /cc-media-card__name \{[^}]*min-width: 0;[^}]*text-overflow: ellipsis/.test(readFileSync(path.join(PROJECT, 'src/ui/kit.css'), 'utf8')));
     check('newest first by default', $$('.cc-media-card__name').map((n) => n.textContent)[0] === LONG);
     const folderBtn = (label) => $$('.cc-media-folder__btn').find((b) => b.querySelector('.cc-media-folder__name').textContent === label);
@@ -826,6 +830,90 @@ try {
     click(btnHas('Import another file'));
     await waitFor(() => btnHas('Choose the export'));
     check('another file can be imported afterwards (the finished job is discarded)', WP_CALLS.some((c) => c[0] === 'discard' && c[1].job === '0123456789abcdef'));
+  }
+
+  console.log('\nIMAGE TOOLS (crop, focal point, replace, from a web address)');
+  {
+    const it = await vite.ssrLoadModule('/src/editor/imageTools.js');
+    const N = { w: 2000, h: 1000 };
+    check('the crop frame starts as the biggest one of the shape, centred', JSON.stringify(it.initialRect(N, 1)) === '{"x":500,"y":0,"w":1000,"h":1000}' && JSON.stringify(it.initialRect(N, null)) === '{"x":0,"y":0,"w":2000,"h":1000}' && it.initialRect(N, 16 / 9).w === 1778);
+    check('moving the frame keeps it inside the image', JSON.stringify(it.dragRect({ x: 100, y: 100, w: 400, h: 300 }, 'move', -500, 5000, N, null)) === '{"x":0,"y":700,"w":400,"h":300}');
+    const se = it.dragRect({ x: 100, y: 100, w: 400, h: 300 }, 'se', 100, 50, N, null);
+    check('dragging a corner resizes from the opposite corner (free shape)', se.x === 100 && se.y === 100 && se.w === 500 && se.h === 350);
+    const nw = it.dragRect({ x: 100, y: 100, w: 400, h: 300 }, 'nw', 40, 20, N, null);
+    check('…from the top left too', nw.x === 140 && nw.y === 120 && nw.w === 360 && nw.h === 280);
+    const sq = it.dragRect({ x: 100, y: 100, w: 400, h: 400 }, 'se', 100, 0, N, 1);
+    check('with a fixed shape the frame keeps it (a square stays square)', sq.w === sq.h && sq.w === 500);
+    const e = it.dragRect({ x: 100, y: 100, w: 400, h: 200 }, 'e', 100, 0, N, 2);
+    check('…an edge handle changes the other side too, around the centre', e.w === 500 && e.h === 250 && e.y === 75);
+    check('a frame never leaves the image or shrinks to nothing', it.dragRect({ x: 1500, y: 0, w: 400, h: 400 }, 'se', 5000, 5000, N, null).w === 500 && it.dragRect({ x: 100, y: 100, w: 400, h: 300 }, 'se', -9999, -9999, N, null).w >= it.MIN_CROP);
+    check('a new shape keeps the centre and fills as much as it can', JSON.stringify(it.reshape({ x: 0, y: 0, w: 2000, h: 1000 }, 1, N)) === '{"x":500,"y":0,"w":1000,"h":1000}');
+    check('typing a size keeps the shape and the image bounds; a typed position is clamped', JSON.stringify(it.setField({ x: 0, y: 0, w: 1000, h: 1000 }, 'w', 500, N, 1)) === '{"x":0,"y":0,"w":500,"h":500}' && it.setField({ x: 0, y: 0, w: 500, h: 500 }, 'x', 9999, N, null).x === 1500 && it.setField({ x: 0, y: 0, w: 500, h: 500 }, 'w', 'abc', N, null).w === 500);
+    check('a focal point is in percent of the picture, one decimal, inside it; it becomes an object-position', JSON.stringify(it.focalFromPoint(150, 75, { left: 100, top: 50, width: 200, height: 100 })) === '{"x":25,"y":25}' && it.focalFromPoint(-50, 9999, { left: 0, top: 0, width: 100, height: 100 }).y === 100 && it.focalCss({ x: 30, y: 70.5 }) === '30% 70.5%' && it.focalCss(null) === '');
+
+    MEDIA.push({ name: '1700000100_clip.mp4', kind: 'video', url: '/uploads/1700000100_clip.mp4', folder: '', mtime: 1700000100, alt: '', w: 0, h: 0, bytes: 5242880, optimized: true, variants: [] });
+    const MediaManager = (await vite.ssrLoadModule('/src/components/MediaManager.jsx')).default;
+    mount(React.createElement(MediaManager));
+    await waitFor(() => $$('figure').length === 4);
+    const card = (name) => $$('figure').find((f) => f.querySelector('.cc-media-card__name').textContent === name);
+    const setVal = (el, v) => { Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+    check('images have Crop and Replace buttons; audio and video do not get Crop', !!card('sky.jpg').querySelector('[aria-label="Crop sky.jpg or set its focal point"]') && !!card('sky.jpg').querySelector('[aria-label="Replace the file sky.jpg"]') && !card('1700000100_clip.mp4').querySelector('[aria-label^="Crop "]'));
+    click(card('sky.jpg').querySelector('[aria-label="Crop sky.jpg or set its focal point"]'));
+    const dlg = await waitFor(() => $('[aria-labelledby="cc-imgtools-title"]'));
+    check('the tools open on Crop with the whole image selected and its size shown', !!dlg && !!btn('Crop', dlg) && dlg.querySelector('[data-testid="crop-size"]').textContent.includes('2000 × 1000') && dlg.querySelectorAll('[data-handle]').length === 8);
+    pick(dlg.querySelector('select[aria-label="Crop shape"]'), '1:1'); await sleep(20);
+    check('choosing a shape reshapes the frame (a square from a wide image: 1000 × 1000)', dlg.querySelector('[data-testid="crop-size"]').textContent.includes('1000 × 1000') && dlg.querySelector('[data-testid="crop-frame"]').style.width === '50%');
+    setVal(dlg.querySelector('input[aria-label="Crop width in pixels"]'), '600'); await sleep(20);
+    check('typing a width changes the height too (the shape is kept)', dlg.querySelector('input[aria-label="Crop height in pixels"]').value === '600');
+    click(btn('Save the cropped image', dlg)); await sleep(60);
+    const crop = calls.filter((c) => c.u.includes('media_crop')).pop();
+    check('saving as a new image sends the frame in pixels, in copy mode', !!crop && JSON.stringify(JSON.parse(crop.body)) === '{"name":"sky.jpg","x":500,"y":0,"w":600,"h":600,"mode":"copy"}', crop && crop.body);
+    await waitFor(() => !$('[aria-labelledby="cc-imgtools-title"]'));
+    check('…and the dialog closes', !$('[aria-labelledby="cc-imgtools-title"]'));
+    click(card('sky.jpg').querySelector('[aria-label="Crop sky.jpg or set its focal point"]'));
+    const d2 = await waitFor(() => $('[aria-labelledby="cc-imgtools-title"]'));
+    click(d2.querySelector('input[name="crop-mode"][type="radio"]:not(:checked)')); await sleep(10);
+    check('replacing the original says that every page will show it', /Every page that uses this image will show the cropped one/.test(d2.textContent) && !!btn('Crop the original', d2));
+    const before = calls.filter((c) => c.u.includes('media_crop')).length;
+    click(btn('Crop the original', d2));
+    const ask = await waitFor(() => $('[role="alertdialog"]'));
+    check('…and asks first: where it is used, and that it cannot be undone', !!ask && /Page: Home/.test(ask.textContent) && /cannot be undone/.test(ask.textContent) && calls.filter((c) => c.u.includes('media_crop')).length === before);
+    click(btn('Crop and replace', ask)); await sleep(60);
+    const rc = calls.filter((c) => c.u.includes('media_crop')).pop();
+    check('confirming crops the original (replace mode)', calls.filter((c) => c.u.includes('media_crop')).length === before + 1 && JSON.parse(rc.body).mode === 'replace');
+    await waitFor(() => !$('[aria-labelledby="cc-imgtools-title"]'));
+
+    click(card('sky.jpg').querySelector('[aria-label="Crop sky.jpg or set its focal point"]'));
+    const d3 = await waitFor(() => $('[aria-labelledby="cc-imgtools-title"]'));
+    click(btn('Focal point', d3)); await sleep(20);
+    check('the Focal point tab explains itself and shows how the image crops (wide, square, portrait)', /keeps that point in view/.test(d3.textContent) && d3.querySelectorAll('[aria-label="How it looks when cropped"] img').length === 3 && btn('Save the focal point', d3).disabled);
+    setVal(d3.querySelector('input[aria-label="Focal point across in percent"]'), '30'); await sleep(20);
+    check('typing a point places the marker and the previews follow it', d3.querySelector('[data-testid="focal-marker"]').style.left === '30%' && d3.querySelector('[aria-label="How it looks when cropped"] img').style.objectPosition === '30% 50%');
+    click(btn('Save the focal point', d3)); await sleep(60);
+    const fm = calls.filter((c) => c.u.includes('save_media_meta')).pop();
+    check('saving stores the point with the image', JSON.parse(fm.body).name === 'sky.jpg' && JSON.stringify(JSON.parse(fm.body).focal) === '{"x":30,"y":50}', fm.body);
+    await waitFor(() => !$('[aria-labelledby="cc-imgtools-title"]'));
+
+    // replace the file
+    const rf = $('input[aria-label="New file for the replaced image"]'); const F = globalThis.File || w.File;
+    click(card('sky.jpg').querySelector('[aria-label="Replace the file sky.jpg"]'));
+    Object.defineProperty(rf, 'files', { configurable: true, value: [new F(['x'], 'newsky.jpg', { type: 'image/jpeg' })] });
+    rf.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const rd = await waitFor(() => $('[role="alertdialog"]'));
+    check('replacing a file asks first: it keeps its name, where it is used, and that it cannot be undone', !!rd && /newsky\.jpg/.test(rd.textContent) && /keeps its name, description and folder/.test(rd.textContent) && /cannot be undone/.test(rd.textContent) && /JPG/.test(rd.textContent));
+    click(btn('Replace the file', rd)); await sleep(80);
+    check('…then sends the file for that name', JSON.stringify(MEDIA_REPLACED) === '[["sky.jpg","newsky.jpg"]]');
+
+    // from a web address
+    click(btnHas('From a web address'));
+    const pd = await waitFor(() => $('[role="alertdialog"], [role="dialog"]:not(.cc-imgtools)'));
+    const urlInput = pd && pd.querySelector('input');
+    check('"From a web address" asks for the address and says the image is downloaded into the library', !!urlInput && /downloads the image into your library/.test(pd.textContent));
+    setVal(urlInput, 'https://example.com/photo.png'); await sleep(10);
+    click(btn('Add to the library', pd)); await sleep(80);
+    const iu = calls.filter((c) => c.u.includes('media_import_url')).pop();
+    check('…and sends it to the server', !!iu && JSON.parse(iu.body).url === 'https://example.com/photo.png', iu && iu.body);
+    MEDIA.pop();
   }
 
   console.log('\nSTYLES PER DEVICE');

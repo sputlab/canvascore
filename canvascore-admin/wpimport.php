@@ -285,14 +285,21 @@ function cc_wp_fetch($url, $maxBytes = CC_WP_MAX_IMAGE) {
 }
 // Puts a downloaded image into the uploads folder after the checks an upload makes. [url, error]
 function cc_wp_store_image($tmp, $sourceUrl, $uploadsDir, $baseDir) {
-    $orig = basename((string)parse_url($sourceUrl, PHP_URL_PATH));
+    $orig = rawurldecode(basename((string)parse_url($sourceUrl, PHP_URL_PATH)));
     $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
-    if (!in_array($ext, CC_WP_IMAGE_EXT, true)) return [null, 'not an image type CanvasCore accepts (.' . ($ext ?: '?') . ')'];
-    if ($ext === 'svg' && !cc_svg_is_safe($tmp)) return [null, 'the SVG contains scripts or other active content'];
-    if ($ext !== 'svg' && @getimagesize($tmp) === false) return [null, 'the file is not a valid image'];
+    if ($ext === 'svg') {
+        if (!cc_svg_is_safe($tmp)) return [null, 'the SVG contains scripts or other active content'];
+    } else {
+        // the file's own type decides the extension (an address often has none, or a wrong one)
+        $info = @getimagesize($tmp);
+        if ($info === false) return [null, 'the file is not a valid image'];
+        $real = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_GIF => 'gif', IMAGETYPE_WEBP => 'webp', IMAGETYPE_BMP => 'bmp'][$info[2]] ?? (defined('IMAGETYPE_AVIF') && $info[2] === IMAGETYPE_AVIF ? 'avif' : '');
+        if ($real === '') return [null, 'not an image type CanvasCore accepts'];
+        if (!($ext === $real || ($ext === 'jpeg' && $real === 'jpg'))) { $orig = pathinfo($orig, PATHINFO_FILENAME) . '.' . $real; $ext = $real; }
+    }
     if (!is_dir($uploadsDir)) @mkdir($uploadsDir, 0755, true);
     if (isset($GLOBALS['CC_HT_UPLOADS'])) ensure_htaccess($uploadsDir, $GLOBALS['CC_HT_UPLOADS']);
-    $safe = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', rawurldecode($orig)), '.-');
+    $safe = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', $orig), '.-');
     if ($safe === '' || strtolower(pathinfo($safe, PATHINFO_EXTENSION)) !== $ext) $safe = 'image.' . $ext;
     $fname = time() . '_' . $safe;
     if (file_exists("$uploadsDir/$fname")) $fname = time() . '_' . bin2hex(random_bytes(3)) . '_' . $safe;

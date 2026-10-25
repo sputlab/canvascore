@@ -10,6 +10,20 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **Image tools in the media library.** Each image has a **Crop** button (the frame can be dragged and resized, or typed in pixels;
+  shapes: free, original, 1:1, 4:3, 3:2, 16:9, 4:5, 9:16, 3:1) that saves the crop as a **new image** or **over the original**
+  (same address: every page that uses it shows the cropped image; the page lists where it is used and asks first). JPEG, PNG and WebP;
+  the description and folder are kept, and the optimized copies are made again.
+  - **Focal point**: click the subject of a picture (or type its position). It is stored with the image, shown on its card and
+    offered when the image is chosen: an **Image** block's *Focus* is filled with it, so the subject stays in view when the
+    picture is cropped to fit. The Focus field shows such a value instead of falling back to Center.
+  - **Replace file**: a new file takes the place of a library file, keeping its name (so no page breaks), description and folder.
+    It must be the same kind of image (a PNG cannot replace a .jpg) and passes the checks of an upload; its focal point is cleared.
+  - **From a web address**: the library and the picker can add an image by its address. The server downloads it (public addresses
+    only: never a private or internal network, no credentials in the address, usual ports, redirects re-checked, 25 MB) and checks
+    it like an upload; the file's own type decides its extension, so an address without one works. Turned off in the demo.
+
 ## [0.22.0] - 2026-10-25 — Block packages and the WordPress importer
 
 ### Added

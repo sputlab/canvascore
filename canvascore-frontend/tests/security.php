@@ -691,6 +691,46 @@ check('…and a discarded one is gone', empty($rs['json']['success']) && strpos(
 $r = $own->api('wp_info');
 check('the importer tells the editor what the server can do', !empty($r['json']['success']) && array_key_exists('curl', $r['json']) && !empty($r['json']['xml']) && is_array($r['json']['collections']), $r['body']);
 
+echo "\nIMAGE TOOLS (over HTTP)\n";
+$imgf = $T . '/tool.jpg'; $g = imagecreatetruecolor(400, 200); imagefilledrectangle($g, 0, 0, 399, 199, imagecolorallocate($g, 10, 120, 200)); imagejpeg($g, $imgf, 90);
+$pngf2 = $T . '/tool.png'; imagepng($g, $pngf2);
+$up = $own->req('POST', '/canvascore-admin/api.php?action=upload_media', ['file' => new CURLFile($imgf, 'image/jpeg', 'tool.jpg')], [], false);
+$tn = $up['json']['filename'] ?? '';
+check('(setup) an image is uploaded', !empty($up['json']['success']) && $tn !== '', $up['body']);
+check('nobody signed out can crop, replace, import or set a focal point', (new Client())->api('media_crop', ['name' => $tn])['code'] === 401 && (new Client())->api('media_import_url', ['url' => 'https://example.com/a.png'])['code'] === 401);
+$r = $ed->api('save_media_meta', ['name' => $tn, 'focal' => ['x' => 140, 'y' => 'abc']]);
+$lib = array_values(array_filter($own->api('get_media')['json'] ?? [], function ($m) use ($tn) { return $m['name'] === $tn; }));
+check('a focal point is stored cleaned (an editor may set it; nonsense is refused) and listed with the image', !empty($r['json']['success']) && array_key_exists('focal', $lib[0]) && $lib[0]['focal'] === null);
+$own->api('save_media_meta', ['name' => $tn, 'focal' => ['x' => 33.33, 'y' => 66]]);
+$lib = array_values(array_filter($own->api('get_media')['json'] ?? [], function ($m) use ($tn) { return $m['name'] === $tn; }));
+check('…a good one is kept (percent, one decimal), and the description is not touched when only the focal point is sent', ($lib[0]['focal'] ?? null) === ['x' => 33.3, 'y' => 66] || ($lib[0]['focal'] ?? null) === ['x' => 33.3, 'y' => 66.0], json_encode($lib[0] ?? null));
+$r = $own->api('media_crop', ['name' => $tn, 'x' => 0, 'y' => 0, 'w' => 200, 'h' => 200, 'mode' => 'copy']);
+$cn = $r['json']['name'] ?? '';
+check('a crop saved as a copy gives a new file of the right size; the original stays', !empty($r['json']['success']) && $cn !== $tn && is_file($web . '/uploads/' . $cn) && getimagesize($web . '/uploads/' . $cn)[0] === 200 && getimagesize($web . '/uploads/' . $tn)[0] === 400, $r['body']);
+check('a crop outside the image, with nonsense numbers, or on a path outside uploads is refused', empty($own->api('media_crop', ['name' => $tn, 'x' => 300, 'y' => 0, 'w' => 200, 'h' => 100])['json']['success']) && empty($own->api('media_crop', ['name' => $tn, 'x' => 'a', 'y' => 0, 'w' => 10, 'h' => 10])['json']['success']) && empty($own->api('media_crop', ['name' => '../api.php', 'x' => 0, 'y' => 0, 'w' => 10, 'h' => 10])['json']['success']));
+$rep = function ($client, $name, $file, $mime = 'image/jpeg') { return $client->req('POST', '/canvascore-admin/api.php?action=media_replace', ['name' => $name, 'file' => new CURLFile($file, $mime, 'new.jpg')], [], false); };
+$r = $rep($own, $tn, $pngf2, 'image/jpeg');
+check('replacing a .jpg with a PNG is refused (the address must keep working)', empty($r['json']['success']) && getimagesize($web . '/uploads/' . $tn)[2] === IMAGETYPE_JPEG, $r['body']);
+$evil = $T . '/evil.jpg'; file_put_contents($evil, '<?php system($_GET["c"]); ?>');
+$r = $rep($own, $tn, $evil);
+check('a script sent as a replacement is refused', empty($r['json']['success']) && strpos((string)file_get_contents($web . '/uploads/' . $tn), '<?php') === false, $r['body']);
+$r = $rep($own, '../canvascore-admin/api.php', $imgf);
+check('…and a replacement cannot target a file outside uploads', empty($r['json']['success']));
+$img2 = $T . '/tool2.jpg'; $g2 = imagecreatetruecolor(800, 600); imagejpeg($g2, $img2);
+$r = $rep($own, $tn, $img2);
+$info = getimagesize($web . '/uploads/' . $tn);
+check('a real JPEG replaces the file under the same name', !empty($r['json']['success']) && $info[0] === 800, $r['body']);
+$lib = array_values(array_filter($own->api('get_media')['json'] ?? [], function ($m) use ($tn) { return $m['name'] === $tn; }));
+check('…the focal point is cleared (the subject moved) and the new size is recorded', array_key_exists('focal', $lib[0]) && $lib[0]['focal'] === null && ($lib[0]['w'] ?? 0) === 800);
+foreach (['http://127.0.0.1/a.png', 'http://localhost/a.png', 'http://169.254.169.254/latest/meta-data/', 'http://10.0.0.1/a.png', 'file:///etc/passwd', 'ftp://example.com/a.png', 'javascript:alert(1)', 'http://user:pw@8.8.8.8/a.png', 'http://[::1]/a.png'] as $u) {
+    $r = $own->api('media_import_url', ['url' => $u]);
+    check("an image is not fetched from $u", empty($r['json']['success']) && !glob($web . '/uploads/*_a.png'), $r['body']);
+}
+$r = $ed->api('media_import_url', ['url' => 'http://127.0.0.1:' . '80' . '/a.png']);
+check('an editor gets the same checks', empty($r['json']['success']));
+$r = $own->api('media_import_url', ['url' => str_repeat('a', 2100)]);
+check('an address that is far too long is refused', empty($r['json']['success']));
+
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
 $kp = sodium_crypto_sign_keypair(); $tsk = sodium_crypto_sign_secretkey($kp);
