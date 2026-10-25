@@ -301,6 +301,76 @@ cc_media_forget($up, 'photo.jpg');
 check('deleting an image removes its copies and its description', !is_file("$up/_cc/photo-480.webp") && !isset(cc_media_meta_all()['photo.jpg']));
 array_map('unlink', glob("$up/_cc/*") ?: []); @rmdir("$up/_cc"); array_map('unlink', glob("$up/*") ?: []); @rmdir($up);
 
+echo "\nIMAGE TOOLS: FOCAL POINT, CROP, REPLACE\n";
+$it = sys_get_temp_dir() . '/cc_it_' . getmypid(); @mkdir($it);
+$GLOBALS['CC_MEDIA_META_FILE'] = $it . '/media-meta.json';
+$mk = function ($file, $w, $h, $fmt = 'jpg') use ($it) {
+    $g = imagecreatetruecolor($w, $h); imagefilledrectangle($g, 0, 0, $w - 1, $h - 1, imagecolorallocate($g, 200, 40, 40));
+    imagefilledrectangle($g, 0, 0, intdiv($w, 2) - 1, $h - 1, imagecolorallocate($g, 40, 40, 200));   // left half blue, right half red
+    $fmt === 'png' ? imagepng($g, "$it/$file") : imagejpeg($g, "$it/$file", 95);
+};
+$mk('1_big.jpg', 1000, 500); $mk('2_pic.png', 400, 300, 'png');
+cc_media_process($it, '1_big.jpg'); cc_media_process($it, '2_pic.png');
+cc_media_meta_update(function (&$all) { $all['1_big.jpg']['alt'] = 'Two halves'; $all['1_big.jpg']['folder'] = 'Shots'; });
+check('a focal point is cleaned: percentages kept inside 0–100, one decimal; anything else is none', cc_media_focal_clean(['x' => '33.33', 'y' => 120]) === ['x' => 33.3, 'y' => 100.0] && cc_media_focal_clean(['x' => -5, 'y' => 'a']) === null && cc_media_focal_clean('x') === null && cc_media_focal_clean(null) === null);
+check('…and becomes an object-position', cc_media_focal_css(['x' => 30, 'y' => 70.5]) === '30% 70.5%' && cc_media_focal_css(null) === '');
+[$n, $e] = cc_media_crop($it, '1_big.jpg', 500, 0, 500, 500, 'copy');
+$ci = $n ? getimagesize("$it/$n") : null;
+check('a crop saved as a copy is a new file of the cropped size; the original is untouched', $n && preg_match('/^\d+_big-crop\.jpg$/', $n) && $ci && $ci[0] === 500 && $ci[1] === 500 && getimagesize("$it/1_big.jpg")[0] === 1000, "$n $e");
+$px = $n ? imagecolorat(imagecreatefromjpeg("$it/$n"), 250, 250) : 0;
+check('…it holds the chosen part (the right, red half)', (($px >> 16) & 255) > 150 && ($px & 255) < 100);
+$mm = cc_media_meta_all();
+check('…it keeps the description and the folder, and gets its own optimized state', $mm[$n]['alt'] === 'Two halves' && $mm[$n]['folder'] === 'Shots' && $mm[$n]['w'] === 500);
+cc_media_meta_update(function (&$all) { $all['1_big.jpg']['focal'] = ['x' => 20, 'y' => 20]; });
+[$n2, $e2] = cc_media_crop($it, '1_big.jpg', 0, 0, 600, 300, 'replace');
+$r = getimagesize("$it/1_big.jpg");
+check('a crop that replaces the original keeps the name and the address', $n2 === '1_big.jpg' && $r[0] === 600 && $r[1] === 300, "$n2 $e2");
+check('…its optimized copies are made again for the new size and the focal point is cleared; description and folder stay', cc_media_meta_all()['1_big.jpg']['w'] === 600 && !isset(cc_media_meta_all()['1_big.jpg']['focal']) && cc_media_meta_all()['1_big.jpg']['alt'] === 'Two halves' && is_file("$it/_cc/1_big-480.webp") && !is_file("$it/_cc/1_big-960.webp"));
+check('a crop outside the image, empty, or not numeric is refused', cc_media_crop($it, '2_pic.png', 300, 0, 200, 100, 'copy')[0] === null && cc_media_crop($it, '2_pic.png', 0, 0, 0, 10, 'copy')[0] === null && cc_media_crop($it, '2_pic.png', -1, 0, 10, 10, 'copy')[0] === null && cc_media_crop($it, '2_pic.png', 'a', 0, 10, 10, 'copy')[0] === null);
+file_put_contents("$it/3_anim.gif", base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')); file_put_contents("$it/4_pic.svg", '<svg xmlns="http://www.w3.org/2000/svg"/>');
+check('formats that cannot be cropped (GIF, SVG), unknown files and path tricks are refused', cc_media_crop($it, '3_anim.gif', 0, 0, 1, 1, 'copy')[0] === null && cc_media_crop($it, '4_pic.svg', 0, 0, 1, 1, 'copy')[0] === null && cc_media_crop($it, 'nope.jpg', 0, 0, 1, 1, 'copy')[0] === null && cc_media_crop($it, '../../etc/passwd', 0, 0, 1, 1, 'copy')[0] === null);
+[$n3] = cc_media_crop($it, '2_pic.png', 10, 10, 100, 100, 'copy');
+check('a PNG is cropped as a PNG', $n3 && getimagesize("$it/$n3")[2] === IMAGETYPE_PNG && getimagesize("$it/$n3")[0] === 100);
+// replace
+$new = sys_get_temp_dir() . '/cc_new_' . getmypid() . '.jpg'; $g = imagecreatetruecolor(800, 400); imagejpeg($g, $new);
+[$meta, $err] = cc_media_replace($it, '1_big.jpg', $new, filesize($new));
+check('replacing keeps the name, makes new copies and records the new size; description and folder stay', $meta && $meta['w'] === 800 && getimagesize("$it/1_big.jpg")[0] === 800 && cc_media_meta_all()['1_big.jpg']['alt'] === 'Two halves' && cc_media_meta_all()['1_big.jpg']['folder'] === 'Shots', $err);
+$png = sys_get_temp_dir() . '/cc_new_' . getmypid() . '.png'; imagepng($g, $png);
+check('a file of another kind of image would break the address: refused (a PNG for a .jpg)', cc_media_replace($it, '1_big.jpg', $png, filesize($png))[0] === null && getimagesize("$it/1_big.jpg")[2] === IMAGETYPE_JPEG);
+file_put_contents($new, '<?php system($_GET[1]);');
+check('a script renamed as an image, an unsafe SVG and a missing file are refused', cc_media_replace($it, '1_big.jpg', $new, filesize($new))[0] === null && cc_media_replace($it, '4_pic.svg', $new, filesize($new))[0] === null && cc_media_replace($it, 'nope.jpg', $png, 10)[0] === null && cc_media_replace($it, '../x.jpg', $png, 10)[0] === null);
+file_put_contents($new, '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+check('…an SVG with a script too', cc_media_replace($it, '4_pic.svg', $new, filesize($new))[0] === null);
+file_put_contents($new, '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"/>');
+check('…a plain SVG replaces an SVG', cc_media_replace($it, '4_pic.svg', $new, filesize($new))[0] !== null && strpos(file_get_contents("$it/4_pic.svg"), 'width="2"') !== false);
+check('no temporary files are left behind', !glob("$it/*.tmp.*"));
+// addresses without an extension, or with a wrong one: the file's own type decides
+require_once __DIR__ . '/../../canvascore-admin/wpimport.php';
+$pngf = sys_get_temp_dir() . '/cc_dl_' . getmypid(); copy($png, $pngf);
+[$u1, $e1] = cc_wp_store_image($pngf, 'https://a.example/image?id=3', $it, '');
+[$u2] = cc_wp_store_image($pngf, 'https://a.example/photo.jpg', $it, '');
+[$u3] = cc_wp_store_image($pngf, 'https://a.example/photo.png', $it, '/site');
+check('an image address without an extension is stored with the right one (from the file itself), and a wrong extension is corrected', preg_match('#^/uploads/\d+_image\.png$#', (string)$u1) && preg_match('#^/uploads/\d+_(?:[0-9a-f]{6}_)?photo\.png$#', (string)$u2) && preg_match('#^/site/uploads/\d+_(?:[0-9a-f]{6}_)?photo\.png$#', (string)$u3), json_encode([$u1, $u2, $u3, $e1]));
+@unlink($pngf); @unlink($new); @unlink($png);
+array_map('unlink', array_filter(array_merge(glob("$it/_cc/*") ?: [], glob("$it/*") ?: []), 'is_file')); @rmdir("$it/_cc"); @rmdir($it);
+unset($GLOBALS['CC_MEDIA_META_FILE']);
+
+echo "\nROLES: HELPERS\n";
+require_once __DIR__ . '/../../canvascore-admin/roles.php';
+check('a role is one of admin, editor, reviewer, author; anything else counts as editor', cc_role_clean('author') === 'author' && cc_role_clean('reviewer') === 'reviewer' && cc_role_clean('admin') === 'admin' && cc_role_clean('root') === 'editor' && cc_role_clean(null) === 'editor' && cc_role_clean(['admin']) === 'editor');
+check('what each role may do', cc_can_create('author') && !cc_can_create('reviewer') && cc_can_publish_directly('editor') && !cc_can_publish_directly('reviewer') && !cc_can_publish_directly('author') && !cc_can_publish_site('author') && cc_can_publish_site('reviewer') && !cc_can_edit_any('author') && cc_is_contributor('author') && cc_is_contributor('reviewer') && !cc_is_contributor('editor'));
+check('the actions closed to authors and reviewers are site-wide ones', in_array('save_settings', CC_CONTRIBUTOR_DENIED, true) && in_array('delete_media', CC_CONTRIBUTOR_DENIED, true) && in_array('bulk_items', CC_CONTRIBUTOR_DENIED, true) && !in_array('save_page', CC_CONTRIBUTOR_DENIED, true) && !in_array('upload_media', CC_CONTRIBUTOR_DENIED, true));
+check('collection access is cleaned: a mode, and a list of valid, distinct names', cc_collection_access_clean(['mode' => 'selected', 'users' => ['ann', 'ann', 'a b', 'x', str_repeat('z', 40), 'bob.smith', 7]]) === ['mode' => 'selected', 'users' => ['ann', 'bob.smith']] && cc_collection_access_clean('x') === ['mode' => 'all', 'users' => []] && cc_collection_access_clean(['mode' => 'weird'])['mode'] === 'all');
+$rdb = new PDO('sqlite::memory:'); $rdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+foreach (cc_db_migrations() as $mig) $mig($rdb);
+$rdb->exec("INSERT INTO collections (id, name, slug, access_json) VALUES ('open', 'Open', 'open', '{}'), ('shut', 'Shut', 'shut', '{\"mode\":\"selected\",\"users\":[\"ann\"]}')");
+check('a collection with no list is open to all; one limited to people only to them; admins always', cc_collection_allowed($rdb, 'open', 'author', 'zed') && !cc_collection_allowed($rdb, 'shut', 'editor', 'zed') && cc_collection_allowed($rdb, 'shut', 'author', 'ann') && cc_collection_allowed($rdb, 'shut', 'admin', 'zed') && cc_collections_denied_ids($rdb, 'author', 'zed') === ['shut'] && cc_collections_denied_ids($rdb, 'admin', 'zed') === []);
+$rdb->exec("INSERT INTO pages (id, title, created_by, is_draft_copy, status) VALUES ('pg', 'P', 'ann', 0, 'published'), ('cp', 'P', 'zed', 1, 'draft')");
+$rdb->exec("UPDATE pages SET parent_id = 'pg' WHERE id = 'cp'");
+check('a draft copy belongs to the page it is a copy of', cc_owner_of_page($rdb, ['id' => 'cp', 'parent_id' => 'pg', 'is_draft_copy' => 1, 'created_by' => 'zed']) === 'ann' && cc_owner_of_page($rdb, ['id' => 'pg', 'created_by' => 'ann', 'is_draft_copy' => 0]) === 'ann');
+check('the migration added the review and ownership columns to pages and items, and the access to collections', (function ($db) { foreach (['pages', 'collection_items'] as $t) { $cols = array_column($db->query("PRAGMA table_info($t)")->fetchAll(PDO::FETCH_ASSOC), 'name'); foreach (['created_by', 'review_state', 'review_note', 'review_by', 'review_at', 'reviewed_by'] as $c) if (!in_array($c, $cols, true)) return false; } return in_array('access_json', array_column($db->query("PRAGMA table_info(collections)")->fetchAll(PDO::FETCH_ASSOC), 'name'), true); })($rdb));
+check('existing pages get their author as creator', (function () { $d = new PDO('sqlite::memory:'); $ms = cc_db_migrations(); ksort($ms); foreach ($ms as $v => $m) { if ($v === 15) { $d->exec("INSERT INTO pages (id, title, author) VALUES ('old', 'Old', 'sam')"); } $m($d); } return $d->query("SELECT created_by FROM pages WHERE id = 'old'")->fetchColumn() === 'sam'; })());
+
 echo "\nREDIRECTS, COOKIE BANNER, SEARCH\n";
 check('redirect paths are normalized and validated', cc_redirect_path('old-page') === null && cc_redirect_path('/Old-Page') === '/old-page/' && cc_redirect_path('/') === null && cc_redirect_path('/a b/') === null && cc_redirect_target('https://x.com/a') === 'https://x.com/a');
 $rdb = new PDO('sqlite::memory:'); $rdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -686,7 +756,7 @@ check('…its SEO title and description come from Yoast', $pageRows[0]['seo_titl
 $pb = json_decode($pageRows[0]['content_json'], true);
 $types = array_column($pb, 'type');
 check('page content: text, picture, text, divider, video and code become blocks', $types === ['TEXT', 'IMAGE', 'TEXT', 'DIVIDER', 'VIDEO', 'CODE_SNIPPET'], json_encode($types));
-check('…the picture was copied into the uploads folder and the page points to it', preg_match('#^/uploads/\d+_team\.jpg$#', $pb[1]['content']['src']) && is_file($wd . '/uploads/' . basename($pb[1]['content']['src'])) && $pb[1]['content']['alt'] === 'The team');
+check('…the picture was copied into the uploads folder and the page points to it', preg_match('#^/uploads/\d+_team\.png$#', $pb[1]['content']['src']) && is_file($wd . '/uploads/' . basename($pb[1]['content']['src'])) && $pb[1]['content']['alt'] === 'The team');
 check('…the caption stays as text, headings are kept', strpos($pb[2]['content']['text'], '<em>Our team</em>') !== false && strpos($pb[2]['content']['text'], '<h2>Our story</h2>') !== false);
 check('…the video is a YouTube link and the code block knows its language', $pb[4]['content']['url'] === 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' && $pb[5]['content']['language'] === 'php' && $pb[5]['content']['code'] === 'echo "hi";');
 $all = json_encode($pb);
@@ -694,7 +764,7 @@ check('…scripts, other iframes and shortcodes are left out and reported', strp
 check('…a link to another imported post points to its new address, other links stay', strpos($pb[0]['content']['text'], 'href="{{BASE_URL}}journal/hello-world/"') !== false && strpos($pb[0]['content']['text'], 'href="https://elsewhere.org/x"') !== false, $pb[0]['content']['text']);
 $items = $wpdb->query("SELECT * FROM collection_items ORDER BY date")->fetchAll(PDO::FETCH_ASSOC);
 check('the posts are items, in their order, with the date, the excerpt without tags and the status', count($items) === 2 && $items[0]['slug'] === 'hello-world' && $items[0]['date'] === '2023-05-04' && $items[0]['excerpt'] === 'A short intro' && $items[0]['status'] === 'published' && $items[1]['status'] === 'draft' && $items[1]['slug'] === 'draft-thoughts');
-check('the featured picture is the cover image', preg_match('#^/uploads/\d+_team\.jpg$#', $items[0]['cover_image']) === 1);
+check('the featured picture is the cover image', preg_match('#^/uploads/\d+_team\.png$#', $items[0]['cover_image']) === 1);
 $tj = json_decode($items[0]['terms_json'], true);
 check('categories and tags are set on the item (one term each, in their own taxonomy)', count($tj) === 2 && count(array_merge(...array_values($tj))) === 2);
 $ib = json_decode($items[0]['content_json'], true);

@@ -285,14 +285,21 @@ function cc_wp_fetch($url, $maxBytes = CC_WP_MAX_IMAGE) {
 }
 // Puts a downloaded image into the uploads folder after the checks an upload makes. [url, error]
 function cc_wp_store_image($tmp, $sourceUrl, $uploadsDir, $baseDir) {
-    $orig = basename((string)parse_url($sourceUrl, PHP_URL_PATH));
+    $orig = rawurldecode(basename((string)parse_url($sourceUrl, PHP_URL_PATH)));
     $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
-    if (!in_array($ext, CC_WP_IMAGE_EXT, true)) return [null, 'not an image type CanvasCore accepts (.' . ($ext ?: '?') . ')'];
-    if ($ext === 'svg' && !cc_svg_is_safe($tmp)) return [null, 'the SVG contains scripts or other active content'];
-    if ($ext !== 'svg' && @getimagesize($tmp) === false) return [null, 'the file is not a valid image'];
+    if ($ext === 'svg') {
+        if (!cc_svg_is_safe($tmp)) return [null, 'the SVG contains scripts or other active content'];
+    } else {
+        // the file's own type decides the extension (an address often has none, or a wrong one)
+        $info = @getimagesize($tmp);
+        if ($info === false) return [null, 'the file is not a valid image'];
+        $real = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_GIF => 'gif', IMAGETYPE_WEBP => 'webp', IMAGETYPE_BMP => 'bmp'][$info[2]] ?? (defined('IMAGETYPE_AVIF') && $info[2] === IMAGETYPE_AVIF ? 'avif' : '');
+        if ($real === '') return [null, 'not an image type CanvasCore accepts'];
+        if (!($ext === $real || ($ext === 'jpeg' && $real === 'jpg'))) { $orig = pathinfo($orig, PATHINFO_FILENAME) . '.' . $real; $ext = $real; }
+    }
     if (!is_dir($uploadsDir)) @mkdir($uploadsDir, 0755, true);
     if (isset($GLOBALS['CC_HT_UPLOADS'])) ensure_htaccess($uploadsDir, $GLOBALS['CC_HT_UPLOADS']);
-    $safe = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', rawurldecode($orig)), '.-');
+    $safe = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', $orig), '.-');
     if ($safe === '' || strtolower(pathinfo($safe, PATHINFO_EXTENSION)) !== $ext) $safe = 'image.' . $ext;
     $fname = time() . '_' . $safe;
     if (file_exists("$uploadsDir/$fname")) $fname = time() . '_' . bin2hex(random_bytes(3)) . '_' . $safe;
@@ -695,8 +702,8 @@ function cc_wp_step($pdo, $job, $budget = 15) {
                 if ($kind === 'pages') {
                     $slug = $slugs['pages'][$r['id']] ?? cc_safe_slug($title);
                     $id = 'page_' . uniqid();
-                    $pdo->prepare("INSERT INTO pages (id, parent_id, title, slug, clean_slug, seo_title, seo_description, layout, content_json, status, is_draft_copy, content_schema, author, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                        ->execute([$id, null, $title, $slug, $slug, $r['seo']['title'], $r['seo']['desc'], 'boxed', $content, $publish ? 'published' : 'draft', 0, $cschema, $user, $now]);
+                    $pdo->prepare("INSERT INTO pages (id, parent_id, title, slug, clean_slug, seo_title, seo_description, layout, content_json, status, is_draft_copy, content_schema, author, created_by, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                        ->execute([$id, null, $title, $slug, $slug, $r['seo']['title'], $r['seo']['desc'], 'boxed', $content, $publish ? 'published' : 'draft', 0, $cschema, $user, $user, $now]);
                     cc_add_revision($pdo, $id, $title, $content, $publish ? 'published' : 'draft');
                     $new = $slug . '/'; $st['created']['pages']++;
                 } else {
@@ -712,8 +719,8 @@ function cc_wp_step($pdo, $job, $budget = 15) {
                     }
                     $cover = ($r['thumb'] > 0 && isset($map['byId'][(string)$r['thumb']])) ? $map['byId'][(string)$r['thumb']]['url'] : '';
                     $exc = cc_wp_text(html_entity_decode(strip_tags($r['excerpt']), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 2000);
-                    $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, terms_json, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                        ->execute([$id, $cid, mb_substr($title, 0, 300), $slug, $exc, $cover, $r['date'], $publish ? 'published' : 'draft', 0, $r['seo']['title'], $r['seo']['desc'], $content, $cschema, '{}', json_encode((object)$picked), $now]);
+                    $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, terms_json, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                        ->execute([$id, $cid, mb_substr($title, 0, 300), $slug, $exc, $cover, $r['date'], $publish ? 'published' : 'draft', 0, $r['seo']['title'], $r['seo']['desc'], $content, $cschema, '{}', json_encode((object)$picked), $now, $user]);
                     cc_add_revision($pdo, 'item:' . $id, $title, $content, $publish ? 'published' : 'draft');
                     $new = $st['collection']['slug'] . '/' . $slug . '/'; $st['created']['posts']++;
                 }

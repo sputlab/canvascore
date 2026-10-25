@@ -5,7 +5,8 @@
       "type": "image",
       "default": "",
       "label": "Image URL",
-      "altKey": "alt"
+      "altKey": "alt",
+      "focalKey": "objectPosition"
     },
     "alt": {
       "type": "text",

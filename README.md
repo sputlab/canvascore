@@ -25,7 +25,11 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 - **Publishing**: a static site of HTML files, with RSS feeds, a sitemap, a search index with filters, redirects, scheduled
   publishing (a page or item goes live and comes down at a time; `cron.php` for sites nobody edits), and images
   optimised to WebP with responsive sizes.
-- **Running it**: accounts with admin and editor roles, drafts and version history, whole-site backups, forms with
+- **Roles and review**: authors write and submit for review, reviewers approve or send back with a note, editors publish directly, and a
+  collection can be limited to chosen people.
+- **Media library**: folders, crop, a focal point that keeps the subject in view, replacing a file without breaking pages, and adding an image
+  from a web address.
+- **Running it**: accounts with admin, editor, reviewer and author roles, drafts and version history, whole-site backups, forms with
   submissions, a cookie banner, and **one-click updates**: the admin checks GitHub releases, verifies the package
   signature, takes a backup, updates, and rolls back if a check fails.
 
@@ -51,6 +55,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 │   ├── blockdef.php       Engine of the shared block definitions (PHP twin of src/render/blockDef.mjs)
 │   ├── blockpkg.php       Block packages: install checks, registry, scoped CSS
 │   ├── wpimport.php       WordPress importer (export reader, HTML to blocks, image download)
+│   ├── roles.php          Roles and review: what each role may do, ownership, collection access
 │   ├── blocks/            One definition per block (settings, template, panel), read by PHP and the editor
 │   ├── submit_form.php    Public endpoint for form submissions
 │   ├── install.php        Setup wizard with setup key (delete after use)

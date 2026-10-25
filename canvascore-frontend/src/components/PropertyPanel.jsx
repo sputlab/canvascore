@@ -83,7 +83,7 @@ export default function PropertyPanel() {
   const renderMediaPicker = () => {
     if (!mediaPickerTarget) return null;
     // The image's alt text from the library fills the block's alt field when that is still empty
-    return <MediaPickerModal kind={(typeof mediaPickerTarget === 'object' && mediaPickerTarget.kind) || 'image'} onClose={() => setMediaPickerTarget(null)} onSelect={(url, alt = '') => {
+    return <MediaPickerModal kind={(typeof mediaPickerTarget === 'object' && mediaPickerTarget.kind) || 'image'} onClose={() => setMediaPickerTarget(null)} onSelect={(url, alt = '', focal = '') => {
       const t = mediaPickerTarget;
       const withAlt = (item, key = 'alt') => (alt && !(item && item[key]) ? { [key]: alt } : {});
       const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -107,7 +107,7 @@ export default function PropertyPanel() {
         if (t.add) lstAdd(t.list, { ...(t.item || {}), [t.key]: url, ...(t.alt ? { [t.alt]: alt } : {}) });
         else if (t.obj) { const cur = liveContent()[t.obj] || {}; handleContentChange(t.obj, { ...cur, [t.key]: url, ...(t.alt ? withAlt(cur, t.alt) : {}) }); }
         else if (t.list) lstPatch(t.list, t.index, { [t.key]: url, ...(t.alt ? withAlt(lstOf(t.list)[t.index], t.alt) : {}) });
-        else patchContent({ [t.key]: url, ...(t.alt ? withAlt(liveContent(), t.alt) : {}) });
+        else patchContent({ [t.key]: url, ...(t.alt ? withAlt(liveContent(), t.alt) : {}), ...(t.focal && focal ? { [t.focal]: focal } : {}) });   // a focal point set in the library fills the block's Focus
       } else if (t.type === 'team_photo') {
         lstPatch('members', t.index, { photo: url });
       } else if (t.type === 'ba_before' || t.type === 'ba_after') {

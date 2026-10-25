@@ -256,6 +256,17 @@ try {
   }
   const realFetch0 = globalThis.fetch;
   globalThis.fetch = async (u) => new Response(JSON.stringify(String(u).includes('get_media_folders') ? [] : String(u).includes('get_media') ? [{ name: 'photo.jpg', url: '/uploads/photo.jpg', alt: 'A photo' }] : []), { status: 200 });
+  // an image with a focal point in the library fills the Image block's Focus; one without leaves it as it is
+  globalThis.fetch = async (u) => new Response(JSON.stringify(String(u).includes('get_media_folders') ? [] : String(u).includes('get_media') ? [{ name: 'photo.jpg', url: '/uploads/photo.jpg', alt: 'A photo', focal: { x: 30, y: 70.5 } }, { name: 'plain.jpg', url: '/uploads/plain.jpg', alt: '' }] : []), { status: 200 });
+  addAndSelect('IMAGE'); mount(React.createElement(PropertyPanel)); await waitFor(() => $$('button').find((b) => b.getAttribute('aria-label') === 'Choose from the media library'));
+  click($$('button').find((b) => b.getAttribute('aria-label') === 'Choose from the media library'));
+  click(await waitFor(() => $('[aria-label="Choose A photo"]'))); await sleep(40);
+  check('IMAGE: a focal point set in the library fills the block\'s Focus (an object-position) with the image', content().src === '/uploads/photo.jpg' && content().objectPosition === '30% 70.5%', JSON.stringify(content()));
+  check('…and the Focus field shows that value instead of falling back to Center', !!$$('select').find((x) => [...x.options].some((o) => o.value === '30% 70.5%') && x.value === '30% 70.5%'));
+  click($$('button').find((b) => b.getAttribute('aria-label') === 'Choose from the media library'));
+  click(await waitFor(() => $('[aria-label="Choose plain.jpg"]'))); await sleep(40);
+  check('…an image without a focal point leaves the Focus as it is', content().src === '/uploads/plain.jpg' && content().objectPosition === '30% 70.5%', JSON.stringify(content()));
+  globalThis.fetch = async (u) => new Response(JSON.stringify(String(u).includes('get_media_folders') ? [] : String(u).includes('get_media') ? [{ name: 'photo.jpg', url: '/uploads/photo.jpg', alt: 'A photo' }] : []), { status: 200 });
   addAndSelect('GALLERY'); mount(React.createElement(PropertyPanel)); await waitFor(() => buttonByText('+ Add image from media'));
   const nImgs = content().images.length;
   click(buttonByText('+ Add image from media'));

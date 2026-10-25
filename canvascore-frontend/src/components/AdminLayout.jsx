@@ -4,22 +4,24 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
   FileText, LayoutTemplate, Library, Image as ImageIcon, ListTree, Palette, Inbox, Users, LogOut, Globe,
-  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink, CircleArrowUp, Package, DownloadCloud,
+  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink, CircleArrowUp, Package, DownloadCloud, ClipboardCheck,
 } from 'lucide-react';
 import { Button } from '../ui/kit';
 import ChangePasswordDialog from './ChangePasswordDialog';
 import AboutDialog from './AboutDialog';
 import { BrandLogo } from '../ui/BrandLogo';
 import { notify } from '../ui/notify';
+import { canManageSite, canPublishSite, canReview, roleLabel } from '../session/permissions';
 
 const NAV = [
   { group: 'Content', items: [
     { view: 'manager', label: 'Pages', icon: FileText },
     { view: 'collections', label: 'Collections', icon: Library },
-    { view: 'templates', label: 'Templates', icon: LayoutTemplate },
+    { view: 'reviews', label: 'Reviews', authorLabel: 'My submissions', icon: ClipboardCheck },
+    { view: 'templates', label: 'Templates', icon: LayoutTemplate, site: true },
     { view: 'media', label: 'Media', icon: ImageIcon },
   ] },
-  { group: 'Site', items: [
+  { group: 'Site', site: true, items: [
     { view: 'menu', label: 'Menu', icon: ListTree },
     { view: 'settings', label: 'Global Options', icon: Palette },
   ] },
@@ -59,21 +61,23 @@ export default function AdminLayout({ children, wide }) {
       <aside className="ui-sidebar" aria-label="Main navigation">
         <div className="ui-brand" title={siteName}><BrandLogo /> <span className="ui-brand__name">{siteName}</span></div>
         <div style={{ padding: '0 12px 6px' }}>
-          <Button variant="success" block icon={Globe} onClick={publish} disabled={publishing} title="Rebuild and publish the whole site">
-            {publishing ? 'Publishing…' : 'Publish Site'}
-          </Button>
+          {canPublishSite(userRole) && (
+            <Button variant="success" block icon={Globe} onClick={publish} disabled={publishing} title="Rebuild and publish the whole site">
+              {publishing ? 'Publishing…' : 'Publish Site'}
+            </Button>
+          )}
           {/* The published site's home page: the folder above canvascore-admin/ */}
           <a className="ui-btn ui-btn--ghost ui-btn--block" href="../" target="_blank" rel="noopener noreferrer" title="Open the published site in a new tab" style={{ marginTop: 6 }}>
             <ExternalLink size={16} aria-hidden="true" />View Site
           </a>
         </div>
         <nav className="ui-nav">
-          {NAV.filter((g) => !g.admin || userRole === 'admin').map((g) => (
+          {NAV.filter((g) => (!g.admin || userRole === 'admin') && (!g.site || canManageSite(userRole))).map((g) => (
             <div key={g.group}>
               <div className="ui-nav__group">{g.group}</div>
-              {g.items.map((it) => (
+              {g.items.filter((it) => !it.site || canManageSite(userRole)).map((it) => (
                 <button key={it.view} type="button" className="ui-nav__item" aria-current={currentView === it.view ? 'page' : undefined} onClick={() => go(it.view)}>
-                  <it.icon size={16} aria-hidden="true" /> {it.label}
+                  <it.icon size={16} aria-hidden="true" /> {!canReview(userRole) && it.authorLabel ? it.authorLabel : it.label}
                 </button>
               ))}
             </div>
@@ -85,7 +89,7 @@ export default function AdminLayout({ children, wide }) {
               <span className="ui-avatar" aria-hidden="true">{username.slice(0, 2)}</span>
               <span style={{ minWidth: 0, flex: 1 }}>
                 <div className="ui-user__name">{username}</div>
-                <div className="ui-user__role" style={{ color: userRole === 'admin' ? '#38bdf8' : '#a78bfa' }}>{userRole}</div>
+                <div className="ui-user__role" style={{ color: userRole === 'admin' ? '#38bdf8' : '#a78bfa' }}>{roleLabel(userRole).toLowerCase()}</div>
               </span>
               {!demo && <Button variant="ghost" size="sm" icon={KeyRound} onClick={() => setPwOpen(true)} title="Change your password" aria-label="Change your password" />}
               <Button variant="ghost" size="sm" icon={LogOut} onClick={logout} title="Log out" aria-label="Log out" />

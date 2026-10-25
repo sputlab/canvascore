@@ -5,9 +5,15 @@ import { FileText, Plus, Trash2, Edit3, LayoutTemplate, ExternalLink, Copy, Home
 import { Button, IconButton, PageHeader, EmptyState, SearchInput, Segmented, Select, StatusBadge, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
+import { canCreate, canManageSite, reviewOf, REVIEW_LABEL } from '../session/permissions';
 
 export default function PageManager() {
-  const { setView, setActivePage, setBlocks, pages, setPages, setSelectedBlockId } = useStore();
+  const { setView, setActivePage, setBlocks, pages, setPages, setSelectedBlockId, userRole } = useStore();
+  const mayCreate = canCreate(userRole);
+  // the review of a page is on the draft copy when there is one
+  const pageReview = (p) => reviewOf(p.draft_copy && p.draft_copy.review_state ? p.draft_copy : p);
+  // who may delete: editors and admins any page; an author their own pages that were never published; a reviewer none
+  const mayDelete = (p) => canManageSite(userRole) || (userRole === 'author' && p.status !== 'published' && p.status !== 'modified');
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
@@ -117,17 +123,17 @@ export default function PageManager() {
     <>
       <PageHeader icon={FileText} title="Pages" description="Every page of the site. Drafts stay private until you publish them."
         actions={<>
-          <Button icon={LayoutTemplate} onClick={() => setView('templates')}>From a template</Button>
-          <Button variant="primary" icon={Plus} onClick={createPage}>New Page</Button>
+          {mayCreate && <Button icon={LayoutTemplate} onClick={() => setView('templates')}>From a template</Button>}
+          {mayCreate && <Button variant="primary" icon={Plus} onClick={createPage}>New Page</Button>}
         </>} />
 
       {loading ? (
         <p className="ui-hint" style={{ padding: 40, textAlign: 'center' }}>Loading…</p>
       ) : pages.length === 0 ? (
-        <EmptyState icon={FileText} title="No pages yet" action={<div className="ui-row" style={{ justifyContent: 'center' }}>
+        <EmptyState icon={FileText} title="No pages yet" action={mayCreate ? <div className="ui-row" style={{ justifyContent: 'center' }}>
           <Button variant="primary" icon={Plus} onClick={createPage}>Create a blank page</Button>
           <Button icon={LayoutTemplate} onClick={() => setView('templates')}>Start from a template</Button>
-        </div>}>Create your first page, blank or from a ready-made template.</EmptyState>
+        </div> : null}>{mayCreate ? 'Create your first page, blank or from a ready-made template.' : 'There are no pages to review yet.'}</EmptyState>
       ) : (
         <>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
@@ -157,7 +163,10 @@ export default function PageManager() {
                         </button>
                         <div className="ui-cell-muted" style={{ color: '#38bdf8' }}>/{Number(page.is_home) ? '' : (page.clean_slug || 'index')}</div>
                       </td>
-                      <td><StatusBadge status={page.status} /></td>
+                      <td>
+                        <StatusBadge status={page.status} />
+                        {pageReview(page).state && <div style={{ marginTop: 4 }} data-testid="page-review"><Badge tone={pageReview(page).state === 'pending' ? 'draft' : 'neutral'}>{REVIEW_LABEL[pageReview(page).state]}</Badge></div>}
+                      </td>
                       <td className="ui-cell-muted">{formatDate(page.updated_at)}</td>
                       <td className="ui-cell-muted">{page.author || 'admin'}</td>
                       <td className="ui-cell-actions">
@@ -165,9 +174,9 @@ export default function PageManager() {
                           {page.status !== 'draft' && page.status !== 'draft_new' && (
                             <a href={pageUrl(page)} target="_blank" rel="noopener noreferrer" className="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" title="View the published page" aria-label={`View ${page.title} online`}><ExternalLink size={14} /></a>
                           )}
-                          <IconButton icon={Copy} label={`Duplicate ${page.title}`} size="sm" onClick={() => duplicatePage(page)} />
+                          {mayCreate && <IconButton icon={Copy} label={`Duplicate ${page.title}`} size="sm" onClick={() => duplicatePage(page)} />}
                           <Button variant="primary" size="sm" icon={Edit3} onClick={() => editPage(page)}>Edit</Button>
-                          <IconButton icon={Trash2} label={`Delete ${page.title}`} size="sm" onClick={() => deletePage(page.id)} style={{ color: '#f87171' }} />
+                          {mayDelete(page) && <IconButton icon={Trash2} label={`Delete ${page.title}`} size="sm" onClick={() => deletePage(page.id)} style={{ color: '#f87171' }} />}
                         </span>
                       </td>
                     </tr>

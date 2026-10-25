@@ -7,6 +7,7 @@ require_once __DIR__ . '/publish.php';
 require_once __DIR__ . '/media.php';
 require_once __DIR__ . '/backup.php';
 require_once __DIR__ . '/update.php';
+require_once __DIR__ . '/roles.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
 cc_security_headers();
@@ -101,7 +102,7 @@ if ($action === 'session_status') {
 
 if ($action === 'check_auth') {
     $acc = cc_session_account($pdo);
-    $out = ['authenticated' => (bool)$acc, 'installed' => cc_is_installed($pdo), 'role' => $acc ? ($acc['role'] === 'admin' ? 'admin' : 'editor') : null,
+    $out = ['authenticated' => (bool)$acc, 'installed' => cc_is_installed($pdo), 'role' => $acc ? cc_role_clean($acc['role']) : null,
             'username' => $acc ? $acc['username'] : null, 'must_change_pw' => $acc ? (int)$acc['must_change_pw'] : 0];
     if ($acc) $out += ['csrf' => cc_issue_csrf(), 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()];
     echo json_encode($out);
@@ -171,7 +172,13 @@ if ($action === 'version') {
 // ---------------------------------------------------------------------------
 // Account management (admin only)
 // ---------------------------------------------------------------------------
-$is_admin = $account['role'] === 'admin';
+$role = cc_role_clean($account['role']);
+$is_admin = $role === 'admin';
+$username = (string)$account['username'];
+// Authors and reviewers work on content; they do not change what belongs to the whole site (see roles.php)
+if (cc_is_contributor($role) && in_array($action, CC_CONTRIBUTOR_DENIED, true)) {
+    echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit;
+}
 
 // Scheduled publishing: the first admin request after a scheduled time makes the due changes (cron.php does it on a server
 // with no admin in use). A failure here never stops the request.
@@ -186,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
-if (in_array($action, ['get_users', 'add_user', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard']) && !$is_admin) {
+if (in_array($action, ['get_users', 'add_user', 'set_role', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard']) && !$is_admin) {
     echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
@@ -202,12 +209,26 @@ if ($action === 'add_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (strlen($password) < 8 || strlen($password) > 4096) { echo json_encode(['success' => false, 'message' => 'The password must be at least 8 characters.']); exit; }
     $chk = $pdo->prepare("SELECT COUNT(*) FROM admin WHERE username = ? COLLATE NOCASE"); $chk->execute([$username]);
     if ($chk->fetchColumn() > 0) { echo json_encode(['success' => false, 'message' => 'Username already exists.']); exit; }
-    $role = ($data['role'] ?? '') === 'admin' ? 'admin' : 'editor';
+    $newRole = cc_role_clean($data['role'] ?? '');
     try {
         $pdo->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw, session_gen) VALUES (?, ?, ?, 1, 0)")
-            ->execute([$username, password_hash($password, PASSWORD_DEFAULT), $role]);
+            ->execute([$username, password_hash($password, PASSWORD_DEFAULT), $newRole]);
     } catch (Exception $e) { echo json_encode(['success' => false, 'message' => 'Username already exists.']); exit; }
     echo json_encode(['success' => true, 'message' => 'User added successfully!']); exit;
+}
+// Change an account's role (it applies at its next request: the role is read from the database every time)
+if ($action === 'set_role' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $uid = (int)($data['id'] ?? 0);
+    $new = (string)($data['role'] ?? '');
+    if (!in_array($new, CC_ROLES, true)) { echo json_encode(['success' => false, 'message' => 'Unknown role.']); exit; }
+    $stmt = $pdo->prepare("SELECT id, role FROM admin WHERE id = ?"); $stmt->execute([$uid]);
+    $target = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$target) { echo json_encode(['success' => false, 'message' => 'Account not found.']); exit; }
+    if ((int)$target['id'] === (int)$account['id'] && $new !== 'admin') { echo json_encode(['success' => false, 'message' => 'You cannot take the admin role from yourself. Ask another admin.']); exit; }
+    if ($target['role'] === 'admin' && $new !== 'admin' && (int)$pdo->query("SELECT COUNT(*) FROM admin WHERE role = 'admin'")->fetchColumn() <= 1) { echo json_encode(['success' => false, 'message' => 'The last administrator cannot be changed.']); exit; }
+    $pdo->prepare("UPDATE admin SET role = ? WHERE id = ?")->execute([$new, $uid]);
+    echo json_encode(['success' => true, 'message' => 'Role changed.']); exit;
 }
 if ($action === 'delete_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
@@ -333,7 +354,8 @@ if ($action === 'get_media') {
         $m = is_array($meta[$f] ?? null) ? $meta[$f] : [];
         $media[] = ['name' => $f, 'kind' => cc_media_kind(pathinfo($f, PATHINFO_EXTENSION)), 'url' => $base_url . $f, 'folder' => (string)($m['folder'] ?? ''), 'mtime' => (int)@filemtime($uploads_dir . '/' . $f),
                     'alt' => (string)($m['alt'] ?? ''), 'w' => (int)($m['w'] ?? 0), 'h' => (int)($m['h'] ?? 0),
-                    'bytes' => (int)($m['bytes'] ?? @filesize($uploads_dir . '/' . $f)), 'optimized' => !empty($m['optimized']), 'variants' => array_values($m['variants'] ?? [])];
+                    'bytes' => (int)($m['bytes'] ?? @filesize($uploads_dir . '/' . $f)), 'optimized' => !empty($m['optimized']), 'variants' => array_values($m['variants'] ?? []),
+                    'focal' => cc_media_focal_clean($m['focal'] ?? null)];
     }
     echo json_encode($media); exit;
 }
@@ -342,9 +364,53 @@ if ($action === 'save_media_meta' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $name = basename((string)($data['name'] ?? ''));
     if ($name === '' || !is_file($uploads_dir . '/' . $name)) { echo json_encode(['success' => false, 'message' => 'Image not found.']); exit; }
-    $alt = trim(mb_substr((string)($data['alt'] ?? ''), 0, 300));
-    cc_media_meta_update(function (&$all) use ($name, $alt) { $all[$name] = array_merge(is_array($all[$name] ?? null) ? $all[$name] : [], ['alt' => $alt]); });
+    // Description (alt) and/or focal point: only what is sent changes ("focal": null clears it)
+    $focal = array_key_exists('focal', $data) ? cc_media_focal_clean($data['focal']) : false;
+    $alt = array_key_exists('alt', $data) ? trim(mb_substr((string)$data['alt'], 0, 300)) : null;
+    cc_media_meta_update(function (&$all) use ($name, $alt, $focal) {
+        $cur = is_array($all[$name] ?? null) ? $all[$name] : [];
+        if ($alt !== null) $cur['alt'] = $alt;
+        if ($focal === null) unset($cur['focal']); elseif ($focal !== false) $cur['focal'] = $focal;
+        $all[$name] = $cur;
+    });
     echo json_encode(['success' => true]); exit;
+}
+// Crop (a copy, or replacing the original), replace a file's content, and add an image from a web address
+if ($action === 'media_crop' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    @set_time_limit(60);
+    [$new, $err] = cc_media_crop($uploads_dir, $d['name'] ?? '', $d['x'] ?? null, $d['y'] ?? null, $d['w'] ?? null, $d['h'] ?? null, ($d['mode'] ?? 'copy') === 'replace' ? 'replace' : 'copy');
+    echo json_encode($new === null ? ['success' => false, 'message' => $err] : ['success' => true, 'name' => $new, 'replaced' => $new === basename((string)($d['name'] ?? '')),
+        'message' => $new === basename((string)($d['name'] ?? '')) ? 'The image was cropped.' : 'The cropped image was saved as a new file.']); exit;
+}
+if ($action === 'media_replace' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    session_write_close();
+    $f = $_FILES['file'] ?? null;
+    if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name'])) { echo json_encode(['success' => false, 'message' => 'The file did not arrive (it may be larger than this server accepts).']); exit; }
+    [$meta, $err] = cc_media_replace($uploads_dir, $_POST['name'] ?? '', $f['tmp_name'], (int)$f['size']);
+    echo json_encode($meta === null ? ['success' => false, 'message' => $err] : ['success' => true, 'message' => 'The file was replaced: pages that use it show the new one after the next publish.', 'meta' => $meta]); exit;
+}
+if ($action === 'media_import_url' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Adding an image from a web address is turned off in the demo.']); exit; }
+    session_write_close();
+    @set_time_limit(60);
+    require_once __DIR__ . '/wpimport.php';
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    $url = trim((string)($d['url'] ?? ''));
+    if (strlen($url) > 2000 || !preg_match('#^https?://#i', $url)) { echo json_encode(['success' => false, 'message' => 'Enter the full address of an image, starting with http:// or https://.']); exit; }
+    [$tmp, $err] = cc_wp_fetch($url);
+    if (!$tmp) { echo json_encode(['success' => false, 'message' => 'The image could not be downloaded: ' . $err . '.']); exit; }
+    $base_dir = dirname($_SERVER['SCRIPT_NAME'], 2);
+    if ($base_dir === '\\' || $base_dir === '/') $base_dir = '';
+    if (!is_dir($uploads_dir)) mkdir($uploads_dir, 0755, true);
+    ensure_htaccess($uploads_dir, $GLOBALS['CC_HT_UPLOADS']);
+    [$local, $err] = cc_wp_store_image($tmp, $url, $uploads_dir, $base_dir);
+    @unlink($tmp);
+    if (!$local) { echo json_encode(['success' => false, 'message' => 'This address is not an image CanvasCore can use: ' . $err . '.']); exit; }
+    $fname = basename($local);
+    $upFolder = cc_media_folder_path($d['folder'] ?? '');
+    if ($upFolder) cc_media_move([$fname], $upFolder);
+    echo json_encode(['success' => true, 'message' => 'The image was added to the library.', 'url' => $local, 'filename' => $fname, 'kind' => 'image', 'meta' => cc_media_meta_all()[$fname] ?? []]); exit;
 }
 // Makes the optimized copies of images uploaded before (a batch at a time: call again while "remaining" > 0)
 if ($action === 'optimize_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -568,6 +634,7 @@ if ($action === 'get_pages') {
         if (!$is_admin) $r['content_json'] = cc_redact_content_json($r['content_json']);
     }
     unset($r);
+    if ($role === 'author') $rows = array_values(array_filter($rows, function ($r) use ($pdo, $username) { return cc_owner_of_page($pdo, $r) === $username; }));   // an author sees their own pages
     echo json_encode($rows); exit;
 }
 
@@ -604,6 +671,11 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $cur = $pdo->prepare("SELECT * FROM pages WHERE id = ?"); $cur->execute([$id]);
     $existing = $cur->fetch(PDO::FETCH_ASSOC);
+    // Roles: an author works on their own pages and cannot publish; a reviewer publishes only what was submitted
+    $roleCheck = cc_page_save_check($pdo, $role, $username, $existing, $publish);
+    if ($roleCheck !== true) { echo json_encode(['success' => false, 'code' => $roleCheck['code'], 'message' => $roleCheck['message']]); exit; }
+    if (cc_is_contributor($role)) $has_home = false;
+    $wasPending = $existing && cc_page_review($pdo, $existing)['state'] === 'pending';
 
     $cschema = cc_version()['content_schema'];
     $has_noindex = is_array($data) && array_key_exists('noindex', $data);
@@ -616,8 +688,8 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // Demo mode: a new page (not the hidden draft copy of an existing one) uses up one of the visitors' pages
             if (!$is_admin && !$isCopy && !cc_demo_take('pages')) { echo json_encode(['success' => false, 'message' => 'The demo allows ' . cc_demo_config()['maxNewPages'] . ' new pages until the next reset. Edit an existing page instead.']); exit; }
-            $pdo->prepare("INSERT INTO pages (id, parent_id, title, slug, clean_slug, seo_title, seo_description, seo_image, layout, bg_color, boxed_width, content_json, status, is_draft_copy, content_schema, author, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                ->execute([$targetId, $parentId, $title, $clean, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $status, $isCopy, $cschema, $author, $now]);
+            $pdo->prepare("INSERT INTO pages (id, parent_id, title, slug, clean_slug, seo_title, seo_description, seo_image, layout, bg_color, boxed_width, content_json, status, is_draft_copy, content_schema, author, created_by, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                ->execute([$targetId, $parentId, $title, $clean, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $status, $isCopy, $cschema, $author, $author, $now]);
         }
         if ($has_noindex) $pdo->prepare("UPDATE pages SET noindex = ? WHERE id = ?")->execute([$noindex, $targetId]);   // "Hide from search engines"
     };
@@ -636,6 +708,7 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($old) relink_slug_change($pdo, $data_dir, $old['clean_slug'] ?? null, $clean);
             $pdo->prepare("DELETE FROM pages WHERE id = ?")->execute([$id]); // remove the copy
             if ($has_home) apply_home($pdo, $parentId, $is_home);
+            cc_review_published($pdo, 'page', $parentId, $username, $wasPending);
             cc_add_revision($pdo, $parentId, $title, $content, 'published');
             echo json_encode(['success' => true, 'message' => 'Page published!', 'new_id' => $parentId]); exit;
         } else {
@@ -643,6 +716,7 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $writeRow($id, 'published', 0, null);
             relink_slug_change($pdo, $data_dir, $oldClean, $clean);
             if ($has_home) apply_home($pdo, $id, $is_home);
+            cc_review_published($pdo, 'page', $id, $username, $wasPending);
             cc_add_revision($pdo, $id, $title, $content, 'published');
             echo json_encode(['success' => true, 'message' => 'Page published!', 'new_id' => $id]); exit;
         }
@@ -680,6 +754,11 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($action === 'discard_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($role === 'reviewer') { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit; }
+    if ($role === 'author') {
+        $chk = cc_review_row($pdo, 'page', json_decode(file_get_contents('php://input'), true)['id'] ?? '');
+        if (!$chk || cc_owner_of_page($pdo, $chk) !== $username) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You can only change your own pages.']); exit; }
+    }
     $parentId = json_decode(file_get_contents('php://input'), true)['id'] ?? null;
     // Only a live page with unpublished changes goes back to its published version; anything else is left alone
     // (this must never publish a page that was not published).
@@ -694,6 +773,13 @@ if ($action === 'discard_draft' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if ($action === 'delete_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = json_decode(file_get_contents('php://input'), true)['id'] ?? null;
+    // An author deletes their own pages that were never published; a reviewer deletes none
+    if ($role === 'reviewer') { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit; }
+    if ($role === 'author') {
+        $own = cc_review_row($pdo, 'page', $id);
+        if (!$own || cc_owner_of_page($pdo, $own) !== $username) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You can only delete your own pages.']); exit; }
+        if (in_array($own['status'] ?? '', ['published', 'modified'], true)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'A published page is removed by an editor.']); exit; }
+    }
     if ($id) {
         $row = $pdo->prepare("SELECT clean_slug, is_draft_copy, status, is_home FROM pages WHERE id = ?"); $row->execute([$id]);
         $p = $row->fetch(PDO::FETCH_ASSOC);
@@ -788,7 +874,7 @@ if ($action === 'clear_submissions' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ---- Collections (management: admin) ----
 if ($action === 'get_collections') {
-    $rows = $pdo->query("SELECT id, name, slug, fields, schema_json, design_json, archive_json, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $pdo->query("SELECT id, name, slug, fields, schema_json, design_json, archive_json, access_json, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count FROM collections c ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as &$r) {
         $r['fields'] = cc_field_defs(json_decode((string)($r['fields'] ?? '[]'), true), $pdo);
         $r['schema'] = cc_schema_clean(json_decode((string)($r['schema_json'] ?? '{}'), true), $r['fields']);
@@ -797,6 +883,11 @@ if ($action === 'get_collections') {
         $r['archive'] = cc_archive_clean(json_decode((string)($r['archive_json'] ?? '{}'), true));
         unset($r['schema_json'], $r['design_json'], $r['archive_json']);
     }
+    unset($r);
+    // collections a person has no access to are not listed; the access settings are for admins
+    $deniedCols = cc_collections_denied_ids($pdo, $role, $username);
+    $rows = array_values(array_filter($rows, function ($c) use ($deniedCols) { return !in_array($c['id'], $deniedCols, true); }));
+    foreach ($rows as &$r) { $r['access'] = $is_admin ? cc_collection_access_clean(json_decode((string)($r['access_json'] ?? '{}'), true)) : null; unset($r['access_json']); }
     unset($r);
     echo json_encode($rows); exit;
 }
@@ -813,6 +904,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Structured data: checked against the fields being saved (or the ones the collection has)
     // Listing and archive pages: sent with the collection (a save without them keeps the ones it has)
     $archive_json = array_key_exists('archive', $d) ? json_encode(cc_archive_clean($d['archive'])) : null;
+    $access_json = array_key_exists('access', $d) ? json_encode(cc_collection_access_clean($d['access'])) : null;
     $schema_json = null;
     if (array_key_exists('schema', $d)) {
         $sdefs = $fields_json !== null ? json_decode($fields_json, true) : null;
@@ -833,6 +925,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($fields_json !== null) $pdo->prepare("UPDATE collections SET fields=? WHERE id=?")->execute([$fields_json, $id]);
             if ($schema_json !== null) $pdo->prepare("UPDATE collections SET schema_json=? WHERE id=?")->execute([$schema_json, $id]);
             if ($archive_json !== null) $pdo->prepare("UPDATE collections SET archive_json=? WHERE id=?")->execute([$archive_json, $id]);
+            if ($access_json !== null) $pdo->prepare("UPDATE collections SET access_json=? WHERE id=?")->execute([$access_json, $id]);
             // New address: every published item forwards from its old URL (the files move at the next publish)
             if ($existing['slug'] !== $slug) {
                 $its = $pdo->prepare("SELECT slug FROM collection_items WHERE collection_id = ? AND status = 'published'"); $its->execute([$id]);
@@ -847,7 +940,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'message' => 'Could not rename the collection: ' . $e->getMessage()]); exit;
         }
     } else {
-        $pdo->prepare("INSERT INTO collections (id, name, slug, fields, schema_json, archive_json) VALUES (?,?,?,?,?,?)")->execute([$id, $name, $slug, $fields_json ?? '[]', $schema_json ?? '{}', $archive_json ?? '{}']);
+        $pdo->prepare("INSERT INTO collections (id, name, slug, fields, schema_json, archive_json, access_json) VALUES (?,?,?,?,?,?,?)")->execute([$id, $name, $slug, $fields_json ?? '[]', $schema_json ?? '{}', $archive_json ?? '{}', $access_json ?? '{}']);
     }
     echo json_encode(['success' => true, 'id' => $id, 'name' => $name, 'slug' => $slug, 'moved' => $existing && $existing['slug'] !== $slug]); exit;
 }
@@ -896,6 +989,7 @@ if ($action === 'get_taxonomy_list') {
 }
 // Categories and tags of a collection: its taxonomies and their terms
 if ($action === 'get_taxonomies') {
+    if (!cc_collection_allowed($pdo, $_GET['collection'] ?? '', $role, $username)) { echo json_encode([]); exit; }
     echo json_encode(cc_taxonomies_load($pdo, $_GET['collection'] ?? '')); exit;
 }
 if ($action === 'save_taxonomies' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -957,9 +1051,11 @@ if ($action === 'delete_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // ---- Collection items (content: any logged-in user) ----
 if ($action === 'get_items') {
     $cid = $_GET['collection'] ?? '';
-    $st = $pdo->prepare("SELECT id, collection_id, title, slug, excerpt, cover_image, date, status, archived, updated_at FROM collection_items WHERE collection_id = ? ORDER BY (date = '') ASC, date DESC, updated_at DESC");
+    if (!cc_collection_allowed($pdo, $cid, $role, $username)) { echo json_encode([]); exit; }
+    $st = $pdo->prepare("SELECT id, collection_id, title, slug, excerpt, cover_image, date, status, archived, updated_at, created_by, review_state, review_note, review_by FROM collection_items WHERE collection_id = ? ORDER BY (date = '') ASC, date DESC, updated_at DESC");
     $st->execute([$cid]);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if ($role === 'author') $rows = array_values(array_filter($rows, function ($r) use ($username) { return $r['created_by'] === $username; }));   // an author sees their own items
     foreach ($rows as &$r) { $r['archived'] = (int)($r['archived'] ?? 0); }
     unset($r);
     echo json_encode($rows); exit;
@@ -968,6 +1064,7 @@ if ($action === 'get_item') {
     $st = $pdo->prepare("SELECT * FROM collection_items WHERE id = ?");
     $st->execute([$_GET['id'] ?? '']);
     $row = $st->fetch(PDO::FETCH_ASSOC);
+    if ($row && (!cc_collection_allowed($pdo, $row['collection_id'], $role, $username) || ($role === 'author' && $row['created_by'] !== $username))) $row = false;
     if ($row) $row['archived'] = (int)($row['archived'] ?? 0);
     if ($row && !$is_admin) $row['content_json'] = cc_redact_content_json($row['content_json']);
     echo json_encode($row ?: null); exit;
@@ -1009,8 +1106,15 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL slug \"$slug\" is already used by \"$t\" in this collection. Change it and publish again."]); exit;
         }
     }
-    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id, field_values, terms_json FROM collection_items WHERE id = ?"); $chk->execute([$id]);
+    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id, field_values, terms_json, created_by, review_state FROM collection_items WHERE id = ?"); $chk->execute([$id]);
     $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
+    // Roles and collection access: only those who may work in the collection (the one it is in, and the one it goes to)
+    foreach (array_unique(array_filter([$cid, $existing_item['collection_id'] ?? ''])) as $ccid) {
+        if (!cc_collection_allowed($pdo, $ccid, $role, $username)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You do not have access to this collection.']); exit; }
+    }
+    $roleCheck = cc_item_save_check($pdo, $role, $username, $existing_item, $status === 'published');
+    if ($roleCheck !== true) { echo json_encode(['success' => false, 'code' => $roleCheck['code'], 'message' => $roleCheck['message']]); exit; }
+    $wasPending = $existing_item && ($existing_item['review_state'] ?? '') === 'pending';
     $fv_json = $fv_clean !== null ? json_encode($fv_clean) : (string)($existing_item['field_values'] ?? '{}');
     // Categories and tags of the item (cleaned against its collection; kept when the client sends none)
     $tj_json = array_key_exists('terms', $d) ? json_encode((object)cc_terms_clean($d['terms'], $pdo, $cid)) : (string)($existing_item['terms_json'] ?? '{}');
@@ -1030,9 +1134,10 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$is_admin) cc_keep_code_surfaces($b, []);
         // Demo mode: a new item uses up one of the visitors' items
         if (!$is_admin && !cc_demo_take('items')) { echo json_encode(['success' => false, 'message' => 'The demo allows ' . cc_demo_config()['maxNewItems'] . ' new collection items until the next reset. Edit an existing item instead.']); exit; }
-        $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, terms_json, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-            ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $fv_json, $tj_json, $now]);
+        $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, terms_json, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $fv_json, $tj_json, $now, $username]);
     }
+    if ($status === 'published') cc_review_published($pdo, 'item', $id, $username, $wasPending);
     // A published item that changed its address: the old one forwards to the new one
     if ($status === 'published') {
         try {
@@ -1056,10 +1161,46 @@ if ($action === 'delete_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
     $st = $pdo->prepare("SELECT id, collection_id, slug, status FROM collection_items WHERE id = ?"); $st->execute([$id]);
     $item = $st->fetch(PDO::FETCH_ASSOC);
+    if ($item && !cc_collection_allowed($pdo, $item['collection_id'], $role, $username)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You do not have access to this collection.']); exit; }
+    if ($role === 'reviewer') { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit; }
+    if ($role === 'author') {   // their own items that were never published
+        $own = cc_review_row($pdo, 'item', $id);
+        if (!$own || $own['created_by'] !== $username || $own['status'] === 'published') { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You can only delete your own drafts.']); exit; }
+    }
     $pdo->prepare("DELETE FROM collection_items WHERE id = ?")->execute([$id]);
     try { $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?")->execute(['item:' . $id]); } catch (Exception $e) {}
     $removed = cc_unpublish_item($pdo, $data_dir, $item);
     echo json_encode(['success' => true, 'removed_files' => $removed]); exit;
+}
+// ---------------------------------------------------------------------------
+// Review (roles.php): an author submits a page or an item; a reviewer (or an editor, or an admin) approves it by publishing it, or
+// sends it back with a note; the person who submitted it can withdraw it.
+// ---------------------------------------------------------------------------
+if ($action === 'review_queue') {
+    echo json_encode(['success' => true, 'role' => $role, 'items' => cc_review_queue($pdo, $role, $username)]); exit;
+}
+if (in_array($action, ['review_submit', 'review_back', 'review_withdraw'], true) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    $kind = ($d['kind'] ?? '') === 'item' ? 'item' : 'page';
+    $id = (string)($d['id'] ?? '');
+    $note = trim(mb_substr((string)($d['note'] ?? ''), 0, 1000));
+    $do = $action === 'review_submit' ? 'submit' : ($action === 'review_back' ? 'back' : 'withdraw');
+    $row = cc_review_row($pdo, $kind, $id);
+    $ok = cc_review_allowed($pdo, $do, $kind, $row, $role, $username);
+    if (!$ok['ok']) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => $ok['message']]); exit; }
+    $now = date('Y-m-d H:i:s');
+    if ($do === 'submit') {
+        cc_review_set($pdo, $kind, $id, ['review_state' => 'pending', 'review_note' => $note, 'review_by' => $username, 'review_at' => $now]);
+        $msg = 'Submitted for review.';
+    } elseif ($do === 'back') {
+        if ($note === '') { echo json_encode(['success' => false, 'message' => 'Say what to change: the author sees your note.']); exit; }
+        cc_review_set($pdo, $kind, $id, ['review_state' => 'changes', 'review_note' => $note, 'review_at' => $now, 'reviewed_by' => $username]);
+        $msg = 'Sent back to the author.';
+    } else {
+        cc_review_set($pdo, $kind, $id, ['review_state' => '', 'review_note' => '', 'review_by' => '', 'review_at' => '']);
+        $msg = 'The submission was withdrawn.';
+    }
+    echo json_encode(['success' => true, 'message' => $msg, 'review' => cc_review_row($pdo, $kind, $id) ? array_intersect_key(cc_review_row($pdo, $kind, $id), array_flip(['review_state', 'review_note', 'review_by', 'review_at', 'reviewed_by'])) : null]); exit;
 }
 // Several items at once: move to another collection, archive, unarchive or delete.
 // Answers what was done and, item by item, what was skipped and why.
@@ -1082,6 +1223,7 @@ if ($action === 'bulk_items' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $get->execute([$iid]);
         $it = $get->fetch(PDO::FETCH_ASSOC);
         if (!$it) { $skipped[] = ['id' => $iid, 'title' => '', 'reason' => 'it no longer exists']; continue; }
+        if (!cc_collection_allowed($pdo, $it['collection_id'], $role, $username) || ($target && !cc_collection_allowed($pdo, $target['id'], $role, $username))) { $skipped[] = ['id' => $iid, 'title' => $it['title'], 'reason' => 'you do not have access to that collection']; continue; }
         if ($op === 'archive' || $op === 'unarchive') {
             $pdo->prepare("UPDATE collection_items SET archived = ?, updated_at = ? WHERE id = ?")->execute([$op === 'archive' ? 1 : 0, $now, $iid]);
         } elseif ($op === 'delete') {

@@ -171,6 +171,8 @@ export const useStore = create((set, get) => ({
   isAuthenticated: false,
   userRole: 'editor',
   username: null,
+  pendingItem: null,         // an item the Reviews page asks Collections to open: { id, collection_id }
+  setPendingItem: (v) => set({ pendingItem: v }),
   mustChangePw: false,
   installed: true,           // false until install.php has run (the sign-in screen then points to it)
   appVersion: (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''),

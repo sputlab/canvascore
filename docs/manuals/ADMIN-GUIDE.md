@@ -108,7 +108,7 @@ root, and published pages are written to the folder above it (the web root itsel
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
         ├── blocks/               Definitions of the blocks (settings and template, one file per block)
         ├── update.php, update-keys.php   One-click updates and the public keys of the releases
-        ├── blockpkg.php, wpimport.php    Block packages and the WordPress importer (libraries)
+        ├── blockpkg.php, wpimport.php, roles.php   Block packages, the WordPress importer, roles and review (libraries)
         ├── .htaccess             Security headers and access rules (Apache, written automatically)
         └── version.json          Version of the installed release
 ```
@@ -251,7 +251,7 @@ instead (section 7.4).
 `# CanvasCore: written automatically…`). If you replace it with a file of your own (for example to
 add HTTP basic auth), CanvasCore leaves it alone: copy CanvasCore's rules into it, or the security
 headers and deny rules are lost. Whatever the server, the library files (`config.php`, `compiler.php`,
-`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `update.php`, `update-keys.php`) answer 404
+`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `update.php`, `update-keys.php`) answer 404
 when opened directly.
 
 ### 4.2 Nginx
@@ -286,7 +286,7 @@ server {
 
         location ^~ /canvascore-admin/data/ { deny all; return 404; }
         location ~ /\. { deny all; return 404; }
-        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|update|update-keys|update-source)\.php$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|update|update-keys|update-source)\.php$ { deny all; return 404; }
         location ~ ^/canvascore-admin/([^/]+/)?[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
 
         # The Menu Builder's live preview is framed by the editor itself
@@ -349,7 +349,7 @@ order, so keep the deny rules above it. `add_header` inside a `location` replace
 the outer block, which is why the preview's block repeats all four. If the site lives in a
 sub-folder (`example.com/site/`), prefix the paths: `/site/canvascore-admin/`, `/site/uploads/`,
 `/site/canvascore-blocks/`. **Updating from before 0.22.0:** add the `canvascore-blocks` block and
-`blockpkg|wpimport` to the library-file rule shown above (one-click updates do not change your server configuration).
+`blockpkg|wpimport|roles` to the library-file rule shown above (one-click updates do not change your server configuration).
 
 **Redirects on Nginx.** Nginx ignores the `.htaccess` block of 301s. The old addresses still
 work, because publishing also writes a small redirect page at each old address (it sends the
@@ -481,7 +481,7 @@ so always restore both together. The Backup page's safety copy restores the cont
    should not stay on the server).
 6. Open the editor. **Database migrations run automatically** on the first request: each
    pending schema step is applied in order, in a transaction, and recorded in the `cc_meta`
-   table (key `db_schema`). There is nothing to run by hand. The current schema is **14**
+   table (key `db_schema`). There is nothing to run by hand. The current schema is **15**
    (`db_schema` in `version.json`); the most recent steps are:
 
    | Migration | Adds |
@@ -495,8 +495,9 @@ so always restore both together. The Backup page's safety copy restores the cont
    | 12 | Categories and tags: `collection_taxonomies`, `collection_terms` tables and `collection_items.terms_json` |
    | 13 | Listing and archive pages: `collections.archive_json` (page size and archives) |
    | 14 | Scheduled publishing: `publish_at` and `unpublish_at` on pages and items (section 7.9) |
+   | 15 | Roles and review (0.23.0, section 6.6): `created_by` and the review columns (`review_state`, `review_note`, `review_by`, `review_at`, `reviewed_by`) on pages and items, `collections.access_json`; existing pages get their author as creator |
 
-   0.22.0 adds no migration: the schema stays at 14. New in 0.22.0: the `packages/` and `imports/`
+   0.23.0 adds migration 15 (the schema becomes 15); nothing else needs doing by hand. Existing accounts keep their role (admin or editor). New in 0.22.0: the `packages/` and `imports/`
    folders of the data directory and the `canvascore-blocks/` folder of the site are created when first
    used (section 12), and the Nginx rules of section 4.2 gain `canvascore-blocks` (Apache writes its
    own rules).
@@ -548,7 +549,18 @@ GitHub Releases.
 
 ## 6. Accounts and roles
 
-Accounts are managed in **Accounts** (admins only). There are two roles.
+Accounts are managed in **Accounts** (admins only): add an account with its role, change a role at any time from the menu in the list
+(you cannot take the admin role from yourself, and the last admin can never be changed), reset a password or delete an account.
+There are four roles:
+
+| | Admin | Editor | Reviewer | Author |
+|---|---|---|---|---|
+| Sees | everything | all content | all content | only their own pages and items |
+| Creates pages and items | yes | yes | no | yes |
+| Edits | everything | all content | all content | their own, until published (items) |
+| Publishes | yes | yes | only what was submitted (approving it), and Publish Site | no: submits for review |
+| Menu, Global Options, templates, masters, media management | yes | yes | no | no |
+| Accounts, backups, updates, code, collections setup | yes | no | no | no |
 
 **Admin**: full access.
 
@@ -575,6 +587,12 @@ header/footer and most Global Options, and can run Publish Site. Editors **canno
 - add, change or remove **redirects** (Global Options › Redirects is shown to admins only;
   renaming a page or item still adds its redirect automatically).
 
+**Reviewer** and **author** work inside a review flow (section 6.6): authors write and submit, reviewers approve or send back. Both have
+the editor's limits above, and in addition cannot change what belongs to the whole site: the menu, Global Options, templates, masters,
+header and footer, redirects, or manage the media library (they can upload images and add them by address and set an image's
+description); and they cannot bulk-edit, archive or schedule items. A reviewer deletes nothing; an author deletes only their own
+pages and items that were never published.
+
 The role is read from the database on every request, and a session ends at its next request
 when its account is deleted or its password is reset or changed elsewhere. Sessions also end
 after the inactivity timeout (section 10) and, at the latest, **7 days** after signing in.
@@ -597,12 +615,12 @@ stays signed in.
 
 1. Go to **Accounts**.
 2. Enter a username (see the rules above), a temporary password (**at least 8 characters**: the server refuses
-   shorter ones) and the role (Editor or Admin), then add the account.
+   shorter ones) and the role (Administrator, Editor, Reviewer or Author: the page explains the one chosen), then add the account.
 3. Give the credentials to the person through a safe channel. At their first sign-in they must
    choose a new password (8 or more characters).
 
-The role cannot be changed later: to change it, delete the account and create it again (the
-person's pages are kept).
+The role can be changed later from the menu in the Accounts list; it applies at the person's next request. You cannot take the admin role
+from yourself, and the last administrator cannot be changed.
 
 ### 6.3 Reset a password
 
@@ -635,6 +653,26 @@ sqlite3 canvascore.sqlite "UPDATE admin SET password_hash='$HASH', must_change_p
 Replace `yourname` with the actual username (`session_gen` signs out any open session). Sign in with the temporary password and choose a new one.
 
 ---
+
+### 6.6 Review and per-collection access
+
+**Review.** An author finishes a page or an item and clicks **Submit for review** (with an optional note; the page is saved first). It is
+then *waiting for review*: the author cannot change it (they can withdraw it). Reviewers, editors and admins see it under **Reviews**; an
+author's own page of the same name is **My submissions**. The reviewer opens it (and may edit it), then either
+
+- **Approve & publish**: the reviewer's Publish button; it approves the submission and publishes it (a reviewer's Publish only works on a
+  submitted page or item; editors and admins can publish anything and keep their normal Publish button), or
+- **Send back…** with a note: the author sees the note on the page and in My submissions, changes it, and clicks **Submit again**.
+
+The review state belongs to the page (to its draft copy, for a published page being changed) or item and is cleared when it is published; the
+person who approved it is kept. Everything goes through the same server checks as before: a role's limits are enforced by the server, not
+only hidden in the editor. Published **items** are edited in place (they have no draft copy), so an author cannot change one: an editor does.
+Pages made before 0.23.0 keep their author as creator; items made before it have no recorded creator, so only editors and admins change them
+and authors do not see them.
+
+**Who can work in a collection.** In Collections › *Who can work here* an admin limits a collection to **selected people** (admins always have
+access). Anyone else, whatever their role, does not see the collection, its items or its categories and tags, cannot save items in it, and bulk
+actions skip it. The published site is not affected: this is about who edits.
 
 ## 7. Publishing
 
@@ -826,6 +864,13 @@ depends on the law that applies to you; CanvasCore only provides the mechanism.
   `media-folders.json`: files always stay directly in `uploads/`, so moving an image to a folder,
   or renaming or deleting a folder, never changes an image address. Deleting a folder deletes no
   file.
+- **Image tools** (0.23.0): **Crop** (JPEG, PNG and WebP, with GD) saves a new image or replaces the original; **Replace file** swaps the
+  content of a file under the same name (it must be the same kind of image, and passes the upload checks); the **focal point** is stored in
+  `media.json` (`focal`: percent across and down) and offered when the image is chosen for an Image block. A replaced or cropped original
+  gets its optimized copies made again and loses its focal point; pages that use it show the new file after the next publish.
+- **From a web address**: the library can add an image by its address (the server downloads it, with the importer's rules: public addresses
+  only, never a private network, no credentials, usual ports, redirects re-checked, 25 MB, the checks of an upload). It needs the PHP `curl`
+  extension and is turned off in the demo.
 
 ### 7.8 Version history
 
@@ -1078,6 +1123,10 @@ What CanvasCore does for you:
 - **Admin folder**: security headers that keep the editor out of other sites' frames
   (clickjacking) and stop MIME sniffing and referrer leaks; the library files and JSON files
   can't be opened directly (section 4). The editor also refuses to run inside a frame.
+- **Roles**: four roles (section 6). The role is read from the database on every request. Authors and reviewers cannot use the site-wide
+  actions (settings, menu, templates, masters, media management, bulk actions, scheduling), an author sees and changes only their own pages
+  and items and cannot publish, a reviewer publishes only what was submitted, and a collection can be limited to chosen people: all of it is
+  checked by the server on every request, whatever the editor shows. Authors cannot publish the site (`rebuild_all.php` refuses them).
 - **Updates**: only admins can check for or install an update. A package is installed only if its
   Ed25519 signature matches a public key in `canvascore-admin/update-keys.php` (so a changed or
   forged package, or a hijacked download, is refused); it is downloaded over HTTPS from GitHub's
@@ -1370,6 +1419,17 @@ The message names the reason: not an export file, broken XML, more than 200 MB o
 The old site could not be reached from your server (a firewall, a login in front of it, a private network), the file was larger than 25 MB, it was not a
 real image, or the server has no PHP `curl` extension. The report lists the pictures. Make the old site's `wp-content/uploads` public for the import, or add
 the pictures to the Media library by hand.
+
+**An author or a reviewer cannot do something an editor can**
+That is by design (section 6): authors and reviewers cannot change the menu, Global Options, templates or masters, manage the media library, or publish
+on their own. Give the account the *editor* role if it should (Accounts › the role menu). A reviewer who cannot publish a page: the page was not
+submitted; an author must **Submit for review** first.
+
+**"This page is waiting for review"**
+The author submitted it, so it is locked for them until a reviewer sends it back or the author withdraws it. A reviewer, an editor or an admin can still edit it.
+
+**Someone does not see a collection**
+The collection is limited to chosen people (Collections › Who can work here). Add them there, or choose *Everyone*. An author also sees only the items they made.
 
 **Version mismatch warning in the sidebar**
 `Editor vX / server vY: reload the page after updating`: reload the tab (hard refresh). If it

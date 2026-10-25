@@ -26,6 +26,12 @@ pictures only from public addresses. A package that gets script, an event attrib
 CSS that reaches outside its own blocks, a file written outside its folders, an import that reads a local file or reaches a private
 network, or a way to use either feature without being an admin, is a vulnerability: report it as described below.
 
+## Roles and review
+
+From 0.23.0 there are four roles (admin, editor, reviewer, author) and collections can be limited to chosen people. The server enforces them on every
+request. A way for an author or a reviewer to publish what they should not, to see or change another author's work, to use a site-wide action,
+or for someone to use a collection they were not given, is a vulnerability: report it as described below.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue, pull request or Discord message for security problems.**

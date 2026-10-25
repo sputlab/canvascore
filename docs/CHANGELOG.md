@@ -10,6 +10,48 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-25 — Roles and review, and image tools
+
+### Added
+- **Roles and review.** Two new roles next to admin and editor, chosen in **Accounts** (each account has a role menu; an admin can
+  change a role at any time, never the last admin's).
+  - **Author**: writes their own pages and items, saves drafts and **submits them for review**. Sees only their own pages and items,
+    cannot publish (nor publish the site), cannot change what belongs to the whole site (menu, Global Options, templates, masters,
+    media management, bulk actions, scheduling). Can upload images, delete their own never-published drafts and keep working on a
+    published page of their own (the changes are a draft copy, submitted like any draft). Published *items* are changed by an editor.
+  - **Reviewer**: sees and can edit all content, creates nothing, and **approves** what was submitted (approving = publishing it, and
+    Publish Site) or **sends it back with a note**. A reviewer cannot publish what nobody submitted.
+  - **Editor** and **admin** work as before (editors publish directly; they also see the submissions and can send them back).
+  - **Review flow**: *Submit for review* (with an optional note) saves the page first. While it waits, the author cannot change it
+    (they can withdraw it). The reviewer finds it in **Reviews** (an author's own page there is **My submissions**) and opens it;
+    a banner shows who submitted it and the note, with *Send back…* and *Approve & publish*. A page sent back shows the reviewer's
+    note to the author, who changes it and submits it again. Page and item lists show where each stands.
+  - **Per-collection access** (Collections › *Who can work here*, admins): everyone, or only the people chosen. Others do not see the
+    collection, its items or its categories and cannot save items in it; bulk actions skip it.
+  - Enforced by the server (`roles.php`), not only hidden in the editor. Migration 15 adds `created_by` and the review columns to pages
+    and items (existing pages keep their author as creator) and `access_json` to collections; items made before have no creator, so only
+    editors and admins change them.
+- **Image tools in the media library.** Each image has a **Crop** button (the frame can be dragged and resized, or typed in pixels;
+  shapes: free, original, 1:1, 4:3, 3:2, 16:9, 4:5, 9:16, 3:1) that saves the crop as a **new image** or **over the original**
+  (same address: every page that uses it shows the cropped image; the page lists where it is used and asks first). JPEG, PNG and WebP;
+  the description and folder are kept, and the optimized copies are made again.
+  - **Focal point**: click the subject of a picture (or type its position). It is stored with the image, shown on its card and
+    offered when the image is chosen: an **Image** block's *Focus* is filled with it, so the subject stays in view when the
+    picture is cropped to fit. The Focus field shows such a value instead of falling back to Center.
+  - **Replace file**: a new file takes the place of a library file, keeping its name (so no page breaks), description and folder.
+    It must be the same kind of image (a PNG cannot replace a .jpg) and passes the checks of an upload; its focal point is cleared.
+  - **From a web address**: the library and the picker can add an image by its address. The server downloads it (public addresses
+    only: never a private or internal network, no credentials in the address, usual ports, redirects re-checked, 25 MB) and checks
+    it like an upload; the file's own type decides its extension, so an address without one works. Turned off in the demo.
+
+### Upgrade notes
+- Migration 15 (the schema becomes 15) runs by itself on the first request: it adds `created_by` and the review columns to pages and items and
+  `access_json` to collections. Existing accounts keep their role; pages keep their author as creator; items made before have no creator, so
+  only editors and admins change them and authors do not see them.
+- **Nginx**: add `roles` to the library-file rule of the example in the Administrator Guide (section 4.2); one-click updates do not change your
+  server configuration. Apache needs nothing.
+- The Image block's Focus can now hold a point such as `30% 70%` (from a focal point in the library): nothing to change.
+
 ## [0.22.0] - 2026-10-25 — Block packages and the WordPress importer
 
 ### Added
@@ -1249,7 +1291,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/sputlab/CanvasCore/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/sputlab/CanvasCore/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/sputlab/CanvasCore/compare/v0.20.0...v0.21.0

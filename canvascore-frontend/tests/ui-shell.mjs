@@ -54,6 +54,10 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('pkg_set_enabled')) { const b = JSON.parse(init.body); PKG_CALLS.push(['enable', b]); const p = PKGS.find((x) => x.id === b.id); if (p) p.enabled = b.enabled; return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_remove')) { const b = JSON.parse(init.body); PKG_CALLS.push(['remove', b]); PKGS.splice(PKGS.findIndex((x) => x.id === b.id), 1); return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_list')) return new Response(JSON.stringify({ success: true, packages: [], css: '' }));
+  if (u.includes('get_users')) return new Response(JSON.stringify(USERS));
+  if (u.includes('set_role')) { const b = JSON.parse(init.body); ROLE_CALLS.push(b); const x = USERS.find((y) => y.id === b.id); if (x) x.role = b.role; return new Response(JSON.stringify({ success: true, message: 'Role changed.' })); }
+  if (u.includes('review_queue')) return new Response(JSON.stringify({ success: true, items: REVIEWS }));
+  if (u.includes('review_back') || u.includes('review_withdraw') || u.includes('review_submit')) { const b = JSON.parse(init.body); REVIEW_CALLS.push([u.split('action=')[1], b]); return new Response(JSON.stringify({ success: true, message: 'Done.' })); }
   if (u.includes('wp_info')) return new Response(JSON.stringify({ success: true, demo: false, curl: true, xml: true, max_mb: 200, upload_mb: 64, collections: [{ id: 'col_1', name: 'News' }] }));
   if (u.includes('wp_analyze')) { WP_CALLS.push(['analyze', init.body.get('file').name]); return new Response(JSON.stringify(WP_ANALYZE)); }
   if (u.includes('wp_start')) { WP_CALLS.push(['start', JSON.parse(init.body)]); return new Response(JSON.stringify(WP_STEPS.shift())); }
@@ -89,6 +93,9 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('action=branding')) return new Response(JSON.stringify({ siteName: 'Acme Bakery', faviconUrl: '/uploads/fav.png' }));
   if (u.includes('optimize_media')) return new Response(JSON.stringify({ success: true, done: 1, remaining: 0 }));
   if (u.includes('save_media_meta')) return new Response(JSON.stringify({ success: true }));
+  if (u.includes('media_crop')) return new Response(JSON.stringify({ success: true, name: '9_sky-crop.jpg', replaced: JSON.parse(init.body).mode === 'replace', message: 'The image was cropped.' }));
+  if (u.includes('media_replace')) { MEDIA_REPLACED.push([init.body.get('name'), init.body.get('file').name]); return new Response(JSON.stringify({ success: true, message: 'The file was replaced.' })); }
+  if (u.includes('media_import_url')) return new Response(JSON.stringify({ success: true, message: 'The image was added to the library.', url: '/uploads/5_photo.png', filename: '5_photo.png' }));
   if (u.includes('get_starters')) return new Response(JSON.stringify(STARTERS));
   if (u.includes('get_revisions')) return new Response(JSON.stringify([{ id: 2, title: 'P', kind: 'published', author: 'ann', created_at: '2026-10-12 10:00:00' }, { id: 1, title: 'P', kind: 'draft', author: 'bob', created_at: '2026-10-11 09:00:00' }]));
   if (u.includes('get_revision&')) return new Response(JSON.stringify({ id: 1, content_json: JSON.stringify([{ id: 'old1', type: 'TEXT', styles: {}, content: { text: '<p>Old version text</p>' } }]) }));
@@ -116,6 +123,14 @@ const MEDIA = [
   { name: LONG, url: '/uploads/' + LONG, folder: '', mtime: 300, alt: '', w: 10, h: 10, bytes: 900, optimized: true, variants: [] },
 ];
 const MEDIA_FOLDERS = ['Products', 'Products/Shoes'];
+const MEDIA_REPLACED = [];
+const USERS = [{ id: 1, username: 'ann', role: 'admin' }, { id: 2, username: 'bob', role: 'author' }, { id: 3, username: 'cy', role: 'reviewer' }];
+const ROLE_CALLS = []; const REVIEW_CALLS = [];
+const REVIEWS = [
+  { kind: 'page', id: 'rp1', parent_id: null, title: 'Spring offer', state: 'pending', note: 'Please check the tone', by: 'bob', at: '2026-10-25 09:30:00', collection: '' },
+  { kind: 'item', id: 'ri1', parent_id: null, title: 'Launch post', state: 'pending', note: '', by: 'bob', at: '2026-10-25 10:00:00', collection: 'News', collection_id: 'c1' },
+  { kind: 'page', id: 'rp2', parent_id: null, title: 'Team page', state: 'changes', note: 'Shorter intro please', by: 'bob', at: '2026-10-24 08:00:00', collection: '' },
+];
 const BACKUPS = [
   { name: 'before-restore-20261012-090000-aa11.zip', kind: 'safety', bytes: 5 * 1048576, created: 1791795600, site_name: 'Acme', app: '0.13.0', counts: { pages: 12, collection_items: 4 }, uploads: { files: 37 } },
   { name: 'backup-20261011-090000-bb22.zip', kind: 'saved', bytes: 3 * 1048576, created: 1791709200, site_name: 'Acme', app: '0.13.0', counts: { pages: 1 }, uploads: { files: 1 } },
@@ -286,6 +301,7 @@ try {
   check('no selection → page settings, Page Info open', !!btnHas('Page Info') && btnHas('Page Info').getAttribute('aria-expanded') === 'true');
 
   console.log('\nEFFECTS & BUTTONS');
+  const setVal2 = (el, v) => { const proto = el.tagName === 'TEXTAREA' ? w.HTMLTextAreaElement.prototype : w.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
   const pick = (el, v) => { Object.getOwnPropertyDescriptor(w.HTMLSelectElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('change', { bubbles: true })); };
   const selByLabel = (txt) => { const l = $$('label').find((x) => x.textContent.trim() === txt); return l && l.parentElement.querySelector('select'); };
   const openSec = async (t) => { const b = btnHas(t); if (b && b.getAttribute('aria-expanded') !== 'true') { click(b); await sleep(30); } };
@@ -505,8 +521,8 @@ try {
     await waitFor(() => $$('figure').length === 3);
     const card = (name) => $$('figure').find((f) => f.querySelector('.cc-media-card__name').textContent === name);
     const lc = card(LONG);
-    check('a long file name is cut with "…" and its buttons stay inside the card (copy, move, delete)',
-      lc.querySelector('.cc-media-card__name').title === LONG && lc.querySelectorAll('.cc-media-card__actions button').length === 3
+    check('a long file name is cut with "…" and its buttons stay inside the card (crop, replace, copy, move, delete)',
+      lc.querySelector('.cc-media-card__name').title === LONG && lc.querySelectorAll('.cc-media-card__actions button').length === 5
       && /cc-media-card__name \{[^}]*min-width: 0;[^}]*text-overflow: ellipsis/.test(readFileSync(path.join(PROJECT, 'src/ui/kit.css'), 'utf8')));
     check('newest first by default', $$('.cc-media-card__name').map((n) => n.textContent)[0] === LONG);
     const folderBtn = (label) => $$('.cc-media-folder__btn').find((b) => b.querySelector('.cc-media-folder__name').textContent === label);
@@ -826,6 +842,209 @@ try {
     click(btnHas('Import another file'));
     await waitFor(() => btnHas('Choose the export'));
     check('another file can be imported afterwards (the finished job is discarded)', WP_CALLS.some((c) => c[0] === 'discard' && c[1].job === '0123456789abcdef'));
+  }
+
+  console.log('\nIMAGE TOOLS (crop, focal point, replace, from a web address)');
+  {
+    const it = await vite.ssrLoadModule('/src/editor/imageTools.js');
+    const N = { w: 2000, h: 1000 };
+    check('the crop frame starts as the biggest one of the shape, centred', JSON.stringify(it.initialRect(N, 1)) === '{"x":500,"y":0,"w":1000,"h":1000}' && JSON.stringify(it.initialRect(N, null)) === '{"x":0,"y":0,"w":2000,"h":1000}' && it.initialRect(N, 16 / 9).w === 1778);
+    check('moving the frame keeps it inside the image', JSON.stringify(it.dragRect({ x: 100, y: 100, w: 400, h: 300 }, 'move', -500, 5000, N, null)) === '{"x":0,"y":700,"w":400,"h":300}');
+    const se = it.dragRect({ x: 100, y: 100, w: 400, h: 300 }, 'se', 100, 50, N, null);
+    check('dragging a corner resizes from the opposite corner (free shape)', se.x === 100 && se.y === 100 && se.w === 500 && se.h === 350);
+    const nw = it.dragRect({ x: 100, y: 100, w: 400, h: 300 }, 'nw', 40, 20, N, null);
+    check('…from the top left too', nw.x === 140 && nw.y === 120 && nw.w === 360 && nw.h === 280);
+    const sq = it.dragRect({ x: 100, y: 100, w: 400, h: 400 }, 'se', 100, 0, N, 1);
+    check('with a fixed shape the frame keeps it (a square stays square)', sq.w === sq.h && sq.w === 500);
+    const e = it.dragRect({ x: 100, y: 100, w: 400, h: 200 }, 'e', 100, 0, N, 2);
+    check('…an edge handle changes the other side too, around the centre', e.w === 500 && e.h === 250 && e.y === 75);
+    check('a frame never leaves the image or shrinks to nothing', it.dragRect({ x: 1500, y: 0, w: 400, h: 400 }, 'se', 5000, 5000, N, null).w === 500 && it.dragRect({ x: 100, y: 100, w: 400, h: 300 }, 'se', -9999, -9999, N, null).w >= it.MIN_CROP);
+    check('a new shape keeps the centre and fills as much as it can', JSON.stringify(it.reshape({ x: 0, y: 0, w: 2000, h: 1000 }, 1, N)) === '{"x":500,"y":0,"w":1000,"h":1000}');
+    check('typing a size keeps the shape and the image bounds; a typed position is clamped', JSON.stringify(it.setField({ x: 0, y: 0, w: 1000, h: 1000 }, 'w', 500, N, 1)) === '{"x":0,"y":0,"w":500,"h":500}' && it.setField({ x: 0, y: 0, w: 500, h: 500 }, 'x', 9999, N, null).x === 1500 && it.setField({ x: 0, y: 0, w: 500, h: 500 }, 'w', 'abc', N, null).w === 500);
+    check('a focal point is in percent of the picture, one decimal, inside it; it becomes an object-position', JSON.stringify(it.focalFromPoint(150, 75, { left: 100, top: 50, width: 200, height: 100 })) === '{"x":25,"y":25}' && it.focalFromPoint(-50, 9999, { left: 0, top: 0, width: 100, height: 100 }).y === 100 && it.focalCss({ x: 30, y: 70.5 }) === '30% 70.5%' && it.focalCss(null) === '');
+
+    MEDIA.push({ name: '1700000100_clip.mp4', kind: 'video', url: '/uploads/1700000100_clip.mp4', folder: '', mtime: 1700000100, alt: '', w: 0, h: 0, bytes: 5242880, optimized: true, variants: [] });
+    const MediaManager = (await vite.ssrLoadModule('/src/components/MediaManager.jsx')).default;
+    mount(React.createElement(MediaManager));
+    await waitFor(() => $$('figure').length === 4);
+    const card = (name) => $$('figure').find((f) => f.querySelector('.cc-media-card__name').textContent === name);
+    const setVal = (el, v) => { Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+    check('images have Crop and Replace buttons; audio and video do not get Crop', !!card('sky.jpg').querySelector('[aria-label="Crop sky.jpg or set its focal point"]') && !!card('sky.jpg').querySelector('[aria-label="Replace the file sky.jpg"]') && !card('1700000100_clip.mp4').querySelector('[aria-label^="Crop "]'));
+    click(card('sky.jpg').querySelector('[aria-label="Crop sky.jpg or set its focal point"]'));
+    const dlg = await waitFor(() => $('[aria-labelledby="cc-imgtools-title"]'));
+    check('the tools open on Crop with the whole image selected and its size shown', !!dlg && !!btn('Crop', dlg) && dlg.querySelector('[data-testid="crop-size"]').textContent.includes('2000 × 1000') && dlg.querySelectorAll('[data-handle]').length === 8);
+    pick(dlg.querySelector('select[aria-label="Crop shape"]'), '1:1'); await sleep(20);
+    check('choosing a shape reshapes the frame (a square from a wide image: 1000 × 1000)', dlg.querySelector('[data-testid="crop-size"]').textContent.includes('1000 × 1000') && dlg.querySelector('[data-testid="crop-frame"]').style.width === '50%');
+    setVal(dlg.querySelector('input[aria-label="Crop width in pixels"]'), '600'); await sleep(20);
+    check('typing a width changes the height too (the shape is kept)', dlg.querySelector('input[aria-label="Crop height in pixels"]').value === '600');
+    click(btn('Save the cropped image', dlg)); await sleep(60);
+    const crop = calls.filter((c) => c.u.includes('media_crop')).pop();
+    check('saving as a new image sends the frame in pixels, in copy mode', !!crop && JSON.stringify(JSON.parse(crop.body)) === '{"name":"sky.jpg","x":500,"y":0,"w":600,"h":600,"mode":"copy"}', crop && crop.body);
+    await waitFor(() => !$('[aria-labelledby="cc-imgtools-title"]'));
+    check('…and the dialog closes', !$('[aria-labelledby="cc-imgtools-title"]'));
+    click(card('sky.jpg').querySelector('[aria-label="Crop sky.jpg or set its focal point"]'));
+    const d2 = await waitFor(() => $('[aria-labelledby="cc-imgtools-title"]'));
+    click(d2.querySelector('input[name="crop-mode"][type="radio"]:not(:checked)')); await sleep(10);
+    check('replacing the original says that every page will show it', /Every page that uses this image will show the cropped one/.test(d2.textContent) && !!btn('Crop the original', d2));
+    const before = calls.filter((c) => c.u.includes('media_crop')).length;
+    click(btn('Crop the original', d2));
+    const ask = await waitFor(() => $('[role="alertdialog"]'));
+    check('…and asks first: where it is used, and that it cannot be undone', !!ask && /Page: Home/.test(ask.textContent) && /cannot be undone/.test(ask.textContent) && calls.filter((c) => c.u.includes('media_crop')).length === before);
+    click(btn('Crop and replace', ask)); await sleep(60);
+    const rc = calls.filter((c) => c.u.includes('media_crop')).pop();
+    check('confirming crops the original (replace mode)', calls.filter((c) => c.u.includes('media_crop')).length === before + 1 && JSON.parse(rc.body).mode === 'replace');
+    await waitFor(() => !$('[aria-labelledby="cc-imgtools-title"]'));
+
+    click(card('sky.jpg').querySelector('[aria-label="Crop sky.jpg or set its focal point"]'));
+    const d3 = await waitFor(() => $('[aria-labelledby="cc-imgtools-title"]'));
+    click(btn('Focal point', d3)); await sleep(20);
+    check('the Focal point tab explains itself and shows how the image crops (wide, square, portrait)', /keeps that point in view/.test(d3.textContent) && d3.querySelectorAll('[aria-label="How it looks when cropped"] img').length === 3 && btn('Save the focal point', d3).disabled);
+    setVal(d3.querySelector('input[aria-label="Focal point across in percent"]'), '30'); await sleep(20);
+    check('typing a point places the marker and the previews follow it', d3.querySelector('[data-testid="focal-marker"]').style.left === '30%' && d3.querySelector('[aria-label="How it looks when cropped"] img').style.objectPosition === '30% 50%');
+    click(btn('Save the focal point', d3)); await sleep(60);
+    const fm = calls.filter((c) => c.u.includes('save_media_meta')).pop();
+    check('saving stores the point with the image', JSON.parse(fm.body).name === 'sky.jpg' && JSON.stringify(JSON.parse(fm.body).focal) === '{"x":30,"y":50}', fm.body);
+    await waitFor(() => !$('[aria-labelledby="cc-imgtools-title"]'));
+
+    // replace the file
+    const rf = $('input[aria-label="New file for the replaced image"]'); const F = globalThis.File || w.File;
+    click(card('sky.jpg').querySelector('[aria-label="Replace the file sky.jpg"]'));
+    Object.defineProperty(rf, 'files', { configurable: true, value: [new F(['x'], 'newsky.jpg', { type: 'image/jpeg' })] });
+    rf.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const rd = await waitFor(() => $('[role="alertdialog"]'));
+    check('replacing a file asks first: it keeps its name, where it is used, and that it cannot be undone', !!rd && /newsky\.jpg/.test(rd.textContent) && /keeps its name, description and folder/.test(rd.textContent) && /cannot be undone/.test(rd.textContent) && /JPG/.test(rd.textContent));
+    click(btn('Replace the file', rd)); await sleep(80);
+    check('…then sends the file for that name', JSON.stringify(MEDIA_REPLACED) === '[["sky.jpg","newsky.jpg"]]');
+
+    // from a web address
+    click(btnHas('From a web address'));
+    const pd = await waitFor(() => $('[role="alertdialog"], [role="dialog"]:not(.cc-imgtools)'));
+    const urlInput = pd && pd.querySelector('input');
+    check('"From a web address" asks for the address and says the image is downloaded into the library', !!urlInput && /downloads the image into your library/.test(pd.textContent));
+    setVal(urlInput, 'https://example.com/photo.png'); await sleep(10);
+    click(btn('Add to the library', pd)); await sleep(80);
+    const iu = calls.filter((c) => c.u.includes('media_import_url')).pop();
+    check('…and sends it to the server', !!iu && JSON.parse(iu.body).url === 'https://example.com/photo.png', iu && iu.body);
+    MEDIA.pop();
+  }
+
+  console.log('\nROLES AND REVIEW (editor screens)');
+  {
+    const perm = await vite.ssrLoadModule('/src/session/permissions.js');
+    check('the permission table: authors create but never publish; reviewers publish only by approving and create nothing; editors and admins publish', perm.canCreate('author') && !perm.canCreate('reviewer') && !perm.canPublishDirect('author') && !perm.canPublishDirect('reviewer') && perm.canPublishDirect('editor') && perm.canPublishDirect('admin') && !perm.canPublishSite('author') && perm.canPublishSite('reviewer') && !perm.canManageSite('author') && !perm.canManageSite('reviewer') && perm.canManageSite('editor') && perm.canReview('reviewer') && !perm.canReview('author'));
+    check('four roles, each with a label and a one-line explanation', perm.ROLES.map((r) => r.id).join() === 'admin,editor,reviewer,author' && perm.ROLES.every((r) => r.label && r.hint.length > 20));
+    const navOf = () => $('nav.ui-nav');
+    useStore.setState({ currentView: 'manager', userRole: 'author', username: 'bob', pages: PAGES });
+    mount(React.createElement(AdminLayout, null, React.createElement('p', null, 'x'))); await waitFor(() => navOf());
+    check('an author\'s sidebar: Pages, Collections, My submissions, Media — no Templates, Menu or Global Options, no Publish Site, no Administration', ['Pages', 'Collections', 'My submissions', 'Media'].every((l) => btn(l, navOf())) && !btn('Templates', navOf()) && !btn('Menu', navOf()) && !btn('Global Options', navOf()) && !btn('Accounts', navOf()) && !btnHas('Publish Site') && /author/.test($('.ui-user__role').textContent));
+    useStore.setState({ userRole: 'reviewer' }); await sleep(30);
+    check('a reviewer\'s sidebar: Reviews and Publish Site (approving puts things online), nothing site-wide', !!btn('Reviews', navOf()) && !!btnHas('Publish Site') && !btn('Templates', navOf()) && !btn('Menu', navOf()) && !btn('Accounts', navOf()));
+    useStore.setState({ userRole: 'editor' }); await sleep(30);
+    check('an editor still has everything but Administration', ['Pages', 'Collections', 'Reviews', 'Templates', 'Media', 'Menu', 'Global Options'].every((l) => btn(l, navOf())) && !!btnHas('Publish Site') && !btn('Accounts', navOf()));
+
+    // accounts
+    useStore.setState({ currentView: 'users', userRole: 'admin', username: 'ann' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/UserManager.jsx')).default)));
+    const roleSel = await waitFor(() => $('select[aria-label="Role of bob"]'));
+    check('every account has a role menu with the four roles', !!roleSel && [...roleSel.options].map((o) => o.value).join() === 'admin,editor,reviewer,author' && roleSel.value === 'author' && $('select[aria-label="Role of cy"]').value === 'reviewer');
+    const addSel = $('select[aria-label="Role of the new account"]');
+    pick(addSel, 'reviewer'); await sleep(20);
+    check('a new account can be a reviewer or an author; the page explains the role chosen', [...addSel.options].map((o) => o.value).join() === 'admin,editor,reviewer,author' && /approves it/.test($('[data-testid="role-hint"]').textContent) && (pick(addSel, 'author'), true));
+    await sleep(20);
+    check('…author: they write and submit', /submits them for review|submit/i.test($('[data-testid="role-hint"]').textContent));
+    pick(roleSel, 'editor'); await sleep(60);
+    check('changing a role sends it to the server', JSON.stringify(ROLE_CALLS[0]) === '{"id":2,"role":"editor"}');
+    USERS[1].role = 'author';
+
+    // the review queue
+    for (const [role, label] of [['reviewer', 'Reviews'], ['author', 'My submissions']]) {
+      useStore.setState({ currentView: 'reviews', userRole: role, username: 'bob' });
+      mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/ReviewQueue.jsx')).default)));
+      await waitFor(() => $('li[data-review="page:rp1"]'));
+      if (role === 'reviewer') {
+        const li = $('li[data-review="page:rp1"]');
+        check('the reviewer\'s queue lists what was submitted, with who sent it, the note, and pages and items apart', !!li && /Spring offer/.test(li.textContent) && /from bob/.test(li.textContent) && /Please check the tone/.test(li.textContent) && /Item in News/.test($('li[data-review="item:ri1"]').textContent) && !!$('li[data-review="page:rp2"]') && /Waiting for review/.test(li.textContent));
+        check('…with Open to review, Send back… and Withdraw', !!btnHas('Open to review', li) && !!btnHas('Send back', li) && !!btn('Withdraw', li) && !btnHas('Send back', $('li[data-review="page:rp2"]')));
+        click(btnHas('Send back', li));
+        const dlg = await waitFor(() => $('[role="alertdialog"], [role="dialog"]'));
+        check('sending back asks for the note', !!dlg && /What should change/.test(dlg.textContent));
+        setVal2(dlg.querySelector('input, textarea'), 'Too long'); await sleep(10);
+        click(btn('Send back', dlg)); await sleep(60);
+        check('…and sends it with the page', JSON.stringify(REVIEW_CALLS.find((c) => c[0] === 'review_back')) === '["review_back",{"kind":"page","id":"rp1","note":"Too long"}]', JSON.stringify(REVIEW_CALLS));
+        click(btnHas('Open to review', $('li[data-review="item:ri1"]'))); await sleep(30);
+        check('an item opens in its collection (the Reviews page hands it to Collections)', st().currentView === 'collections' && st().pendingItem && st().pendingItem.id === 'ri1' && st().pendingItem.collection_id === 'c1');
+        st().setPendingItem(null);
+      } else {
+        check('an author\'s page is "My submissions": their pending work and what came back, with the reviewer\'s note', /My submissions/.test(doc.body.textContent) && /Shorter intro please/.test($('li[data-review="page:rp2"]').textContent) && !btnHas('Send back') && !!btn('Withdraw', $('li[data-review="page:rp1"]')));
+        click(btn('Withdraw', $('li[data-review="page:rp1"]'))); await sleep(60);
+        check('an author can withdraw what they submitted', JSON.stringify(REVIEW_CALLS.find((c) => c[0] === 'review_withdraw')) === '["review_withdraw",{"kind":"page","id":"rp1"}]');
+      }
+      void label;
+    }
+
+    // the page list
+    const keep = PAGES.map((p) => ({ ...p }));
+    Object.assign(PAGES[2], { review_state: 'pending', review_by: 'bob' }); PAGES[1].draft_copy = { id: 'dc', review_state: 'changes', review_note: 'x' };
+    useStore.setState({ currentView: 'manager', userRole: 'reviewer', username: 'cy', pages: PAGES });
+    mount(React.createElement(PageManager)); await waitFor(() => $$('tbody tr').length === 3);
+    check('the page list shows where each page is in the review (also for a page that is live with changes)', $$('[data-testid="page-review"]').map((x) => x.textContent).sort().join() === 'Changes requested,Waiting for review', $$('[data-testid="page-review"]').map((x) => x.textContent).join() + ' | ' + $$('tbody tr').map((r) => r.textContent.slice(0, 40)).join(' / '));
+    check('a reviewer has no New Page, Duplicate or Delete', !btnHas('New Page') && !$('[aria-label^="Duplicate"]') && !$('[aria-label^="Delete"]'));
+    useStore.setState({ userRole: 'author' }); await sleep(30);
+    check('an author can create pages and delete only what was never published', !!btnHas('New Page') && !!$('[aria-label="Delete Contact"]') && !$('[aria-label="Delete Home"]') && !$('[aria-label="Delete About us"]'));
+    PAGES.forEach((p, i) => { delete p.review_state; delete p.review_by; delete p.draft_copy; Object.assign(p, keep[i]); });
+    useStore.setState({ userRole: 'editor', pages: PAGES });
+
+    // collection access
+    const CollectionAccess = (await vite.ssrLoadModule('/src/components/CollectionAccess.jsx')).default;
+    COL_SAVES.length = 0;
+    mount(React.createElement(CollectionAccess, { collection: { ...COLS[0], access: { mode: 'all', users: [] } }, canEdit: true, onSaved: () => {} }));
+    await sleep(40);
+    check('a collection says who works in it; "everyone" by default', /Everyone who can sign in/.test($('[data-testid="access-summary"]').textContent));
+    click($('[data-testid="access-summary"]').closest('button, summary, div').querySelector('button') || $('[data-testid="access-summary"]'));
+    await sleep(20);
+    const radios = $$('input[type="radio"]');
+    click(radios[1]); await waitFor(() => $('[aria-label="People with access"]'));
+    const group = $('[aria-label="People with access"]');
+    check('choosing people lists the editors, reviewers and authors (not admins, who always have access)', !!group && !!group.querySelector('input[aria-label="bob"]') && !!group.querySelector('input[aria-label="cy"]') && !group.querySelector('input[aria-label="ann"]'));
+    click(group.querySelector('input[aria-label="bob"]')); await sleep(10);
+    click(btn('Save access')); await sleep(60);
+    check('saving sends the mode and the chosen people with the collection', COL_SAVES.length === 1 && JSON.stringify(COL_SAVES[0].access) === '{"mode":"selected","users":["bob"]}', JSON.stringify(COL_SAVES));
+  }
+
+  console.log('\nROLES AND REVIEW (page editor)');
+  {
+    const base = { ...PAGES[2], id: 'ep1', status: 'draft', is_draft_copy: 0, review_state: '', review_note: '', review_by: '' };
+    const open = async (role, page) => {
+      useStore.setState({ currentView: 'editor', userRole: role, username: role === 'author' ? 'bob' : 'cy', activePage: page, blocks: [], selectedBlockId: null, isEditingMaster: false, editorRestored: false, pastBlocks: [], futureBlocks: [] });
+      mount(React.createElement(VisualEditor)); await sleep(250);
+      return $('header.cc-ed-top');
+    };
+    let top = await open('author', base);
+    check('an author has Save Draft and Submit for review, and no Publish', !!btnHas('Save Draft', top) && !!btn('Submit for review', top) && !btn('Publish', top));
+    calls.length = 0; REVIEW_CALLS.length = 0;
+    click(btn('Submit for review', top));
+    const sd = await waitFor(() => $('[role="alertdialog"], [role="dialog"]'));
+    check('submitting asks for an optional note for the reviewer', !!sd && /note for the reviewer/i.test(sd.textContent));
+    setVal2(sd.querySelector('input, textarea'), 'Ready'); await sleep(10);
+    click(btn('Submit', sd)); await waitFor(() => REVIEW_CALLS.length, 3000);
+    check('it saves the page first, then submits it with the note', calls.findIndex((c) => c.u.includes('save_page')) !== -1 && calls.findIndex((c) => c.u.includes('save_page')) < calls.findIndex((c) => c.u.includes('review_submit')) && JSON.stringify(REVIEW_CALLS[0]) === '["review_submit",{"kind":"page","id":"ep1","note":"Ready"}]', JSON.stringify([calls.map((c) => c.u.split('action=')[1]), REVIEW_CALLS]));
+    await sleep(60);
+    const bar = $('[data-testid="review-bar"]');
+    check('then the page shows "Waiting for review", the author cannot save or resubmit, and can withdraw', !!bar && /Waiting for review/.test(bar.textContent) && /cannot change it while it waits/.test(bar.textContent) && btnHas('Save Draft', $('header.cc-ed-top')).disabled && !btn('Submit for review', $('header.cc-ed-top')) && !!btn('Withdraw', bar));
+    top = await open('author', { ...base, review_state: 'changes', review_note: 'Shorter intro please', reviewed_by: 'cy' });
+    check('a page sent back shows the reviewer\'s note and offers "Submit again"', /Shorter intro please/.test($('[data-testid="review-bar-note"]').textContent) && !!btn('Submit again', top) && !btnHas('Save Draft', top).disabled);
+    top = await open('author', { ...base, status: 'published' });
+    check('a live page with no changes has nothing to submit', !btn('Submit for review', top) && !btn('Publish', top));
+    top = await open('reviewer', base);
+    check('a reviewer cannot publish a page nobody submitted, and has no Submit button', !btn('Publish', top) && !btn('Approve & publish', top) && !btn('Submit for review', top) && !$('[data-testid="review-bar"]'));
+    top = await open('reviewer', { ...base, review_state: 'pending', review_by: 'bob', review_note: 'Check the tone', review_at: '2026-10-25 09:30:00' });
+    check('for a submitted page a reviewer gets "Approve & publish", Send back… and the note', !!btn('Approve & publish', top) && !!btnHas('Send back', $('[data-testid="review-bar"]')) && /submitted by bob/.test($('[data-testid="review-bar"]').textContent) && /Check the tone/.test($('[data-testid="review-bar-note"]').textContent) && !btnHas('Save Draft', top).disabled);
+    top = await open('editor', { ...base, review_state: 'pending', review_by: 'bob' });
+    check('an editor keeps Publish (not "Approve") and sees the submission', !!btn('Publish', top) && !btn('Approve & publish', top) && !!$('[data-testid="review-bar"]') && !btn('Submit for review', top));
+    top = await open('editor', base);
+    check('an editor with nothing submitted sees no banner and no Submit button', !$('[data-testid="review-bar"]') && !btn('Submit for review', top) && !!btn('Publish', top));
+    top = await open('author', { ...base, __item: true, collection_id: 'c1', status: 'published' });
+    check('an item that is already published cannot be submitted either', !btn('Submit for review', top));
   }
 
   console.log('\nSTYLES PER DEVICE');

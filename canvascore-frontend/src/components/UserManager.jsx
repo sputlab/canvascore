@@ -4,6 +4,7 @@ import { UserPlus, Users, Trash2, KeyRound } from 'lucide-react';
 import { Button, Card, Field, Input, Select, PageHeader, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
+import { ROLES, roleLabel } from '../session/permissions';
 
 export default function UserManager() {
   const me = useStore((st) => st.username);
@@ -48,6 +49,14 @@ export default function UserManager() {
     } catch { notify('Network error.', 'error'); }
   };
 
+  const changeRole = async (u, role) => {
+    try {
+      const data = await (await fetch('api.php?action=set_role', { method: 'POST', body: JSON.stringify({ id: u.id, role }) })).json();
+      notify(data.message || (data.success ? 'Role changed.' : 'The role was not changed.'), data.success ? 'success' : 'error');
+    } catch { notify('Network error.', 'error'); }
+    fetchUsers();
+  };
+
   const handleDeleteUser = async (id, username) => {
     if (!(await confirmDialog({ title: `Delete the account "${username}"?`, message: 'They will no longer be able to sign in. Their pages stay.', confirmLabel: 'Delete account', danger: true }))) return;
     try {
@@ -60,7 +69,7 @@ export default function UserManager() {
 
   return (
     <div style={{ maxWidth: 860 }}>
-      <PageHeader icon={Users} title="Accounts" description="People who can sign in to the editor. Editors manage content; administrators also manage accounts, backups and custom code." />
+      <PageHeader icon={Users} title="Accounts" description="People who can sign in to the editor, and what each may do. Authors write and submit for review, reviewers approve, editors publish directly, administrators also manage accounts, backups and custom code." />
 
       <Card title="Add a user" icon={UserPlus}>
         <form onSubmit={handleAddUser}>
@@ -68,9 +77,10 @@ export default function UserManager() {
             <Field label="Username"><Input value={newUsername} onChange={e => setNewUsername(e.target.value)} required autoComplete="off" /></Field>
             <Field label="Password"><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required autoComplete="new-password" /></Field>
             <Field label="Role">
-              <Select value={newRole} onChange={e => setNewRole(e.target.value)} options={[['editor', 'Editor (content only)'], ['admin', 'Administrator (full control)']]} />
+              <Select value={newRole} onChange={e => setNewRole(e.target.value)} aria-label="Role of the new account" options={ROLES.map((r) => [r.id, r.label])} />
             </Field>
           </div>
+          <p className="ui-hint" data-testid="role-hint">{(ROLES.find((r) => r.id === newRole) || {}).hint}</p>
           <Button type="submit" variant="success" icon={UserPlus}>Add user</Button>
         </form>
       </Card>
@@ -84,7 +94,10 @@ export default function UserManager() {
                 <React.Fragment key={u.id}>
                 <tr>
                   <td className="ui-cell-title">{u.username}{u.username === me && <span className="ui-hint" style={{ fontWeight: 400 }}> (you)</span>}</td>
-                  <td><Badge tone={u.role === 'admin' ? 'accent' : 'neutral'}>{u.role}</Badge></td>
+                  <td>
+                    <Select aria-label={`Role of ${u.username}`} value={u.role} onChange={(e) => changeRole(u, e.target.value)} options={ROLES.map((r) => [r.id, r.label])} style={{ width: 'auto' }} />
+                    {u.role === 'admin' && <span style={{ marginLeft: 6 }}><Badge tone="accent">{roleLabel(u.role)}</Badge></span>}
+                  </td>
                   <td className="ui-cell-actions">
                     <span className="ui-row" style={{ justifyContent: 'flex-end', gap: 6, flexWrap: 'nowrap' }}>
                       <Button size="sm" icon={KeyRound} aria-expanded={pw?.id === u.id} onClick={() => setPw(pw?.id === u.id ? null : { id: u.id, username: u.username, a: '', b: '' })}>Change password</Button>

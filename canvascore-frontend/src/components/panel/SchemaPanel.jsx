@@ -14,7 +14,7 @@
 //   also          label, placeholder, labelWhen [{ when, label, placeholder }], hint, hintIf, half (two per row),
 //                 subhead (a small heading above), showIf { key | styles.key: [values] | { not } | { gt, lt } | bool },
 //                 hidden, noTransparent, adminOnly + adminOnlyMessage, check + checkMessage, altKey (the library's
-//                 alt text fills it)
+//                 alt text fills it), focalKey (the key the image's focal point from the library fills: an object-position)
 //   lists         itemKeys (the fields of a card, in order; else every setting of the item), itemTitle "Plan {n}" / "{stars|?} stars", itemTitleKey (a field's value, else itemTitle), itemMark
 //                 { key, text }, newItem ("$placeholder:WxH" makes a placeholder image), addLabel, maxItems,
 //                 addFromMedia { label, key, alt } (picks an image and adds an item with it)
@@ -92,7 +92,7 @@ function Control({ k, s, scope }) {
   const alt = (s.labelWhen || []).find((w) => holds(w.when, scope)) || {};
   const label = alt.label ?? s.label ?? '';
   const placeholder = alt.placeholder ?? s.placeholder;
-  const onPick = ctx.pickTo({ ...scope.pick, key, ...(s.altKey ? { alt: s.altKey } : {}), ...(s.fileKind ? { kind: s.fileKind } : {}) });
+  const onPick = ctx.pickTo({ ...scope.pick, key, ...(s.altKey ? { alt: s.altKey } : {}), ...(s.focalKey ? { focal: s.focalKey } : {}), ...(s.fileKind ? { kind: s.fileKind } : {}) });
   const control = s.control || '';
 
   if (control.startsWith('widget:')) {
@@ -158,7 +158,9 @@ function Control({ k, s, scope }) {
     );
   }
   if (s.type === 'enum' || control === 'select') {
-    const opts = choicesOf(s);
+    let opts = choicesOf(s);
+    // a value the choices don't list but the setting accepts (a focal point such as "30% 70%" set by the picker): shown as it is
+    if (s.pattern && v !== '' && v != null && !opts.some(([o]) => String(o) === String(v)) && new RegExp(s.pattern).test(String(v))) opts = [...opts, [v, `Focal point (${v})`]];
     const has = (x) => opts.some(([o]) => String(o) === String(x));
     const cur = has(v) ? v : has(s.default) ? s.default : (opts[0] || [''])[0];   // a value that is not one of the choices: the default, else the first
     const numeric = s.type === 'number';
