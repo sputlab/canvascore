@@ -103,6 +103,7 @@ import IMAGE_TEXT from '../../../canvascore-admin/blocks/image-text.json' with {
 import IMAGE from '../../../canvascore-admin/blocks/image.json' with { type: 'json' };
 import LOGOS from '../../../canvascore-admin/blocks/logos.json' with { type: 'json' };
 import MAPS from '../../../canvascore-admin/blocks/maps.json' with { type: 'json' };
+import PAYMENT_BUTTON from '../../../canvascore-admin/blocks/payment-button.json' with { type: 'json' };
 import PRICING from '../../../canvascore-admin/blocks/pricing.json' with { type: 'json' };
 import PROGRESS from '../../../canvascore-admin/blocks/progress.json' with { type: 'json' };
 import REVIEW_SUMMARY from '../../../canvascore-admin/blocks/review-summary.json' with { type: 'json' };
@@ -122,7 +123,7 @@ import TEXT from '../../../canvascore-admin/blocks/text.json' with { type: 'json
 import TIMELINE from '../../../canvascore-admin/blocks/timeline.json' with { type: 'json' };
 import VIDEO_HERO from '../../../canvascore-admin/blocks/video-hero.json' with { type: 'json' };
 import VIDEO from '../../../canvascore-admin/blocks/video.json' with { type: 'json' };
-export const BLOCK_DEFS = [ACCORDION, AUDIO_PLAYER, AUTHOR_BIO, BEFORE_AFTER, BENTO, BUSINESS, BUTTON, CALLOUT, CARDS, CASE_STUDY, CODE_SNIPPET, COUNTDOWN, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HERO, HOTSPOTS, HOVER_GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PRICING, PROGRESS, REVIEW_SUMMARY, SCROLLYTELLING, SEARCH, SHARE_BAR, SLIDER, SPLIT_CTA, STEPS, TABLE_OF_CONTENTS, TABLE, TABS, TEAM, TESTIMONIAL_WALL, TESTIMONIAL, TEXT, TIMELINE, VIDEO_HERO, VIDEO];
+export const BLOCK_DEFS = [ACCORDION, AUDIO_PLAYER, AUTHOR_BIO, BEFORE_AFTER, BENTO, BUSINESS, BUTTON, CALLOUT, CARDS, CASE_STUDY, CODE_SNIPPET, COUNTDOWN, COUNTERS, DIVIDER, FAQ, GALLERY, GRID, HERO, HOTSPOTS, HOVER_GRID, HTML, ICON_BOX, IMAGE_TEXT, IMAGE, LOGOS, MAPS, PAYMENT_BUTTON, PRICING, PROGRESS, REVIEW_SUMMARY, SCROLLYTELLING, SEARCH, SHARE_BAR, SLIDER, SPLIT_CTA, STEPS, TABLE_OF_CONTENTS, TABLE, TABS, TEAM, TESTIMONIAL_WALL, TESTIMONIAL, TEXT, TIMELINE, VIDEO_HERO, VIDEO];
 // <defs:end>
 const BY_TYPE = new Map(BLOCK_DEFS.map((d) => [d.type, d]));
 export const blockDef = (type) => BY_TYPE.get(type) || null;

@@ -54,6 +54,14 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('pkg_set_enabled')) { const b = JSON.parse(init.body); PKG_CALLS.push(['enable', b]); const p = PKGS.find((x) => x.id === b.id); if (p) p.enabled = b.enabled; return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_remove')) { const b = JSON.parse(init.body); PKG_CALLS.push(['remove', b]); PKGS.splice(PKGS.findIndex((x) => x.id === b.id), 1); return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_list')) return new Response(JSON.stringify({ success: true, packages: [], css: '' }));
+  if (u.includes('integrations_get')) return new Response(JSON.stringify({ success: true, demo: false, curl: true, config: INT_CFG, log: INT_LOG, forms: [{ id: 'f_news', type: 'newsletter', labels: ['Email'] }, { id: 'f_contact', type: 'form', labels: ['Name', 'Email', 'Message'] }] }));
+  if (u.includes('integrations_payment_links')) return new Response(JSON.stringify({ success: true, links: [{ id: 'sl_1', name: 'Course', amount: '49.00', currency: 'eur', url: 'https://buy.stripe.com/test_abc123' }] }));
+  if (u.includes('integrations_save')) { const b = JSON.parse(init.body); INT_CALLS.push(['save', b]); return new Response(JSON.stringify({ success: true, message: 'Saved.', config: INT_CFG, new_secrets: b.section === 'webhooks' ? { wh_aaaaaaaaaa: 'abcdef0123456789abcdef0123456789' } : {} })); }
+  if (u.includes('integrations_test')) { const b = JSON.parse(init.body); INT_CALLS.push(['test', b]); return new Response(JSON.stringify({ success: true, message: b.kind === 'webhook' ? 'The test was received (HTTP 200).' : 'Connected to the audience “Customers”.' })); }
+  if (u.includes('integrations_resend')) { const b = JSON.parse(init.body); INT_CALLS.push(['resend', b]); return new Response(JSON.stringify({ success: true, message: 'Sent.' })); }
+  if (u.includes('stripe_link_create')) { const b = JSON.parse(init.body); INT_CALLS.push(['create', b]); return new Response(JSON.stringify({ success: true, message: 'Payment link created.', config: INT_CFG })); }
+  if (u.includes('stripe_link_add')) { const b = JSON.parse(init.body); INT_CALLS.push(['add', b]); return new Response(JSON.stringify({ success: true, message: 'Link added.', config: INT_CFG })); }
+  if (u.includes('stripe_link_set_active')) { const b = JSON.parse(init.body); INT_CALLS.push(['active', b]); return new Response(JSON.stringify({ success: true, message: 'Done.', config: INT_CFG })); }
   if (u.includes('library_index')) return new Response(JSON.stringify(LIB_INDEX));
   if (u.includes('library_install_file')) { LIB_CALLS.push(['file', init.body.get('kit').name, init.body.get('options')]); return new Response(JSON.stringify(LIB_NEXT)); }
   if (u.includes('library_install')) { const b = JSON.parse(init.body); LIB_CALLS.push(['install', b]); return new Response(JSON.stringify(LIB_NEXT)); }
@@ -131,6 +139,13 @@ const MEDIA_REPLACED = [];
 const USERS = [{ id: 1, username: 'ann', role: 'admin' }, { id: 2, username: 'bob', role: 'author' }, { id: 3, username: 'cy', role: 'reviewer' }];
 const ROLE_CALLS = []; const REVIEW_CALLS = [];
 const LIB_CALLS = [];
+const INT_CALLS = [];
+const INT_CFG = { webhooks: [{ id: 'wh_aaaaaaaaaa', name: 'Zapier', url: 'https://hooks.example.com/x', enabled: true, forms: 'all', secret_hint: '••••c0de' }],
+  mailchimp: { enabled: true, key_hint: '••••us21', has_key: true, list_id: 'ab12cd34ef', double_optin: false, forms: 'newsletter' }, brevo: { enabled: false, key_hint: '', has_key: false, list_id: '', forms: 'newsletter' },
+  analytics: { provider: 'none', ga4_id: '', plausible_domain: '', plausible_host: '', matomo_url: '', matomo_site: '', consent: true },
+  stripe: { key_hint: '••••AAAA', has_key: true, mode: 'test', links: [{ id: 'sl_1', name: 'Course', amount: '49.00', currency: 'eur', url: 'https://buy.stripe.com/test_abc123', stripe_id: 'plink_1', created: '2026-10-25 10:00:00', active: true }] } };
+const INT_LOG = [{ id: 7, kind: 'webhook', target: 'Zapier (wh_aaaaaaaaaa)', event: 'form.submitted', status: 'failed', code: 500, detail: 'HTTP 500', created_at: '2026-10-25 11:00:00', can_resend: true },
+  { id: 6, kind: 'newsletter', target: 'Mailchimp', event: 'subscribe', status: 'ok', code: 200, detail: 'HTTP 200', created_at: '2026-10-25 10:59:00', can_resend: false }];
 let LIB_INDEX = { success: true, demo: false, zip: true, sodium: true, fetched: 1, installed: [{ install_id: 'i1', id: 'bistro-site', name: 'Bistro', version: '1.0.0', type: 'site', at: '2026-10-25 10:00:00', user: 'ann', pages: ['a', 'b', 'c'], templates: 0, design: true, undo: 'undo-aaaaaaaaaaaa.json' }],
   kits: [
     { id: 'coming-soon-page', name: 'Coming Soon', type: 'page', version: '1.0.0', author: 'Ann', description: 'A launch page.', license: 'CC0-1.0', tags: ['launch'], pages: 1, preview: true, installed: null },
@@ -1130,6 +1145,87 @@ try {
     LIB_INDEX = { success: true, demo: true, zip: true, kits: [], installed: [], warning: '' };
     click(btn('Refresh')); await sleep(60);
     check('in the demo it is turned off', /turned off in the demo/.test(doc.body.textContent) && btn('Install from a file…').disabled);
+  }
+
+  console.log('\nINTEGRATIONS (admin page)');
+  {
+    useStore.setState({ currentView: 'integrations', userRole: 'admin', username: 'ann' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/Integrations.jsx')).default)));
+    await waitFor(() => $('[data-webhook="wh_aaaaaaaaaa"]'));
+    check('the sidebar has Integrations for admins only', !!btn('Integrations', $('nav.ui-nav')) && (useStore.setState({ userRole: 'editor' }), true));
+    await sleep(30);
+    check('…editors do not see it', !btn('Integrations', $('nav.ui-nav')) && (useStore.setState({ userRole: 'admin' }), true));
+    await sleep(30);
+    check('the tabs: Webhooks, Newsletter, Analytics, Stripe, Activity', ['Webhooks', 'Newsletter', 'Analytics', 'Stripe', 'Activity'].every((t) => $$('[role="tab"]').some((x) => x.textContent.trim() === t)));
+    const wh = $('[data-webhook="wh_aaaaaaaaaa"]');
+    check('a webhook shows its name, address, forms and the secret as a hint only', wh.querySelector('input[aria-label="Webhook 1 name"]').value === 'Zapier' && wh.querySelector('input[aria-label="Webhook 1 address"]').value === 'https://hooks.example.com/x' && /Secret ••••c0de/.test(wh.textContent) && wh.querySelector('select[aria-label^="Forms for"]').value === 'all');
+    click(btn('Add a webhook')); await sleep(20);
+    const second = $('input[aria-label="Webhook 2 address"]');
+    setVal2($('input[aria-label="Webhook 2 name"]'), 'My server'); setVal2(second, 'https://example.org/hook');
+    pick($$('select[aria-label^="Forms for"]')[1], 'chosen'); await sleep(20);
+    check('"only the forms I choose" lists the site\'s forms', !!$('[role="group"][aria-label="Forms"]') && /Newsletter: Email/.test($('[role="group"][aria-label="Forms"]').textContent) && /Form: Name, Email, Message/.test($('[role="group"][aria-label="Forms"]').textContent));
+    click($('[role="group"][aria-label="Forms"] input[type="checkbox"]')); await sleep(10);
+    click(btn('Save webhooks')); await sleep(80);
+    const sv = INT_CALLS.find((c) => c[0] === 'save');
+    check('saving sends both webhooks, the new one with its chosen forms and no id (the server gives it one)', sv && sv[1].section === 'webhooks' && sv[1].data.length === 2 && sv[1].data[0].id === 'wh_aaaaaaaaaa' && !sv[1].data[1].id && JSON.stringify(sv[1].data[1].forms) === '["f_news"]' && sv[1].data[1].name === 'My server', JSON.stringify(sv));
+    const sec = await waitFor(() => $('[data-testid="webhook-secret"]'));
+    check('a new webhook\'s secret is shown once, for copying', !!sec && /abcdef0123456789abcdef0123456789/.test(sec.textContent) && /shown once/.test(sec.textContent));
+    click(btn('Send a test')); await sleep(60);
+    check('"Send a test" asks the server to send a sample', JSON.stringify(INT_CALLS.find((c) => c[0] === 'test')) === '["test",{"kind":"webhook","id":"wh_aaaaaaaaaa"}]');
+    check('the signature check is explained', /X-CanvasCore-Signature/.test(doc.body.textContent) && /HMAC-SHA256/.test(doc.body.textContent));
+
+    click($$('[role="tab"]').find((x) => x.textContent.trim() === 'Newsletter')); await waitFor(() => $('[data-service="mailchimp"]'));
+    const mc = $('[data-service="mailchimp"]');
+    check('Mailchimp and Brevo are there; a saved key is shown as a hint, never its value', !!$('[data-service="brevo"]') && /Saved \(••••us21\)/.test(mc.textContent) && mc.querySelector('input[aria-label="Mailchimp API key"]').value === '' && mc.querySelector('input[aria-label="Mailchimp Audience ID"]').value === 'ab12cd34ef');
+    check('…the consent rule is stated (only with consent)', /consent/i.test(mc.textContent) && /double opt-in/i.test(mc.textContent));
+    INT_CALLS.length = 0;
+    click(btn('Save Mailchimp', mc)); await sleep(60);
+    check('saving without typing a key sends none (the server keeps the saved one)', INT_CALLS[0][1].section === 'mailchimp' && INT_CALLS[0][1].data.api_key === '' && INT_CALLS[0][1].data.list_id === 'ab12cd34ef' && INT_CALLS[0][1].data.forms === 'newsletter');
+    INT_CALLS.length = 0; click(btn('Test the connection', $('[data-service="mailchimp"]'))); await sleep(60);
+    check('the connection can be tested', JSON.stringify(INT_CALLS.find((c) => c[0] === 'test')) === '["test",{"kind":"mailchimp"}]');
+    const bv = $('[data-service="brevo"]');
+    check('a service with no key cannot be tested yet', btn('Test the connection', bv).disabled);
+
+    click($$('[role="tab"]').find((x) => x.textContent.trim() === 'Analytics')); await waitFor(() => $('select[aria-label="Analytics service"]'));
+    pick($('select[aria-label="Analytics service"]'), 'ga4'); await sleep(20);
+    check('Google Analytics asks for the measurement ID and explains that it waits for cookie consent', !!$('input[aria-label="Measurement ID"]') && /Accept/.test(doc.body.textContent) && /Wait for the visitor to accept cookies/.test(doc.body.textContent));
+    setVal2($('input[aria-label="Measurement ID"]'), 'G-ABCD1234'); INT_CALLS.length = 0;
+    click(btn('Save analytics')); await sleep(60);
+    check('saving sends the service, the id and the consent choice', JSON.stringify(INT_CALLS[0][1]) === JSON.stringify({ section: 'analytics', data: { provider: 'ga4', ga4_id: 'G-ABCD1234', plausible_domain: '', plausible_host: '', matomo_url: '', matomo_site: '', consent: true } }));
+    pick($('select[aria-label="Analytics service"]'), 'plausible'); await sleep(20);
+    check('Plausible needs no consent: the choice is not offered', /does not use cookies/.test(doc.body.textContent) && !/Wait for the visitor to accept cookies/.test(doc.body.textContent));
+
+    click($$('[role="tab"]').find((x) => x.textContent.trim() === 'Stripe')); await waitFor(() => $('li[data-link="sl_1"]'));
+    check('Stripe: the key is a hint and its mode shown, and the payment links are listed', /Saved \(••••AAAA, test mode\)/.test(doc.body.textContent) && /Test mode/.test(doc.body.textContent) && /Course/.test($('li[data-link="sl_1"]').textContent) && /49\.00 EUR/.test($('li[data-link="sl_1"]').textContent));
+    setVal2($('input[aria-label="Product name"]'), 'Workshop'); setVal2($('input[aria-label="Price"]'), '25.50'); INT_CALLS.length = 0;
+    click(btn('Create the link')); await sleep(60);
+    check('creating a link sends the name, price and currency', JSON.stringify(INT_CALLS[0]) === '["create",{"name":"Workshop","amount":"25.50","currency":"eur","adjustable":false}]');
+    setVal2($('input[aria-label="Link name"]'), 'Ticket'); setVal2($('input[aria-label="Link address"]'), 'https://buy.stripe.com/abcd1234'); INT_CALLS.length = 0;
+    click(btn('Add the link')); await sleep(60);
+    check('an existing link is added by its name and address (no key needed)', JSON.stringify(INT_CALLS[0]) === '["add",{"name":"Ticket","url":"https://buy.stripe.com/abcd1234"}]');
+    click($('li[data-link="sl_1"] input[type="checkbox"]')); await sleep(60);
+    check('a link can be switched off', JSON.stringify(INT_CALLS.find((c) => c[0] === 'active')) === '["active",{"id":"sl_1","active":false}]');
+
+    click($$('[role="tab"]').find((x) => x.textContent.trim() === 'Activity')); await waitFor(() => $('tr[data-log="7"]'));
+    check('Activity lists the deliveries with their result; only a failed one with something to send again has the button', /Failed/.test($('tr[data-log="7"]').textContent) && /HTTP 500/.test($('tr[data-log="7"]').textContent) && !!btn('Send again', $('tr[data-log="7"]')) && /Sent/.test($('tr[data-log="6"]').textContent) && !btn('Send again', $('tr[data-log="6"]')));
+    INT_CALLS.length = 0; click(btn('Send again', $('tr[data-log="7"]'))); await sleep(60);
+    check('"Send again" asks the server to resend that delivery', JSON.stringify(INT_CALLS[0]) === '["resend",{"id":7}]');
+  }
+
+  console.log('\nPAYMENT BUTTON (panel)');
+  {
+    useStore.setState({ currentView: 'editor', userRole: 'editor' });
+    st().setBlocks([]); st().addBlock('PAYMENT_BUTTON'); await sleep(30);
+    const blk = st().blocks[0];
+    check('a Payment Button starts empty (no link), as a card, with the Stripe note', blk && blk.type === 'PAYMENT_BUTTON' && blk.content.link === '' && blk.content.layout === 'card' && blk.content.note === true);
+    st().setSelectedBlockId(blk.id);
+    mount(React.createElement(PropertyPanel)); await waitFor(() => $('select[aria-label="Choose a payment link"]')); await sleep(150);
+    const sel = $('select[aria-label="Choose a payment link"]');
+    check('its panel offers the payment links kept in Integrations, and a field to paste one', [...sel.options].some((o) => o.value === 'https://buy.stripe.com/test_abc123' && /Course — 49\.00 EUR/.test(o.textContent)) && !!$('input[aria-label="Payment link address"]'));
+    pick(sel, 'https://buy.stripe.com/test_abc123'); await sleep(40);
+    check('choosing one sets the link of the block', st().blocks[0].content.link === 'https://buy.stripe.com/test_abc123');
+    setVal2($('input[aria-label="Payment link address"]'), 'https://evil.example/pay'); await sleep(40);
+    check('a link that is not a Stripe payment link is flagged (the button would stay empty)', /not a Stripe payment link/.test(doc.body.textContent));
   }
 
   console.log('\nSTYLES PER DEVICE');

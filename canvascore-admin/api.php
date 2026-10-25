@@ -193,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
-if (in_array($action, ['get_users', 'add_user', 'set_role', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard', 'library_index', 'library_install', 'library_install_file', 'library_undo', 'library_preview']) && !$is_admin) {
+if (in_array($action, ['get_users', 'add_user', 'set_role', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard', 'library_index', 'library_install', 'library_install_file', 'library_undo', 'library_preview', 'integrations_get', 'integrations_save', 'integrations_test', 'integrations_rotate_secret', 'integrations_resend', 'integrations_log_clear', 'stripe_link_create', 'stripe_link_add', 'stripe_link_set_active', 'stripe_link_remove']) && !$is_admin) {
     echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
@@ -1486,6 +1486,118 @@ if (strpos($action, 'wp_') === 0) {
     if ($action === 'wp_step') {
         $res = cc_wp_step($pdo, $job, 15);
         echo json_encode(isset($res['error']) ? ['success' => false, 'message' => $res['error']] : ['success' => true] + $res); exit;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Integrations (integrations.php): webhooks, newsletter services, analytics and Stripe payment links. Admins only (they hold keys);
+// the keys are never sent back, only masked. The list of payment links is the one thing every signed-in user may read.
+// ---------------------------------------------------------------------------
+if ($action === 'integrations_payment_links') {
+    require_once __DIR__ . '/integrations.php';
+    $links = [];
+    foreach (cc_int_load()['stripe']['links'] as $l) if (!empty($l['active'])) $links[] = ['id' => $l['id'], 'name' => $l['name'], 'amount' => $l['amount'] ?? '', 'currency' => $l['currency'] ?? '', 'url' => $l['url']];
+    echo json_encode(['success' => true, 'links' => $links]); exit;
+}
+if (strpos($action, 'integrations_') === 0 || strpos($action, 'stripe_link_') === 0) {
+    require_once __DIR__ . '/integrations.php';
+    $intErr = function ($m) { echo json_encode(['success' => false, 'message' => $m]); exit; };
+    if ($action === 'integrations_get') {
+        cc_int_log_table($pdo);
+        $log = $pdo->query("SELECT id, kind, target, event, status, code, detail, created_at, (payload_json != '') AS can_resend FROM integration_log ORDER BY id DESC LIMIT 60")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($log as &$l) { $l['can_resend'] = (bool)$l['can_resend']; } unset($l);
+        echo json_encode(['success' => true, 'demo' => cc_demo_on(), 'curl' => function_exists('curl_init'), 'config' => cc_int_public(cc_int_load()), 'log' => $log,
+            'forms' => cc_int_known_forms(cc_data_dir())]); exit;
+    }
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') $intErr('Not found.');
+    if (cc_demo_on()) $intErr('Integrations are turned off in the demo.');
+    session_write_close();
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    $cfg = cc_int_load();
+    if ($action === 'integrations_save') {
+        $sec = (string)($d['section'] ?? ''); $in = $d['data'] ?? [];
+        $newSecrets = [];
+        if ($sec === 'webhooks') {
+            $list = is_array($in) ? array_slice(array_values($in), 0, CC_INT_MAX_WEBHOOKS) : [];
+            $old = []; foreach ($cfg['webhooks'] as $w) $old[$w['id']] = $w;
+            $out = [];
+            foreach ($list as $i => $row) {
+                $oid = is_array($row) && is_string($row['id'] ?? null) ? $row['id'] : '';
+                $c = cc_int_clean_webhook($row, $old[$oid] ?? null);
+                if ($c['url'] === '') $intErr('Webhook ' . ($i + 1) . ': the address must be a public https address' . (cc_int_source()['allow_private'] ? '' : ' (never a private or internal one)') . '.');
+                if (!isset($old[$c['id']])) $newSecrets[$c['id']] = $c['secret'];
+                $out[] = $c;
+            }
+            $cfg['webhooks'] = $out;
+        } elseif ($sec === 'mailchimp') { $cfg['mailchimp'] = cc_int_clean_mailchimp($in, $cfg['mailchimp']); }
+        elseif ($sec === 'brevo') { $cfg['brevo'] = cc_int_clean_brevo($in, $cfg['brevo']); }
+        elseif ($sec === 'analytics') { $cfg['analytics'] = cc_int_clean_analytics($in); }
+        elseif ($sec === 'stripe_key') {
+            $key = cc_int_clean_stripe_key(is_array($in) ? ($in['api_key'] ?? '') : '', $cfg['stripe']['api_key']);
+            if (!empty($in['clear_key'])) $key = '';
+            if ($key === $cfg['stripe']['api_key'] && trim((string)($in['api_key'] ?? '')) !== '' && strpos((string)$in['api_key'], '••••') !== 0) $intErr('That is not a Stripe secret or restricted key (it starts with sk_ or rk_).');
+            $cfg['stripe']['api_key'] = $key;
+        } else $intErr('Unknown section.');
+        if (!cc_int_save($cfg)) $intErr('The settings could not be saved in the data folder.');
+        echo json_encode(['success' => true, 'message' => 'Saved.', 'config' => cc_int_public($cfg), 'new_secrets' => $newSecrets]); exit;
+    }
+    if ($action === 'integrations_rotate_secret') {
+        foreach ($cfg['webhooks'] as &$w) if ($w['id'] === (string)($d['id'] ?? '')) { $w['secret'] = bin2hex(random_bytes(16)); $sec = $w['secret']; }
+        unset($w);
+        if (!isset($sec)) $intErr('Webhook not found.');
+        cc_int_save($cfg);
+        echo json_encode(['success' => true, 'secret' => $sec, 'config' => cc_int_public($cfg)]); exit;
+    }
+    if ($action === 'integrations_test') {
+        $kind = (string)($d['kind'] ?? '');
+        if ($kind === 'webhook') {
+            $w = null; foreach ($cfg['webhooks'] as $x) if ($x['id'] === (string)($d['id'] ?? '')) $w = $x;
+            if (!$w) $intErr('Webhook not found.');
+            $body = cc_int_webhook_body('webhook.test', 'https://' . preg_replace('/[^a-zA-Z0-9.:\-]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'localhost')) . '/', ['id' => 'f_test', 'type' => 'form'], ['Name' => 'Test', 'Email' => 'test@example.com', 'Message' => 'This is a test from CanvasCore.'], 0, '');
+            [$ok, $code, $detail] = cc_int_send_webhook($w, $body, 'webhook.test');
+            cc_int_log($pdo, 'webhook', $w['name'] . ' (' . $w['id'] . ')', 'webhook.test', $ok, $code, $detail, null);
+            echo json_encode(['success' => $ok, 'message' => $ok ? 'The test was received (' . $detail . ').' : 'The test failed: ' . $detail . '.']); exit;
+        }
+        if ($kind === 'mailchimp' || $kind === 'brevo') { [$ok, $msg] = cc_int_test_service($kind, $cfg[$kind]); echo json_encode(['success' => $ok, 'message' => $msg]); exit; }
+        $intErr('Unknown test.');
+    }
+    if ($action === 'integrations_resend') { [$ok, $msg] = cc_int_resend($pdo, (int)($d['id'] ?? 0)); echo json_encode(['success' => $ok, 'message' => $msg]); exit; }
+    if ($action === 'integrations_log_clear') { cc_int_log_table($pdo); $pdo->exec("DELETE FROM integration_log"); echo json_encode(['success' => true]); exit; }
+    // Stripe payment links
+    if ($action === 'stripe_link_create') {
+        if ($cfg['stripe']['api_key'] === '') $intErr('Add your Stripe key first.');
+        [$link, $msg] = cc_int_stripe_create_link($cfg['stripe']['api_key'], $d);
+        if (!$link) $intErr($msg);
+        array_unshift($cfg['stripe']['links'], $link); $cfg['stripe']['links'] = array_slice($cfg['stripe']['links'], 0, 200);
+        cc_int_save($cfg);
+        echo json_encode(['success' => true, 'message' => $msg, 'link' => $link, 'config' => cc_int_public($cfg)]); exit;
+    }
+    if ($action === 'stripe_link_add') {   // a payment link made in the Stripe dashboard: only its address is needed
+        $url = trim((string)($d['url'] ?? '')); $name = cc_int_text($d['name'] ?? '', 100);
+        if (!cc_int_stripe_link_ok($url)) $intErr('That is not a Stripe payment link (it starts with https://buy.stripe.com/).');
+        if ($name === '') $intErr('Give the link a name.');
+        foreach ($cfg['stripe']['links'] as $l) if ($l['url'] === $url) $intErr('That link is already in the list.');
+        array_unshift($cfg['stripe']['links'], ['id' => 'sl_' . bin2hex(random_bytes(4)), 'name' => $name, 'amount' => '', 'currency' => '', 'url' => $url, 'stripe_id' => '', 'created' => gmdate('Y-m-d H:i:s'), 'active' => true]);
+        $cfg['stripe']['links'] = array_slice($cfg['stripe']['links'], 0, 200);
+        cc_int_save($cfg);
+        echo json_encode(['success' => true, 'message' => 'Link added.', 'config' => cc_int_public($cfg)]); exit;
+    }
+    if ($action === 'stripe_link_set_active') {
+        foreach ($cfg['stripe']['links'] as &$l) if ($l['id'] === (string)($d['id'] ?? '')) {
+            $active = !empty($d['active']);
+            if ($l['stripe_id'] !== '' && $cfg['stripe']['api_key'] !== '') { [$ok, $msg] = cc_int_stripe_set_active($cfg['stripe']['api_key'], $l['stripe_id'], $active); if (!$ok) $intErr($msg); }
+            else $msg = $active ? 'The link is shown again.' : 'The link is no longer offered in the editor (it still works at Stripe: deactivate it there).';
+            $l['active'] = $active; $found = true;
+        }
+        unset($l);
+        if (!isset($found)) $intErr('Link not found.');
+        cc_int_save($cfg);
+        echo json_encode(['success' => true, 'message' => $msg, 'config' => cc_int_public($cfg)]); exit;
+    }
+    if ($action === 'stripe_link_remove') {
+        $cfg['stripe']['links'] = array_values(array_filter($cfg['stripe']['links'], function ($l) use ($d) { return $l['id'] !== (string)($d['id'] ?? ''); }));
+        cc_int_save($cfg);
+        echo json_encode(['success' => true, 'config' => cc_int_public($cfg)]); exit;
     }
 }
 

@@ -92,6 +92,11 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         $feed_links = '';
         foreach ($feeds as $fd) $feed_links .= '<link rel="alternate" type="application/rss+xml" title="' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '" href="' . htmlspecialchars($site_url . '/' . $fd['slug'] . '/feed.xml') . '">' . "\n";
         $cookie_html = cc_cookie_banner_html($settings['cookieBanner'] ?? null);
+        // Administration › Integrations › Analytics: the snippet in the head of every page; it waits for the cookie banner (when there is one)
+        $analytics_html = '';
+        try {
+            if (is_file(cc_data_dir() . '/integrations.json')) { require_once __DIR__ . '/integrations.php'; $analytics_html = cc_int_analytics_html(cc_int_load()['analytics'], $cookie_html !== ''); }
+        } catch (Throwable $e) { error_log('CanvasCore publish (analytics): ' . $e->getMessage()); }
         // Global Options › Announcement bar: at the top of every page (nothing when it is off or has no text)
         $ann = $settings['announcement'] ?? null;
         $announce_html = (is_array($ann) && !empty($ann['enabled'])) ? cc_announcement_html($ann, 'cc-site-announce', '', '', true) : '';
@@ -103,12 +108,14 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             return trim(preg_replace('/\s+/u', ' ', $t));
         };
         // Every published page and item gets the same finishing touches
-        $finish = function ($html, $canonical, $noindex) use ($feed_links, $cookie_html, $announce_html, $base_url, &$media_meta) {
+        $finish = function ($html, $canonical, $noindex) use ($feed_links, $cookie_html, $announce_html, $analytics_html, $base_url, &$media_meta) {
             $head = '';
             if ($canonical !== '') $head .= '<link rel="canonical" href="' . htmlspecialchars($canonical) . '">' . "\n";
             if ($noindex || cc_demo_on()) $head .= '<meta name="robots" content="noindex">' . "\n";
             $head .= $feed_links;
-            if ($head !== '') $html = preg_replace('#</head>#i', $head . '</head>', $html, 1);
+            if ($analytics_html !== '' && !cc_demo_on()) $head .= $analytics_html;   // a demo site is not counted
+            // (a callback: the snippet may contain $ or \\, which a replacement string would read as references)
+            if ($head !== '') $html = preg_replace_callback('#</head>#i', function ($m) use ($head) { return $head . $m[0]; }, $html, 1);
             if ($cookie_html !== '') $html = preg_replace('#</body>#i', str_replace('{{BASE_URL}}', $base_url, $cookie_html) . '</body>', $html, 1);
             // (a callback: the text may contain $1 or \\, which a replacement string would read as references)
             if ($announce_html !== '') $html = preg_replace_callback('#<body[^>]*>#i', function ($m) use ($announce_html, $base_url) { return $m[0] . "\n" . str_replace('{{BASE_URL}}', $base_url, $announce_html); }, $html, 1);

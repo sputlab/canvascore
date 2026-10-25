@@ -1468,6 +1468,23 @@
         "width": "100%",
         "padding": "20px 0"
       }
+    },
+    "PAYMENT_BUTTON": {
+      "content": {
+        "link": "",
+        "label": "Buy now",
+        "priceText": "",
+        "title": "",
+        "description": "",
+        "layout": "card",
+        "align": "left",
+        "accent": "",
+        "note": true
+      },
+      "styles": {
+        "padding": "20px 0",
+        "width": "100%"
+      }
     }
   }
 }

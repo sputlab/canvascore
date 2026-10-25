@@ -11,6 +11,24 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Integrations** (Administration › **Integrations**, admins): webhooks, newsletter services, analytics and Stripe payment links.
+  - **Webhooks for forms**: every submission of the forms you choose (all, or some) is sent to your own https address as a JSON POST
+    (event, form, fields, page, site), signed with a secret of that webhook (`X-CanvasCore-Signature: sha256=` HMAC-SHA256 of
+    `timestamp.body`, with `X-CanvasCore-Timestamp`, `-Event` and `-Delivery`). It runs after the visitor has been answered; *Send a test*,
+    a new secret on request, and an **Activity** list of deliveries where a failed one can be sent again. Addresses must be public (never a
+    private or internal network, no credentials, https); the connection is pinned to the address that was checked and redirects are not followed.
+  - **Newsletter services**: **Mailchimp** (audience, optional double opt-in) and **Brevo** (list). The email (and name) of a submission is
+    added only **with consent**: a ticked consent box, or a Newsletter block that asks for none (the form is the signup); a plain contact
+    form is never a signup. Choose Newsletter blocks only, every form with a ticked consent box, or chosen forms; *Test the connection* names the list.
+  - **Analytics**: Google Analytics 4, Plausible or Matomo, as a snippet in the head of every published page. Services that use cookies wait for
+    the cookie banner's Accept when the site has one (Plausible does not need to). Ids and addresses are checked strictly (nothing with code in it).
+  - **Stripe payment links**: a Stripe key (a restricted one is enough) lets you create a product, price and payment link from the admin; or add a link
+    made in the Stripe dashboard (no key needed). A new **Payment Button** block (Business) takes a link from that list (or a pasted one), and only
+    `buy.stripe.com` / `donate.stripe.com` addresses work; the visitor pays on Stripe's own page.
+  - Keys live in `integrations.json` in the data folder (0600, never in `settings.json`, never sent to the editor except masked); a key field
+    left empty keeps the saved key. A form's kind and the positions of its email, name and consent fields are now written to `forms.json` at publish.
+    Integration settings and the activity list are not part of a backup.
+  - `integrations-source.php` (not part of a release, kept when a site updates itself) points the services to other addresses (a mirror, a test).
 - **Online template library** (Administration › **Template library**, admins; also *Browse the online library* on the Templates page): starter
   pages, sections and full-site kits shared by the community, installed from the admin.
   - **Kinds of kit**: a **page** (one draft page), **sections** (each becomes an entry of *Add › My templates*) and a **site kit** (several

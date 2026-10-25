@@ -72,6 +72,7 @@ export const BLOCKS = [
   { type: 'TABLE', label: 'Data Table', icon: Table2, category: 'data', color: '#f59e0b', keywords: 'table rows columns' },
   { type: 'TIMELINE', label: 'Timeline', icon: History, category: 'data', color: '#f59e0b', keywords: 'history milestones' },
   { type: 'PRICING', label: 'Pricing', icon: CreditCard, category: 'data', color: '#f59e0b', keywords: 'plans price table' },
+  { type: 'PAYMENT_BUTTON', label: 'Payment Button', icon: CreditCard, category: 'business', color: '#635bff', keywords: 'stripe pay buy checkout donate payment link purchase shop' },
   { type: 'TEAM', label: 'Team', icon: Users, category: 'data', color: '#f59e0b', keywords: 'people members staff' },
   { type: 'REVIEW_SUMMARY', label: 'Review Summary', icon: StarHalf, category: 'data', color: '#f59e0b', keywords: 'rating stars score reviews average' },
   { type: 'LOGOS', label: 'Logo Cloud', icon: Building2, category: 'data', color: '#f59e0b', keywords: 'clients partners brands' },

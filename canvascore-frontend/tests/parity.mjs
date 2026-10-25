@@ -82,6 +82,12 @@ const fixtures = [
   { id: 'n1', type: 'ACCORDION', styles: { width: '100%' }, content: { allowMultiple: false, openFirst: true, icon: 'plus', variant: 'card', items: [{ title: 'Prima', content: '<p>uno</p>' }, { title: 'Seconda', content: '<p>due</p>' }] } },
   { id: 'n1b', type: 'ACCORDION', styles: { width: '100%' }, content: { allowMultiple: true, openFirst: false, icon: 'chevron', variant: 'flat', items: [{ title: 'A', content: '<p>x</p>' }] } },
   { id: 'n1c', type: 'ACCORDION', styles: {}, content: { icon: 'none', items: [] } },
+  { id: 'pay1', type: 'PAYMENT_BUTTON', styles: { padding: '20px 0', width: '100%' }, content: { link: 'https://buy.stripe.com/test_abc123XYZ', label: 'Buy the course', priceText: '€49.00', title: 'The <b>course</b>', description: "Line one\nLine <script>alert(1)</script> two", layout: 'card', align: 'center', accent: '#ff0000', note: true } },
+  { id: 'pay2', type: 'PAYMENT_BUTTON', styles: {}, content: { link: 'https://donate.stripe.com/abcd1234?prefilled_amount=500', label: '', layout: 'plain', align: 'right', accent: '', note: false } },
+  { id: 'pay3', type: 'PAYMENT_BUTTON', styles: {}, content: { link: 'javascript:alert(1)', label: 'Pay', title: 'x', layout: 'weird', align: 'middle', accent: 'red;}', note: 'yes' } },
+  { id: 'pay4', type: 'PAYMENT_BUTTON', styles: {}, content: { link: 'https://evil.example/https://buy.stripe.com/abcd1234', label: ['a'], priceText: { a: 1 }, description: 5, layout: null } },
+  { id: 'pay5', type: 'PAYMENT_BUTTON', styles: {}, content: { link: 'http://buy.stripe.com/abcd1234', label: 'Pay' } },
+  { id: 'pay6', type: 'PAYMENT_BUTTON', styles: {}, content: {} },
   { id: 'n2', type: 'TABS', styles: { width: '100%' }, content: { variant: 'underline', tabAlign: 'left', items: [{ title: 'Uno', content: '<p>a</p>' }, { title: 'Due', content: '<p>b</p>' }, { title: 'Tre', content: '<p>c</p>' }] } },
   { id: 'n2b', type: 'TABS', styles: {}, content: { variant: 'pills', tabAlign: 'center', items: [{ title: 'Solo', content: '<p>s</p>' }] } },
   { id: 'n3', type: 'PRICING', styles: { padding: '20px 0', width: '100%' }, content: { columns: 0, plans: [
@@ -233,7 +239,7 @@ const fixtures = [
 // Fixtures from the REAL DEFAULTS (blocks.json): exactly what the editor creates with addBlock.
 {
   const defs = JSON.parse(readFileSync(fileURLToPath(new URL('../../canvascore-admin/blocks.json', import.meta.url)), 'utf-8'));
-  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER']) {
+  for (const type of ['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER', 'PAYMENT_BUTTON']) {
     const def = defs.types[type];
     if (!def) { console.error(`blocks.json: type ${type} is missing`); process.exit(1); }
     fixtures.push({ id: 'def_' + type.toLowerCase(), type, styles: { ...(defs._baseStyles || {}), ...(def.styles || {}) }, content: JSON.parse(JSON.stringify(def.content || {})) });
@@ -297,7 +303,7 @@ function diff(a, b, path = '') {
 
 // For these blocks the generated CSS carries LOGIC (radio tabs, open state, responsive):
 // besides the structure we also compare the text of the <style> tags.
-const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER']);
+const STRICT_STYLE = new Set(['ACCORDION', 'TABS', 'PRICING', 'GALLERY', 'DIVIDER', 'CALLOUT', 'STEPS', 'COUNTERS', 'PROGRESS', 'TABLE', 'COUNTDOWN', 'TIMELINE', 'LOGOS', 'TEAM', 'BEFORE_AFTER', 'BUSINESS', 'BENTO', 'SPLIT_CTA', 'CASE_STUDY', 'AUTHOR_BIO', 'REVIEW_SUMMARY', 'TESTIMONIAL_WALL', 'HOVER_GRID', 'SCROLLYTELLING', 'HOTSPOTS', 'TABLE_OF_CONTENTS', 'SHARE_BAR', 'CODE_SNIPPET', 'PRICE_CALCULATOR', 'WIZARD', 'VIDEO_HERO', 'AUDIO_PLAYER', 'ANNOUNCEMENT_BAR', 'NEWSLETTER', 'PAYMENT_BUTTON']);
 function styleTexts(html) {
   const $ = load(`<div id="__root__">${html}</div>`, null, false);
   return $('style').map((_, e) => $(e).text().replace(/\s+/g, ' ').replace(/:\s+/g, ':').replace(/,\s+/g, ',').trim()).get();
