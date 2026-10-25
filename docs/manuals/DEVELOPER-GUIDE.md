@@ -102,6 +102,7 @@ canvascore-frontend/         React editor
 | `update.php` | One-click updates: release check, signed package, backup, folder swap, health check, rollback (section 7) |
 | `update-keys.php` | The public keys (Ed25519) that releases are signed with; the private key is never in the repository |
 | `blockdef.php` | The PHP engine of the shared block definitions: setting cleaning, the template language, transforms, behaviour scripts (section 5) |
+| `popups.php`, `popups.css`, `popups.js` | Popups: settings and display rules (`cc_popup_settings_clean()`, `cc_popup_applies()`), the markup written into published pages (`cc_popups_html()`), its style sheet and the ES5 runtime (section 7) |
 | `integrations.php` | Integrations: the settings file with its cleaners, the outgoing HTTP call, signed webhooks, Mailchimp and Brevo, the analytics snippet, Stripe payment links, the activity log (section 7) |
 | `library.php` | The template library: the signed index, kit reading and checks, cleaning, installing and undo (sections 7 and 8.4) |
 | `roles.php` | Roles and review: what each role may do, ownership, per-collection access and the review flow (section 7) |
@@ -121,7 +122,7 @@ canvascore-frontend/         React editor
 
 | Path | Purpose |
 | --- | --- |
-| `vite.config.js` | Injects `__APP_VERSION__`, `__APP_BUILD__`, `__BLOCK_DEFS__`, `__EFFECTS_CSS__` from `../canvascore-admin/`; the `canvascore-editor-csp` plugin adds the editor's Content Security Policy (`script-src 'self'`) and `referrer` / `robots` metas to the **built** `index.html` (not in the dev server, which needs inline scripts) |
+| `vite.config.js` | Injects `__APP_VERSION__`, `__APP_BUILD__`, `__BLOCK_DEFS__`, `__EFFECTS_CSS__`, `__POPUPS_CSS__` from `../canvascore-admin/`; the `canvascore-editor-csp` plugin adds the editor's Content Security Policy (`script-src 'self'`) and `referrer` / `robots` metas to the **built** `index.html` (not in the dev server, which needs inline scripts) |
 | `public/menu-preview.html` | Menu Builder live preview: a page of its own, loaded in a sandboxed iframe (`allow-scripts`, no same origin) and fed the menu HTML by `postMessage`, so the menu's scripts run there and not under the editor's CSP |
 | `scripts/bump.mjs` | `prebuild` hook: increments `build` in `version.json`, syncs `package.json` version |
 | `scripts/library-kit.php`, `scripts/library-index.php` | Template library tools: `library-kit.php check` or `pack <folder>` for kit authors; `library-index.php --key … --kits … --base-url …` builds and signs the index (section 8.4) |
@@ -160,6 +161,7 @@ canvascore-frontend/         React editor
 | `src/session/permissions.js` | The role table for the editor (`ROLES`, `canCreate`, `canPublishDirect`, `canPublishSite`, `canManageSite`, `canReview`, `reviewOf`): the twin of `roles.php`, so no button is offered that the server would refuse |
 | `src/components/ReviewQueue.jsx`, `ReviewBar.jsx`, `CollectionAccess.jsx` | Reviews / My submissions; the review banner of the page editor; Collections › Who can work here |
 | `src/components/ImageTools.jsx`, `src/editor/imageTools.js`, `mediaActions.js` | The media library's Crop and Focal point dialog and its pure maths (frame, handles, aspect, focal point); an image from a web address |
+| `src/components/Popups.jsx`, `src/components/panel/PopupSettings.jsx`, `src/components/PopupPreview.jsx`, `src/editor/popups.js` | Content › Popups: the list; the settings panel of a popup open in the editor (look, triggers, display rules); the preview (`popups.css` through `__POPUPS_CSS__`); the defaults, the words that sum a popup up, the starters |
 | `src/components/Integrations.jsx` | Administration › Integrations: the Webhooks, Newsletter, Analytics, Stripe and Activity tabs; keys are only typed in, never shown |
 | `src/components/TemplateLibrary.jsx` | Administration › Template library: cards, filters, the install dialog, results, installed kits and Restore |
 | `src/components/BlockPackages.jsx`, `src/editor/blockPackages.js` | Administration › Block packages; and the editor side of packages: `registerPackages()` registers their definitions, catalog entries and CSS, `loadBlockPackages()` fetches `pkg_list` after sign-in |
@@ -169,7 +171,7 @@ canvascore-frontend/         React editor
 | `src/session/` | Session manager, fetch guard, local draft backups and trackers |
 | `src/ui/` | UI kit (`kit.jsx`, `kit.css`), `global.css`, `notify.js` + `toast.jsx`, `dialog.js` + `dialogHost.jsx`, `branding.js` (`useBrandingHead()`, `brandIconUrl()`) + `BrandLogo.jsx` (site favicon as the admin logo) |
 | `src/menu/menuThemes.js` | Menu defaults, themes, effect groups (mirrored in `compiler.php`) |
-| `tests/` | The 12 test suites (10 Node, plus `server.php` and `security.php` in PHP) and the `render_php.php` / `render_php_list.php` / `render_def.php` / `render_menu.php` CLI helpers |
+| `tests/` | The 13 test suites (11 Node, plus `server.php` and `security.php` in PHP) and the `render_php.php` / `render_php_list.php` / `render_def.php` / `render_menu.php` / `render_popups.php` CLI helpers |
 
 ## 3. Local development
 
@@ -242,7 +244,7 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 
 ### Tests
 
-`npm test` runs the 12 suites in sequence (each exits non-zero on failure):
+`npm test` runs the 13 suites in sequence (each exits non-zero on failure):
 
 | Script | File | Covers |
 | --- | --- | --- |
@@ -254,6 +256,7 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 | `test:panels` | `tests/panels-ui.mjs` | `addBlock` → `PropertyPanel` field edits → store, and canvas rendering per block; every definition has a generated panel whose fields and widgets exist and that mounts |
 | `test:starters` | `tests/starters.mjs` | `starters.json`: known types, real content fields, unique ids, renders in JS and PHP |
 | `test:menu` | `tests/menu.mjs` | Menu effect catalog in sync with `compiler.php`, every theme/effect rendered by PHP, escaping |
+| `test:popups` | `tests/popups.mjs` | The popup runtime (`canvascore-admin/popups.js`) in jsdom on the HTML the real PHP writes (`render_popups.php`), with a fake clock: every trigger (time, scroll, exit intent, a click), the rules (devices, visitors, schedule, frequency), closing, the focus trap, one popup at a time, the cookie banner, a form sent in a popup |
 | `test:rich-text` | `tests/rich-text.mjs` | Paste cleanup, in-place editing keeps layout, toolbars, tidy on blur |
 | `test:ui` | `tests/ui-shell.mjs` | Sidebar, Pages screen, editor top bar and shortcuts, Add panel, property tabs, effects, Layers, dialogs, media library (folders, selection, uploads), site branding and About, Backup page, Collections (rename, bulk actions) |
 | `test:server` | `tests/server.php` (`php tests/server.php`) | Server helpers through the real PHP code: security helpers (rich-text styles and links, `cc_sanitize_blocks`, active URLs, reserved slugs, redirect targets, CSS colors/lengths, image URLs, `build_inline_style`), migration 8 on an old database (default account removed, installed flag, stored rich text cleaned, `session_gen` and unique names), code surfaces kept on editors' saves, re-linking after a slug change, client IP behind trusted proxies, SVG upload check, sanitizer, `cc_int`, slider arrows and reduced motion, form fallbacks and field types, revision history, image copies and `srcset`, redirects (chains, loops, `.htaccess` block, redirect page), cookie banner, Site Search block, public branding, media folders and image usage, backup and restore (contents, refused files, newer versions, safety copies), deleted collections and items going offline |
@@ -311,6 +314,7 @@ the web root can be written. It contains:
 | `canvascore.sqlite` | All structured content (tables below) |
 | `settings.json` | Global Options: `brandColor`, `fontFamily`, `siteName`, `siteSuffix`, `siteUrl`, `faviconUrl`, `defaultOgImage`, `robotsAllow`, `menuInheritTheme`, `headerEnabled`, `footerEnabled`, `cookieBanner` (`{ enabled, text, acceptLabel, declineLabel, privacyLabel, privacyUrl, position }`), `adminEmail`, `emailFrom`, `emailSubject`, `sessionTimeoutMinutes`, `trustedProxies` (the last five are admin-only: `get_settings` leaves them out for editors and an editor's save keeps the stored values) |
 | `menu.json` | `{ "items": [...], "settings": {...} }`, nested items (`children`), legacy flat format still read |
+| `popups` (table) | Popups: `id` (`pop_` + hex), `name`, `status` draft or published, `content_json` (the blocks), `settings_json` (look, triggers, rules: always passed through `cc_popup_settings_clean()`), `created_by`, `created_at`, `updated_at` (migration 16; in site backups) |
 | `integrations.json` | Integrations (0600): `webhooks` (id, name, url, enabled, forms, secret), `mailchimp` and `brevo` (enabled, api_key, list_id, forms; double_optin), `analytics` (provider and ids, consent), `stripe` (api_key, links). Written by `cc_int_save()`; only masked copies reach the editor (`cc_int_public()`). Not in a backup |
 | `forms.json` | Written by each publish: form id → `{ to, labels, success, type, meta }` (recipient, field labels in order, success message; `type` form, newsletter or wizard; `meta` = the positions of the first `email`, `name` and `consent` fields), so addresses never reach the client and `submit_form.php` accepts only `field_0…field_N-1` with those labels. Older registries (id → recipient string) are still read |
 | `media.json` | Media metadata per uploaded file name: `alt`, `w`, `h`, `bytes`, `variants` (widths of the WebP copies), `optimized`, `folder` (media library folder path such as `Products/Shoes`, `''` = none; see `media.php`) |
@@ -437,13 +441,13 @@ undoable change.
 
 `api.php` runs `cc_migrate($pdo)` and `cc_migrate_content($pdo)` on every request (`migrations.php`).
 
-**DB schema** (currently 15; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
+**DB schema** (currently 16; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
 unique user names, old default account removed, pre-wizard sites marked installed, stored content sanitized, 9 = custom
 fields (`collections.fields`, `collection_items.field_values`), 10 = structured data (`collections.schema_json`), 11 = the
 collection design (`collections.design_json`), 12 = categories and tags (`collection_taxonomies`, `collection_terms`,
 `collection_items.terms_json`), 13 = listing and archives (`collections.archive_json`), 14 = scheduled publishing
 (`publish_at` / `unpublish_at` on pages and items), 15 = roles and review (`created_by` and the review columns on pages and
-items, `collections.access_json`)): add a numbered closure
+items, `collections.access_json`), 16 = the `popups` table): add a numbered closure
 to `cc_db_migrations()`, then bump `db_schema` in `version.json` and note it in the CHANGELOG. Each migration
 runs once, in order, in a transaction, and the number is recorded in `cc_meta`.
 
@@ -862,6 +866,24 @@ memory limit can't handle the image). The original is never changed.
 | `cc_media_folder_create($path)` / `cc_media_folder_rename($from, $to)` / `cc_media_folder_delete($path)` | Folder operations. Rename moves sub-folders and images' `folder` along (refused when the target exists or is inside the source); delete moves its images to the parent folder and deletes no file |
 | `cc_media_move($names, $folder)` | Sets `folder` for the given files (creating the folder). **Folders are labels**: files never move on disk, so image URLs never change |
 | `cc_media_usage($pdo, $names)` | Where each file is used: searches the stored content of pages, draft copies (`Page draft`), items (incl. `cover_image`), `site_parts`, `master_components`, and `settings.json` / `menu.json`, by bare file name; returns `name => ["Page: Home", …]` |
+
+### `popups.php` (popups)
+
+Loaded by `publish.php` and by `api.php` for `get_popups`, `get_popup`, `save_popup` and `delete_popup` (everyone signed in reads; `save_popup` and `delete_popup` are in `CC_CONTRIBUTOR_DENIED`, so editors and admins change them, and the demo refuses). A popup is edited in the page
+editor like a page (`activePage.__popup`, saved by `VisualEditor` to `save_popup`); its blocks follow the rules of a page (`cc_keep_code_surfaces()` for an editor, `cc_sanitize_blocks()`).
+
+| Function | What it does |
+| --- | --- |
+| `cc_popup_settings_clean($in)` | The only way settings are stored or read: `look` (position, width, animation, overlay and its color and strength, background, radius, padding, close options), `triggers` (`time`, `scroll`, `exit`, `click`) and `rules` (`where`, `devices`, `visitor`, `frequency`, `schedule`, `priority`). Choices fall back to defaults, numbers are held in range, colors go through `cc_css_color()`, ids and dates are validated |
+| `cc_popup_applies($settings, $ctx)` | The build-time rule: `$ctx` is `{ kind: page \| item \| archive \| 404, id, collection }`; `where` is everywhere, only the chosen pages or collections, or all but them; never the 404 page |
+| `cc_popups_published($pdo)` | The published popups that have blocks (at most `CC_POP_MAX`, 30), with their cleaned settings |
+| `cc_popup_element($popup)` | The hidden dialog markup (overlay, close button, blocks rendered once and cached; the name only as an escaped `aria-label`; the look as CSS variables `--cc-pop-*`). Forms inside register in `cc_form_registry()` like any form |
+| `cc_popups_html($popups, $ctx)` | What a page gets before `</body>`: the style sheet, the popups that apply, `<script type="application/json" id="cc-popups-data">` (ids, triggers, rules: no text) and the runtime. Empty when none applies |
+
+`publish.php` calls it from `$finish($html, $canonical, $noindex, $ctx)` for pages, items and the collection listing and archive pages (`$render_page` finds the collection from the path); the 404 page has no `$ctx`. The **runtime** (`popups.js`, ES5, no dependencies)
+decides in the browser what the server cannot: devices (≤ 767 px mobile, ≤ 1024 px tablet), new or returning (`localStorage.cc_visited`), the schedule (the visitor's date), and the frequency (`localStorage.cc_popup_<id>` = `{ t, c }`, `sessionStorage` for "session"), then arms the
+triggers: `setTimeout`, a `scroll` listener, `mouseout` through the top edge (armed after 2 s; skipped when `(pointer: coarse)`) and clicks on `#popup-<id>` or `[data-cc-popup-open]`. One popup at a time (`shown`), the lowest `prio` first, deferred while `#cc-consent` is visible; it traps Tab in a
+dialog, closes on Esc / overlay / the close button and gives the focus back; a `submit` inside a popup records `c: 1`. `tests/popups.mjs` runs it with a fake clock; `tests/server.php` (POPUPS) covers the settings, the rules and the markup, and `tests/security.php` the whole flow over HTTP.
 
 ### `integrations.php` (integrations)
 
@@ -1396,6 +1418,8 @@ Recently added actions:
 | `media_crop` | POST `{ name, x, y, w, h, mode }` | `mode` `copy` or `replace`; returns `{ name, replaced }`. Not for authors or reviewers |
 | `media_replace` | POST multipart `name`, `file` | Replaces a library file's content under its name. Not for authors or reviewers |
 | `media_import_url` | POST `{ url, folder }` | Downloads an image into the library (the importer's downloader); not in the demo. `save_media_meta` also takes `focal` (`{ x, y }` or `null`) and `get_media` returns it |
+| `get_popups` / `get_popup` | GET / GET `?id=` | Everyone signed in: the list (`id, name, status, blocks, settings`) and one popup (`content_json`, `settings`; an editor gets the content with admin code redacted) |
+| `save_popup` / `delete_popup` | POST | Editors and admins (not authors or reviewers; not in the demo). `save_popup` takes `{ id?, name, status, blocks, settings }`, checks the settings, refuses publishing a popup with no blocks (`code: empty`) and returns `{ id, status }`; at most 30 popups |
 | `integrations_get` | GET | Admins: `{ config (masked), log (latest 60 deliveries), forms (from forms.json), demo, curl }` |
 | `integrations_save` | POST `{ section, data }` | Admins, not in the demo: `section` webhooks (a list; returns `new_secrets` once), mailchimp, brevo, analytics or stripe_key |
 | `integrations_test` / `integrations_rotate_secret` / `integrations_resend` / `integrations_log_clear` | POST | Admins: send a sample webhook or test a service's list; make a new webhook secret (returned once); send a failed delivery again; clear the log |

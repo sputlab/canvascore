@@ -421,7 +421,7 @@ Tick **Required** for a field the visitor must fill in.
 
 ### Newsletter Signup
 
-An email sign-up box. Each sign-up is stored in **Submissions**, like a form message, and sent to the receiving email.
+An email sign-up box. Each sign-up is stored in **Submissions**, like a form message, and sent to the receiving email (and to Mailchimp or Brevo, when set up in Integrations). It works well inside a **popup** (Content › Popups).
 
 - **Title (empty = none)** and **Text (empty = none)**.
 - **Email field name (shown in Submissions)**, **Email field hint (empty = the name)** and **Your email address**.

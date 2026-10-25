@@ -112,7 +112,8 @@ root, and published pages are written to the folder above it (the web root itsel
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
         ├── blocks/               Definitions of the blocks (settings and template, one file per block)
         ├── update.php, update-keys.php   One-click updates and the public keys of the releases
-        ├── blockpkg.php, wpimport.php, roles.php, library.php, integrations.php   Block packages, the WordPress importer, roles and review, the template library, integrations (libraries)
+        ├── blockpkg.php, wpimport.php, roles.php, library.php, integrations.php, popups.php   Block packages, the WordPress importer, roles and review, the template library, integrations, popups (libraries)
+        ├── popups.css, popups.js         The look and the runtime of popups, written into the pages that have one
         ├── .htaccess             Security headers and access rules (Apache, written automatically)
         └── version.json          Version of the installed release
 ```
@@ -255,7 +256,7 @@ instead (section 7.4).
 `# CanvasCore: written automatically…`). If you replace it with a file of your own (for example to
 add HTTP basic auth), CanvasCore leaves it alone: copy CanvasCore's rules into it, or the security
 headers and deny rules are lost. Whatever the server, the library files (`config.php`, `compiler.php`,
-`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `library.php`, `integrations.php`, `update.php`, `update-keys.php`) answer 404
+`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `library.php`, `integrations.php`, `popups.php`, `update.php`, `update-keys.php`) answer 404
 when opened directly.
 
 ### 4.2 Nginx
@@ -290,7 +291,7 @@ server {
 
         location ^~ /canvascore-admin/data/ { deny all; return 404; }
         location ~ /\. { deny all; return 404; }
-        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|update|update-keys|update-source|library-source|integrations-source)\.php$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|popups|update|update-keys|update-source|library-source|integrations-source)\.php$ { deny all; return 404; }
         location ~ ^/canvascore-admin/([^/]+/)?[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
 
         # The Menu Builder's live preview is framed by the editor itself
@@ -353,7 +354,7 @@ order, so keep the deny rules above it. `add_header` inside a `location` replace
 the outer block, which is why the preview's block repeats all four. If the site lives in a
 sub-folder (`example.com/site/`), prefix the paths: `/site/canvascore-admin/`, `/site/uploads/`,
 `/site/canvascore-blocks/`. **Updating from before 0.22.0:** add the `canvascore-blocks` block and
-`blockpkg|wpimport|roles|library|integrations` and `library-source|integrations-source` to the library-file rule shown above (one-click updates do not change your server configuration).
+`blockpkg|wpimport|roles|library|integrations|popups` and `library-source|integrations-source` to the library-file rule shown above (one-click updates do not change your server configuration).
 
 **Redirects on Nginx.** Nginx ignores the `.htaccess` block of 301s. The old addresses still
 work, because publishing also writes a small redirect page at each old address (it sends the
@@ -485,7 +486,7 @@ so always restore both together. The Backup page's safety copy restores the cont
    should not stay on the server).
 6. Open the editor. **Database migrations run automatically** on the first request: each
    pending schema step is applied in order, in a transaction, and recorded in the `cc_meta`
-   table (key `db_schema`). There is nothing to run by hand. The current schema is **15**
+   table (key `db_schema`). There is nothing to run by hand. The current schema is **16**
    (`db_schema` in `version.json`); the most recent steps are:
 
    | Migration | Adds |
@@ -499,9 +500,10 @@ so always restore both together. The Backup page's safety copy restores the cont
    | 12 | Categories and tags: `collection_taxonomies`, `collection_terms` tables and `collection_items.terms_json` |
    | 13 | Listing and archive pages: `collections.archive_json` (page size and archives) |
    | 14 | Scheduled publishing: `publish_at` and `unpublish_at` on pages and items (section 7.9) |
+   | 16 | Popups (0.25.0): the `popups` table (name, status, blocks, settings), included in site backups |
    | 15 | Roles and review (0.23.0, section 6.6): `created_by` and the review columns (`review_state`, `review_note`, `review_by`, `review_at`, `reviewed_by`) on pages and items, `collections.access_json`; existing pages get their author as creator |
 
-   0.23.0 added migration 15 (the schema is 15); 0.24.0 adds no migration. Existing accounts keep their role (admin or editor). The `library/` folder and
+   0.23.0 added migration 15, 0.24.0 none, and 0.25.0 adds migration 16 (the schema is 16). Existing accounts keep their role (admin or editor). The `library/` folder and
    the `integrations.json` file of the data directory are created when the template library and the integrations are first used (sections 12.3 and 12.4). New in 0.22.0: the `packages/` and `imports/`
    folders of the data directory and the `canvascore-blocks/` folder of the site are created when first
    used (section 12), and the Nginx rules of section 4.2 gain `canvascore-blocks` (Apache writes its
@@ -926,7 +928,7 @@ server-level copy before updates and for disaster recovery.
 A backup contains:
 
 - pages (live versions and their unpublished draft copies), collections and their items,
-  templates, masters, the global header and footer, and redirects;
+  templates, masters, popups, the global header and footer, and redirects;
 - Global Options (`settings.json`, including form emails and the session timeout), the menu,
   and the media library data (`media.json`: descriptions, sizes, folders; `media-folders.json`);
 - every uploaded file in `uploads/` (images, audio and video), including the optimized copies in `uploads/_cc/`;
@@ -1140,6 +1142,8 @@ What CanvasCore does for you:
 - **Integrations**: admins only. API keys are stored apart from the settings, readable by the web user only, never sent back to the editor (masked), and sent only to the service's own
   address. Webhooks go only to public https addresses (private networks refused, the connection pinned to the checked address, no redirects), are signed, and run after the visitor is
   answered; a newsletter service gets an email only with consent; analytics ids are checked strictly; a payment button links only to Stripe (section 12.4).
+- **Popups**: editors and admins build them (authors and reviewers only read the list). Every setting is checked by the server, a popup's blocks follow the rules of a page (no code from an editor), and its name appears only as escaped text. Published
+  popups are written into the pages they apply to at publish time; the runtime on the page only shows and hides them and keeps what it remembers in the visitor's own browser (`localStorage`: `cc_visited`, `cc_popup_<id>`).
 - **Template library**: admins only. The index is signed (Ed25519, the release keys) and a kit's download must match the checksum in it; downloads only from
   the library's https hosts. A kit is cleaned like an editor's save (no code), cannot replace anything (pages are drafts with new addresses), and a site
   kit's design is applied only when asked, after a safety copy (section 12.3).
@@ -1446,6 +1450,11 @@ The author submitted it, so it is locked for them until a reviewer sends it back
 
 **Someone does not see a collection**
 The collection is limited to chosen people (Collections › Who can work here). Add them there, or choose *Everyone*. An author also sees only the items they made.
+
+**A popup does not show**
+Check, in this order: the popup is **Published** (the list says so) and you published the **site** afterwards; its rules allow this page (Where), this device and this visitor; its schedule includes today; and it is not waiting for its
+frequency (a popup shown once per week stays away for a week: test in a private window, or clear the site's data). Exit intent needs a mouse; a popup waits while the cookie banner is on screen; and only one popup shows at a time (the lower
+priority number first).
 
 **A webhook fails, or nobody is added to Mailchimp or Brevo**
 Open *Integrations › Activity*: each delivery shows its result. A webhook needs a public https address that answers with a 2xx code within a few seconds; fix the receiver and use *Send again*.
