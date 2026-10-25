@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
   FileText, LayoutTemplate, Library, Image as ImageIcon, ListTree, Palette, Inbox, Users, LogOut, Globe,
-  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink, CircleArrowUp, Package, DownloadCloud, ClipboardCheck, Store, Plug,
+  Menu as MenuIcon, X, DatabaseBackup, KeyRound, Info, ExternalLink, CircleArrowUp, Package, DownloadCloud, ClipboardCheck, Store, Plug, AppWindow,
 } from 'lucide-react';
 import { Button } from '../ui/kit';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -19,6 +19,7 @@ const NAV = [
     { view: 'collections', label: 'Collections', icon: Library },
     { view: 'reviews', label: 'Reviews', authorLabel: 'My submissions', icon: ClipboardCheck },
     { view: 'templates', label: 'Templates', icon: LayoutTemplate, site: true },
+    { view: 'popups', label: 'Popups', icon: AppWindow, site: true },
     { view: 'media', label: 'Media', icon: ImageIcon },
   ] },
   { group: 'Site', site: true, items: [

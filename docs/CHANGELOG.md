@@ -10,6 +10,33 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-25 — Popups
+
+### Added
+- **Popups** (Content › **Popups**, admins and editors): windows that open over the site, built from blocks like a page in the editor, with
+  their own settings panel.
+  - **Look**: a centred dialog (with a dimming overlay) or a slide-in in a corner or a bar across the top or bottom; width, animation (fade, slide,
+    zoom, none), background, rounded corners, spacing, a close button, closing by a click outside or by Esc. *Preview the popup* shows it as visitors
+    will see it. Starters: blank, newsletter, offer.
+  - **Triggers**: after some seconds, when the visitor has scrolled a percentage of the page, **exit intent** (the mouse leaves through the top of the
+    window: mouse devices only) and a **click on a link** to it (`#popup-<id>`, which opens it whatever the rules say). The first that happens shows it;
+    one popup at a time, the lower priority number first; it waits while the cookie banner is on screen.
+  - **Display rules**: where (everywhere, only chosen pages and collections, or everywhere except them: decided when the site is published, so a popup
+    is simply absent from the other pages), devices (computers, tablets, phones), new or returning visitors, a schedule (from and until a date), and
+    how often (every time, once per visit, again after N days, once). A popup whose form was sent does not come back. What it remembers stays in the
+    visitor's own browser (`localStorage`).
+  - Published popups are written into the pages they apply to at the next **Publish Site** (a page with none gets nothing); drafts are never published.
+    Forms in a popup work like any form (stored, mailed, sent to webhooks and newsletter services). A popup carries no code of its own: Custom HTML,
+    form emails and custom CSS/JS follow the same rules as in a page (an editor cannot add code), rich text is sanitized, and every setting is checked
+    by the server. Authors and reviewers can read popups but not change them.
+  - Migration 16 adds the `popups` table (included in site backups).
+
+### Upgrade notes
+- Migration 16 (the schema becomes 16) runs by itself on the first request: it adds the `popups` table.
+- **Nginx**: add `popups` to the library-file rule of the example in the Administrator Guide (section 4.2); one-click updates do not change your server configuration. Apache needs nothing.
+- Popups are written into pages at publish time: nothing changes on your site until you publish a popup and then the site.
+- A popup remembers that it was shown in the visitor's own browser (`localStorage`); if you list your cookies and storage in a privacy policy, add it.
+
 ## [0.24.0] - 2026-10-25 — Template library and integrations
 
 ### Added
@@ -1342,7 +1369,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/sputlab/CanvasCore/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/sputlab/CanvasCore/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/sputlab/CanvasCore/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/sputlab/CanvasCore/compare/v0.21.1...v0.22.0

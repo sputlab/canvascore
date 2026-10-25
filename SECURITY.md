@@ -44,6 +44,11 @@ From 0.24.0, admins can connect webhooks, Mailchimp, Brevo, analytics and Stripe
 through a webhook, to forge or replay a signed delivery, to add someone to a newsletter without their consent, to inject script through an analytics id or a payment link, or to send a payment button anywhere but to Stripe,
 is a vulnerability: report it as described below.
 
+## Popups
+
+From 0.25.0, editors and admins can build popups that are written into published pages. A way to get script or any code into a page through a popup (its name, its settings, its blocks), to publish
+a popup that is not published, to change popups as an author or a reviewer, or to make the popup runtime do anything but show and hide the popup, is a vulnerability: report it as described below.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue, pull request or Discord message for security problems.**

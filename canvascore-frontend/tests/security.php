@@ -1058,6 +1058,48 @@ $own->api('integrations_save', ['section' => 'webhooks', 'data' => []]);
 @unlink($admin . '/integrations-source.php');
 check('the integrations file answers 404 when opened directly', $own->req('GET', '/canvascore-admin/integrations.php', null, [], false)['code'] === 404);
 
+echo "\nPOPUPS (over HTTP)\n";
+$pop = function ($id, $name, $status, $settings = [], $blocks = null) { return array_filter(['id' => $id, 'name' => $name, 'status' => $status, 'settings' => $settings, 'blocks' => $blocks ?? [['id' => 'pb', 'type' => 'TEXT', 'content' => ['text' => '<p>Popup ' . $name . '</p>']]]], function ($v) { return $v !== null; }); };
+check('nobody signed out can read or change popups', (new Client())->api('get_popups')['code'] === 401 && (new Client())->api('save_popup', $pop('', 'x', 'draft'))['code'] === 401);
+$r = $own->api('save_popup', $pop('', 'Everywhere', 'published', ['triggers' => ['time' => ['seconds' => 99999]], 'look' => ['width' => 'huge', 'position' => '"><script>', 'background' => 'red;}</style><script>x()</script>', 'overlayColor' => 'javascript:1'], 'rules' => ['where' => ['mode' => 'nope', 'pages' => ['x', '../y']], 'visitor' => 'vip', 'frequency' => ['mode' => 'weekly', 'days' => -4]]]));
+$pid1 = $r['json']['id'] ?? '';
+check('an admin creates a popup; the server hands out its id', !empty($r['json']['success']) && preg_match('/^pop_[a-f0-9]{10}$/', $pid1) && ($r['json']['status'] ?? '') === 'published', $r['body']);
+$g = $own->api('get_popup&id=' . $pid1)['json'] ?? [];
+check('every setting was checked on the way in: unknown choices and hostile values are replaced by the defaults, numbers held in range', ($g['settings']['look']['position'] ?? '') === 'center' && ($g['settings']['look']['width'] ?? 0) === 520 && ($g['settings']['triggers']['time']['seconds'] ?? 0) === 600 && ($g['settings']['rules']['where']['mode'] ?? '') === 'all' && ($g['settings']['rules']['where']['pages'] ?? null) === ['x'] && ($g['settings']['rules']['visitor'] ?? '') === 'all' && ($g['settings']['rules']['frequency'] ?? null) === ['mode' => 'days', 'days' => 1] && strpos(json_encode($g['settings']), 'script') === false, json_encode($g['settings'] ?? null));
+$r = $own->api('save_popup', $pop('', 'Nothing in it', 'published', [], []));
+check('a popup with no content cannot be published (a draft can be empty)', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'empty' && !empty($own->api('save_popup', $pop('', 'Empty draft', 'draft', [], []))['json']['success']), $r['body']);
+check('an author and a reviewer can read the list but not change anything', is_array($au1->api('get_popups')['json']) && ($au1->api('save_popup', $pop('', 'x', 'draft'))['json']['code'] ?? '') === 'forbidden' && ($rv->api('save_popup', $pop($pid1, 'x', 'draft'))['json']['code'] ?? '') === 'forbidden' && ($au1->api('delete_popup', ['id' => $pid1])['json']['code'] ?? '') === 'forbidden');
+$html = [['id' => 'h', 'type' => 'HTML', 'content' => ['code' => '<script>steal()</script>']], ['id' => 't', 'type' => 'TEXT', 'content' => ['text' => '<p onclick="x()">Hi<script>bad()</script></p>']]];
+$r = $ed->api('save_popup', $pop('', 'By editor', 'draft', [], $html)); $pidE = $r['json']['id'] ?? '';
+$ge = json_encode($own->api('get_popup&id=' . $pidE)['json'] ?? []);
+check('an editor can make popups, but no code gets in (Custom HTML is emptied, rich text is cleaned)', !empty($r['json']['success']) && strpos($ge, 'steal()') === false && strpos($ge, 'bad()') === false && strpos($ge, 'onclick') === false, $ge);
+$r = $own->api('save_popup', $pop('', 'Admin HTML', 'draft', [], $html)); $pidH = $r['json']['id'] ?? '';
+check('…an admin keeps the HTML they write', strpos(json_encode($own->api('get_popup&id=' . $pidH)['json'] ?? []), 'steal()') !== false);
+// publishing: where each popup lands
+$evilName = 'Sale </script><script>alert(1)</script> "x"';
+$r = $own->api('save_popup', $pop('', $evilName, 'published', ['rules' => ['where' => ['mode' => 'include', 'pages' => ['int-pay']]]], [['id' => 'pf', 'type' => 'FORM', 'content' => ['customId' => 'in-pop', 'fields' => [['label' => 'Email', 'type' => 'email']]]]])); $pid2 = $r['json']['id'] ?? '';
+$r = $own->api('save_popup', $pop('', 'Not roles blog', 'published', ['rules' => ['where' => ['mode' => 'exclude', 'collections' => [$cid]]]])); $pid3 = $r['json']['id'] ?? '';
+$r = $own->api('save_popup', $pop('', 'A draft', 'draft')); $pid4 = $r['json']['id'] ?? '';
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$forms = (string)@file_get_contents($web . '/int-forms/index.html'); $pay = (string)@file_get_contents($web . '/int-pay/index.html');
+$item = (string)@file_get_contents($web . '/roles-blog/role-i1/index.html'); $arch = (string)@file_get_contents($web . '/roles-blog/index.html'); $nf = (string)@file_get_contents($web . '/404.html');
+$has = function ($html, $id) { return strpos($html, 'id="cc-popup-' . $id . '"') !== false; };
+check('after a publish a page gets the popups that apply to it: "everywhere" ones, and the ones chosen for it; never a draft', $has($forms, $pid1) && $has($forms, $pid3) && !$has($forms, $pid2) && !$has($forms, $pid4) && $has($pay, $pid1) && $has($pay, $pid2) && !$has($pay, $pid4));
+check('…a popup that excludes a collection is on the pages but not on its items or its listing; "everywhere" ones are on both; the 404 page has none', $has($item, $pid1) && !$has($item, $pid3) && ($arch === '' || ($has($arch, $pid1) && !$has($arch, $pid3))) && strpos($nf, 'cc-popup') === false);
+check('a page with a popup gets the style sheet, the data and the runtime once; a page without one gets nothing', substr_count($forms, 'id="cc-popups-css"') === 1 && substr_count($forms, 'id="cc-popups-data"') === 1 && substr_count($forms, 'cc_popup_') >= 1 && strpos($nf, 'cc-popups-data') === false);
+preg_match('#<script type="application/json" id="cc-popups-data">(.*?)</script>#s', $pay, $jm); $list = json_decode($jm[1] ?? '', true);
+check('the data for the runtime is plain JSON of settings (ids, triggers, rules): no popup name, and nothing that could close the script', count($list ?? []) === 3 && strpos($jm[1] ?? '', '<') === false && strpos($jm[1] ?? '', 'alert') === false && !isset($list[0]['name']));
+check('a popup\'s name cannot add a script to the page: the angle brackets are gone when it is saved, and it only ever appears as an escaped aria-label', strpos($pay, 'alert(1)</script>') === false && strpos($pay, '<script>alert(1)') === false && strpos($pay, 'aria-label="Sale  /script  script alert(1) /script  &quot;x&quot;"') !== false);
+check('a form in a popup is on the page and registered, so it can be answered', strpos($pay, 'name="_form" value="f_in-pop"') !== false && isset((json_decode((string)@file_get_contents($data . '/forms.json'), true) ?: [])['f_in-pop']));
+$g1 = $own->api('get_popups')['json'] ?? [];
+check('the list tells what each popup is: status, blocks and settings', count($g1) >= 5 && array_values(array_filter($g1, function ($p) use ($pid2) { return $p['id'] === $pid2; }))[0]['status'] === 'published');
+$own->api('delete_popup', ['id' => $pid2]); $own->api('save_popup', $pop($pid1, 'Everywhere', 'draft'));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pay2 = (string)@file_get_contents($web . '/int-pay/index.html');
+check('a deleted popup and an unpublished one leave the pages at the next publish', !$has($pay2, $pid2) && !$has($pay2, $pid1) && $has($pay2, $pid3));
+check('the popup code answers 404 when opened directly', $own->req('GET', '/canvascore-admin/popups.php', null, [], false)['code'] === 404);
+foreach ([$pid1, $pid3, $pid4, $pidE, $pidH] as $x) $own->api('delete_popup', ['id' => $x]);
+
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
 $kp = sodium_crypto_sign_keypair(); $tsk = sodium_crypto_sign_secretkey($kp);

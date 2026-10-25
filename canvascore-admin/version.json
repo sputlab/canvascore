@@ -1,6 +1,6 @@
 {
-  "app": "0.24.0",
-  "db_schema": 15,
+  "app": "0.25.0",
+  "db_schema": 16,
   "content_schema": 1,
   "build": 60,
   "built": "2026-10-25T09:06:24.521Z"

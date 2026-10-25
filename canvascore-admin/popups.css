@@ -1,0 +1,30 @@
+/* canvascore-admin/popups.css: the look of popups, on published pages (inlined once, only on pages that have a popup) and in the editor's preview.
+   A popup is <div class="cc-popup cc-popup--POSITION cc-popup--ANIMATION" hidden> with an optional overlay and a box; the runtime (popups.js) adds
+   .is-open. The look comes from variables set on the popup: --cc-pop-w (width), --cc-pop-bg, --cc-pop-radius, --cc-pop-pad, --cc-pop-ov (overlay). */
+.cc-popup[hidden] { display: none !important; }
+.cc-popup { position: fixed; inset: 0; z-index: 99990; display: flex; pointer-events: none; font-family: var(--font-family, inherit); }
+.cc-popup__overlay { position: absolute; inset: 0; background: var(--cc-pop-ov, rgba(15, 23, 42, .6)); opacity: 0; transition: opacity .25s ease; pointer-events: auto; }
+.cc-popup.is-open .cc-popup__overlay { opacity: 1; }
+.cc-popup__box { position: relative; pointer-events: auto; box-sizing: border-box; background: var(--cc-pop-bg, #fff); color: #0f172a; border-radius: var(--cc-pop-radius, 16px);
+  width: min(var(--cc-pop-w, 520px), 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: auto; box-shadow: 0 24px 60px rgba(15, 23, 42, .35); outline: none;
+  opacity: 0; transition: opacity .25s ease, transform .25s ease; }
+.cc-popup.is-open .cc-popup__box { opacity: 1; transform: none; }
+.cc-popup__content { padding: var(--cc-pop-pad, 28px); }
+.cc-popup__close { position: absolute; top: 8px; right: 8px; z-index: 2; width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(15, 23, 42, .08); color: #0f172a; font: 400 22px/1 system-ui, sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.cc-popup__close:hover { background: rgba(15, 23, 42, .16); }
+.cc-popup__close:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+/* positions */
+.cc-popup--center { align-items: center; justify-content: center; padding: 16px; }
+.cc-popup--bottom-right { align-items: flex-end; justify-content: flex-end; padding: 20px; }
+.cc-popup--bottom-left { align-items: flex-end; justify-content: flex-start; padding: 20px; }
+.cc-popup--top-bar { align-items: flex-start; justify-content: center; padding: 0; }
+.cc-popup--bottom-bar { align-items: flex-end; justify-content: center; padding: 0; }
+.cc-popup--top-bar .cc-popup__box, .cc-popup--bottom-bar .cc-popup__box { width: 100%; max-height: 60vh; border-radius: 0; }
+/* the box starts a little away from where it ends up (the animation) */
+.cc-popup--fade .cc-popup__box { transform: none; }
+.cc-popup--slide .cc-popup__box { transform: translateY(28px); }
+.cc-popup--slide.cc-popup--top-bar .cc-popup__box { transform: translateY(-28px); }
+.cc-popup--zoom .cc-popup__box { transform: scale(.94); }
+.cc-popup--none .cc-popup__box, .cc-popup--none .cc-popup__overlay { transition: none; }
+@media (prefers-reduced-motion: reduce) { .cc-popup__box, .cc-popup__overlay { transition: none; } .cc-popup--slide .cc-popup__box, .cc-popup--zoom .cc-popup__box { transform: none; } }
+@media (max-width: 600px) { .cc-popup--bottom-right, .cc-popup--bottom-left { padding: 10px; } }

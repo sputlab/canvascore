@@ -25,6 +25,7 @@ import ImportWordPress from './components/ImportWordPress';
 import ReviewQueue from './components/ReviewQueue';
 import TemplateLibrary from './components/TemplateLibrary';
 import Integrations from './components/Integrations';
+import Popups from './components/Popups';
 import { loadBlockPackages } from './editor/blockPackages';
 import { Toaster } from './ui/toast';
 import { DialogHost } from './ui/dialogHost';
@@ -75,6 +76,7 @@ export default function App() {
   else if (currentView === 'reviews') view = <ReviewQueue />;
   else if (currentView === 'library' && userRole === 'admin') view = <TemplateLibrary />;
   else if (currentView === 'integrations' && userRole === 'admin') view = <Integrations />;
+  else if (currentView === 'popups' && (userRole === 'admin' || userRole === 'editor')) view = <Popups />;
   // Every section except the full-screen page editor lives in the admin shell (sidebar navigation)
   if (currentView !== 'editor') view = <AdminLayout wide={currentView === 'manager'}>{view}</AdminLayout>;
 

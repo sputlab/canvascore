@@ -54,6 +54,10 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.includes('pkg_set_enabled')) { const b = JSON.parse(init.body); PKG_CALLS.push(['enable', b]); const p = PKGS.find((x) => x.id === b.id); if (p) p.enabled = b.enabled; return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_remove')) { const b = JSON.parse(init.body); PKG_CALLS.push(['remove', b]); PKGS.splice(PKGS.findIndex((x) => x.id === b.id), 1); return new Response(JSON.stringify({ success: true, packages: PKGS })); }
   if (u.includes('pkg_list')) return new Response(JSON.stringify({ success: true, packages: [], css: '' }));
+  if (u.includes('get_popups')) return new Response(JSON.stringify(POPUPS.map((x) => ({ id: x.id, name: x.name, status: x.status, blocks: JSON.parse(x.content_json).length, settings: x.settings, updated_at: '2026-10-25 10:00:00' }))));
+  if (u.includes('get_popup&')) { const x = POPUPS.find((y) => u.includes('id=' + y.id)); return new Response(JSON.stringify(x || null)); }
+  if (u.includes('save_popup')) { const b = JSON.parse(init.body); POPUP_CALLS.push(['save', b]); return new Response(JSON.stringify({ success: true, id: b.id || 'pop_new0000001', status: b.status, message: 'Popup saved.' })); }
+  if (u.includes('delete_popup')) { const b = JSON.parse(init.body); POPUP_CALLS.push(['delete', b]); return new Response(JSON.stringify({ success: true })); }
   if (u.includes('integrations_get')) return new Response(JSON.stringify({ success: true, demo: false, curl: true, config: INT_CFG, log: INT_LOG, forms: [{ id: 'f_news', type: 'newsletter', labels: ['Email'] }, { id: 'f_contact', type: 'form', labels: ['Name', 'Email', 'Message'] }] }));
   if (u.includes('integrations_payment_links')) return new Response(JSON.stringify({ success: true, links: [{ id: 'sl_1', name: 'Course', amount: '49.00', currency: 'eur', url: 'https://buy.stripe.com/test_abc123' }] }));
   if (u.includes('integrations_save')) { const b = JSON.parse(init.body); INT_CALLS.push(['save', b]); return new Response(JSON.stringify({ success: true, message: 'Saved.', config: INT_CFG, new_secrets: b.section === 'webhooks' ? { wh_aaaaaaaaaa: 'abcdef0123456789abcdef0123456789' } : {} })); }
@@ -140,6 +144,11 @@ const USERS = [{ id: 1, username: 'ann', role: 'admin' }, { id: 2, username: 'bo
 const ROLE_CALLS = []; const REVIEW_CALLS = [];
 const LIB_CALLS = [];
 const INT_CALLS = [];
+const POPUP_CALLS = [];
+const POPUPS = [
+  { id: 'pop_aaaaaaaa11', name: 'Newsletter box', status: 'published', content_json: '[{"id":"b1","type":"TEXT","content":{"text":"<h2>Join us</h2>"},"styles":{}}]', settings: { triggers: { time: { on: true, seconds: 8 }, scroll: { on: true, percent: 40 }, exit: { on: true } }, rules: { where: { mode: 'exclude', pages: ['p1', 'p2'], collections: [] }, frequency: { mode: 'days', days: 7 }, devices: { mobile: false } } } },
+  { id: 'pop_bbbbbbbb22', name: 'Offer', status: 'draft', content_json: '[]', settings: { triggers: { time: { on: false }, click: true }, rules: { frequency: { mode: 'once' }, visitor: 'new', schedule: { from: '2026-11-01', to: '2026-11-30' } } } },
+];
 const INT_CFG = { webhooks: [{ id: 'wh_aaaaaaaaaa', name: 'Zapier', url: 'https://hooks.example.com/x', enabled: true, forms: 'all', secret_hint: '••••c0de' }],
   mailchimp: { enabled: true, key_hint: '••••us21', has_key: true, list_id: 'ab12cd34ef', double_optin: false, forms: 'newsletter' }, brevo: { enabled: false, key_hint: '', has_key: false, list_id: '', forms: 'newsletter' },
   analytics: { provider: 'none', ga4_id: '', plausible_domain: '', plausible_host: '', matomo_url: '', matomo_site: '', consent: true },
@@ -1226,6 +1235,93 @@ try {
     check('choosing one sets the link of the block', st().blocks[0].content.link === 'https://buy.stripe.com/test_abc123');
     setVal2($('input[aria-label="Payment link address"]'), 'https://evil.example/pay'); await sleep(40);
     check('a link that is not a Stripe payment link is flagged (the button would stay empty)', /not a Stripe payment link/.test(doc.body.textContent));
+  }
+
+  console.log('\nPOPUPS (list and builder)');
+  {
+    const nav = () => $('nav.ui-nav');
+    useStore.setState({ currentView: 'popups', userRole: 'editor', username: 'ann', pages: PAGES });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/Popups.jsx')).default)));
+    await waitFor(() => $('tr[data-popup="pop_aaaaaaaa11"]'));
+    check('the sidebar has Popups for admins and editors, not for authors and reviewers', !!btn('Popups', nav()) && (useStore.setState({ userRole: 'author' }), true));
+    await sleep(30);
+    check('…', !btn('Popups', nav()) && (useStore.setState({ userRole: 'reviewer' }), true));
+    await sleep(30);
+    check('…nor reviewers', !btn('Popups', nav()) && (useStore.setState({ userRole: 'admin' }), true));
+    await sleep(30);
+    const r1 = $('tr[data-popup="pop_aaaaaaaa11"]'), r2 = $('tr[data-popup="pop_bbbbbbbb22"]');
+    check('the list shows each popup: name, blocks, status, what makes it appear and its rules in words', /Newsletter box/.test(r1.textContent) && /1 block/.test(r1.textContent) && /Published/.test(r1.textContent) && /After 8 s · At 40% scroll · Exit intent/.test(r1.textContent) && /Everywhere except 2 pages · Once a week · Not on mobile/.test(r1.textContent), r1.textContent);
+    check('…a draft with no timer is "only from a link", with its frequency, visitors and dates', /Draft/.test(r2.textContent) && /Only from a link/.test(r2.textContent) && /Once per visitor · New visitors · 2026-11-01 → 2026-11-30/.test(r2.textContent), r2.textContent);
+    POPUP_CALLS.length = 0;
+    click(btn('New popup')); const dlg = await waitFor(() => $('[aria-labelledby="cc-newpop-title"]'));
+    check('"New popup" offers starters: Blank, Newsletter, Offer', !!dlg && ['blank', 'newsletter', 'offer'].every((k) => dlg.querySelector(`[data-starter="${k}"]`)));
+    click(dlg.querySelector('[data-starter="newsletter"]')); await sleep(120);
+    const made = POPUP_CALLS.find((c) => c[0] === 'save');
+    check('a starter creates the popup (a draft with its blocks and the default settings) and opens it in the editor', made && made[1].status === 'draft' && made[1].blocks.map((b) => b.type).join() === 'TEXT,NEWSLETTER' && made[1].settings.triggers.time.seconds === 5 && made[1].settings.rules.frequency.mode === 'days' && st().currentView === 'editor' && st().activePage.__popup === true && st().activePage.id === 'pop_new0000001' && st().blocks.length === 2, JSON.stringify(made && made[1].name));
+    useStore.setState({ currentView: 'popups' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/Popups.jsx')).default)));
+    await waitFor(() => $('tr[data-popup="pop_aaaaaaaa11"]'));
+    click(btn('Edit', $('tr[data-popup="pop_aaaaaaaa11"]'))); await sleep(100);
+    const ap = st().activePage;
+    check('Edit opens the popup in the editor with its blocks and its settings', st().currentView === 'editor' && ap.__popup && ap.id === 'pop_aaaaaaaa11' && ap.title === 'Newsletter box' && ap.status === 'published' && ap.settings.triggers.time.seconds === 8 && st().blocks.length === 1);
+    useStore.setState({ currentView: 'popups' });
+    mount(React.createElement(AdminLayout, null, React.createElement((await vite.ssrLoadModule('/src/components/Popups.jsx')).default)));
+    await waitFor(() => $('tr[data-popup="pop_bbbbbbbb22"]'));
+    POPUP_CALLS.length = 0;
+    click($('[aria-label="Duplicate Newsletter box"]')); await sleep(100);
+    const dup = POPUP_CALLS.find((c) => c[0] === 'save');
+    check('Duplicate saves a draft copy with the same blocks and settings', dup && dup[1].name === 'Newsletter box (copy)' && dup[1].status === 'draft' && !dup[1].id && dup[1].blocks.length === 1 && dup[1].settings.triggers.time.seconds === 8);
+    POPUP_CALLS.length = 0;
+    click($('[aria-label="Publish Offer"]')); await sleep(100);
+    check('Publish (the eye) sends the popup with the new status; a published one offers Unpublish', POPUP_CALLS[0][1].id === 'pop_bbbbbbbb22' && POPUP_CALLS[0][1].status === 'published' && !!$('[aria-label="Unpublish Newsletter box"]'));
+    POPUP_CALLS.length = 0;
+    click($('[aria-label="Delete Offer"]')); const cd = await waitFor(() => $('[role="alertdialog"]'));
+    check('Delete asks first', !!cd && /Delete the popup “Offer”\?/.test(cd.textContent) && /cannot be undone/.test(cd.textContent) && POPUP_CALLS.length === 0);
+    click(btn('Delete popup', cd)); await sleep(80);
+    check('…then deletes it', JSON.stringify(POPUP_CALLS[0]) === '["delete",{"id":"pop_bbbbbbbb22"}]');
+
+    // the settings panel in the editor
+    const base = { id: 'pop_aaaaaaaa11', __popup: true, title: 'Newsletter box', slug: '', status: 'draft', settings: POPUPS[0].settings, layout: 'full', bg_color: '#ffffff', boxed_width: '1100px' };
+    useStore.setState({ currentView: 'editor', userRole: 'admin', activePage: base, blocks: [{ id: 'pb1', type: 'TEXT', content: { text: '<h2>Join us</h2><script>bad()</script>' }, styles: {} }], selectedBlockId: null, isEditingMaster: false, editorRestored: false, pastBlocks: [], futureBlocks: [], pages: PAGES });
+    mount(React.createElement(VisualEditor)); await sleep(250);
+    const top = $('header.cc-ed-top');
+    check('the editor says it is a popup, goes back to Popups, has no version history and no "view page" address', /Popup/.test(top.textContent) && !!btnHas('Popups', top) && !top.querySelector('[aria-label="Version history"]') && top.querySelector('button[aria-label^="Not published yet"]') && top.querySelector('button[aria-label^="Not published yet"]').disabled);
+    check('the panel shows the popup settings (not page settings), and the canvas says what it is', /Popup settings/.test(doc.body.textContent) && !/Page Info/.test(doc.body.textContent) && /You are editing a popup/.test(doc.body.textContent));
+    const sum = () => $('[data-testid="popup-summary"]').textContent;
+    check('the panel sums the popup up in words', /After 8 s · At 40% scroll · Exit intent — Everywhere except 2 pages · Once a week · Not on mobile/.test(sum()), sum());
+    setVal2($('input[aria-label="Seconds after the page opens"]'), '12'); await sleep(40);
+    check('changing a value updates the popup\'s settings (the delay becomes 12 s)', st().activePage.settings.triggers.time.seconds === 12 && /After 12 s/.test(sum()));
+    click($$('label').find((l) => /about to leave/.test(l.textContent)).querySelector('input')); await sleep(40);
+    check('…a trigger can be switched off (exit intent)', st().activePage.settings.triggers.exit.on === false && !/Exit intent/.test(sum()));
+    pick($('select[aria-label="Where"]'), 'include'); await sleep(40);
+    const pg = $('[role="group"][aria-label="Pages"]');
+    check('"only on the pages I choose" lists the site\'s pages to tick', st().activePage.settings.rules.where.mode === 'include' && !!pg && /Home/.test(pg.textContent) && /About us/.test(pg.textContent));
+    check('…the pages already chosen are ticked', [...pg.querySelectorAll('input[type="checkbox"]')].filter((i) => i.checked).map((i) => i.closest('label').textContent.trim()).join() === 'Home,About us');
+    click([...pg.querySelectorAll('label')].find((l) => /Contact/.test(l.textContent)).querySelector('input')); await sleep(40);
+    check('ticking a page adds it to the rules (the others are kept), and the summary follows', JSON.stringify(st().activePage.settings.rules.where.pages) === '["p1","p2","p3"]' && /Only on 3 pages/.test(sum()), sum());
+    pick($('select[aria-label="How often"]'), 'session'); pick($('select[aria-label="Visitors"]'), 'returning'); await sleep(40);
+    check('frequency and visitors are set from their menus', st().activePage.settings.rules.frequency.mode === 'session' && st().activePage.settings.rules.visitor === 'returning' && /Once per visit/.test(sum()) && /Returning visitors/.test(sum()));
+    check('the link that opens the popup by hand is shown, with its address', /#popup-pop_aaaaaaaa11/.test($('[data-testid="popup-link"]').textContent));
+    click(btn('Preview the popup')); await sleep(60);
+    const pv = $('[data-testid="popup-preview"]');
+    check('the preview shows the popup open, as visitors will see it, with its blocks, and without the scripts of its content', !!pv && !!pv.querySelector('.cc-popup.is-open.cc-popup--center') && /Join us/.test(pv.textContent) && !pv.innerHTML.includes('<script') && !!pv.querySelector('.cc-popup__close') && !!pv.querySelector('.cc-popup__overlay') && pv.querySelector('.cc-popup').style.getPropertyValue('--cc-pop-w') === '520px');
+    $('.cc-popup__close', pv).click(); await sleep(40);
+    check('the preview closes', !$('[data-testid="popup-preview"]'));
+    click($$('button.ui-section__head').find((b) => b.textContent.trim() === 'Look')); await sleep(30);
+    pick($('select[aria-label="Where it appears"]'), 'bottom-right'); await sleep(40);
+    click(btn('Preview the popup')); await sleep(60);
+    check('a slide-in is previewed in its corner, without an overlay', !!$('[data-testid="popup-preview"] .cc-popup--bottom-right') && !$('[data-testid="popup-preview"] .cc-popup__overlay'));
+    doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(40);
+    check('Esc closes the preview too', !$('[data-testid="popup-preview"]'));
+    POPUP_CALLS.length = 0; calls.length = 0;
+    click(btnHas('Save Draft')); await sleep(120);
+    const sv = POPUP_CALLS.find((c) => c[0] === 'save');
+    check('Save sends the name, status, blocks and every setting to the popup endpoint (not to the pages)', sv && sv[1].id === 'pop_aaaaaaaa11' && sv[1].name === 'Newsletter box' && sv[1].status === 'draft' && sv[1].blocks.length === 1 && sv[1].settings.look.position === 'bottom-right' && sv[1].settings.rules.frequency.mode === 'session' && !calls.some((c) => c.u.includes('save_page')));
+    pick($('select[aria-label="Status"]'), 'published'); await sleep(30);
+    POPUP_CALLS.length = 0;
+    click(btnHas('Publish')); await sleep(200);
+    const pb = POPUP_CALLS.find((c) => c[0] === 'save');
+    check('Publish saves it as published and then publishes the site', pb && pb[1].status === 'published' && calls.some((c) => c.u.includes('rebuild_all') || c.u.includes('publish')));
   }
 
   console.log('\nSTYLES PER DEVICE');

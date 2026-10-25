@@ -97,6 +97,10 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         try {
             if (is_file(cc_data_dir() . '/integrations.json')) { require_once __DIR__ . '/integrations.php'; $analytics_html = cc_int_analytics_html(cc_int_load()['analytics'], $cookie_html !== ''); }
         } catch (Throwable $e) { error_log('CanvasCore publish (analytics): ' . $e->getMessage()); }
+        // Popups (Administration › Popups): the published ones, written into the pages they apply to by $finish (the rules about devices, visitors,
+        // schedule and frequency, and the triggers, are decided in the visitor's browser by popups.js)
+        $popups = [];
+        try { require_once __DIR__ . '/popups.php'; $popups = cc_popups_published($pdo); } catch (Throwable $e) { error_log('CanvasCore publish (popups): ' . $e->getMessage()); $warnings[] = 'Popups could not be published (details in the server error log).'; }
         // Global Options › Announcement bar: at the top of every page (nothing when it is off or has no text)
         $ann = $settings['announcement'] ?? null;
         $announce_html = (is_array($ann) && !empty($ann['enabled'])) ? cc_announcement_html($ann, 'cc-site-announce', '', '', true) : '';
@@ -108,7 +112,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             return trim(preg_replace('/\s+/u', ' ', $t));
         };
         // Every published page and item gets the same finishing touches
-        $finish = function ($html, $canonical, $noindex) use ($feed_links, $cookie_html, $announce_html, $analytics_html, $base_url, &$media_meta) {
+        $finish = function ($html, $canonical, $noindex, $ctx = null) use ($feed_links, $cookie_html, $announce_html, $analytics_html, $popups, $base_url, &$media_meta) {
             $head = '';
             if ($canonical !== '') $head .= '<link rel="canonical" href="' . htmlspecialchars($canonical) . '">' . "\n";
             if ($noindex || cc_demo_on()) $head .= '<meta name="robots" content="noindex">' . "\n";
@@ -116,6 +120,10 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             if ($analytics_html !== '' && !cc_demo_on()) $head .= $analytics_html;   // a demo site is not counted
             // (a callback: the snippet may contain $ or \\, which a replacement string would read as references)
             if ($head !== '') $html = preg_replace_callback('#</head>#i', function ($m) use ($head) { return $head . $m[0]; }, $html, 1);
+            if ($popups && is_array($ctx)) {
+                $ph = cc_popups_html($popups, $ctx);
+                if ($ph !== '') $html = preg_replace_callback('#</body>#i', function ($m) use ($ph, $base_url) { return str_replace('{{BASE_URL}}', $base_url, $ph) . $m[0]; }, $html, 1);
+            }
             if ($cookie_html !== '') $html = preg_replace('#</body>#i', str_replace('{{BASE_URL}}', $base_url, $cookie_html) . '</body>', $html, 1);
             // (a callback: the text may contain $1 or \\, which a replacement string would read as references)
             if ($announce_html !== '') $html = preg_replace_callback('#<body[^>]*>#i', function ($m) use ($announce_html, $base_url) { return $m[0] . "\n" . str_replace('{{BASE_URL}}', $base_url, $announce_html); }, $html, 1);
@@ -208,7 +216,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             if (!$isRootSlug) $targets[] = __DIR__ . '/../' . $slug . '/index.html';
             if (empty($targets)) $targets[] = __DIR__ . '/../' . $slug . '/index.html'; // slug 'index'/'home' that is not home while another page is the home
             $noindex_pg = (int)($page['noindex'] ?? 0) === 1;
-            $html = $finish($html, $page_abs, $noindex_pg);
+            $html = $finish($html, $page_abs, $noindex_pg, ['kind' => 'page', 'id' => (string)$page['id']]);
             foreach ($targets as $fp) $write($fp, $html);
             if (!$noindex_pg) {
                 $txt = $plain($content_html);
@@ -304,7 +312,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     $ihtml = str_replace('{{PAGE_CONTENT}}', $i_full, $ihtml);
                     $ihtml = str_replace('{{BASE_URL}}', $base_url, $ihtml);
 
-                    $ihtml = $finish($ihtml, $i_abs, false);
+                    $ihtml = $finish($ihtml, $i_abs, false, ['kind' => 'item', 'id' => (string)$it['id'], 'collection' => (string)$it['collection_id']]);
                     $write(__DIR__ . '/../' . $col_slug . '/' . $it_slug . '/index.html', $ihtml);
                     if ((int)($it['archived'] ?? 0) !== 1) {
                         $itxt = $plain($i_content);
@@ -332,7 +340,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         // (/<col>/filter/<field>/<value>/), and the taxonomies: their pages (/<col>/<tax>/) and their terms (/<col>/<tax>/<term>/).
         // An address that an item already uses is never written over.
         try {
-            $render_page = function ($path, $title, $desc, $inner) use (&$sitemap_urls, $template, $menu_html, $google_fonts_link, $brand_color, $font_family, $header_html, $footer_html, $site_suffix, $base_url, $site_url, $finish, $write) {
+            $render_page = function ($path, $title, $desc, $inner) use (&$sitemap_urls, $template, $menu_html, $google_fonts_link, $brand_color, $font_family, $header_html, $footer_html, $site_suffix, $base_url, $site_url, $finish, $write, $pdo) {
                 $tt = htmlspecialchars($title);
                 $tdesc = htmlspecialchars(mb_substr(trim(preg_replace('/\s+/u', ' ', $desc !== '' ? $desc : $title)), 0, 300));
                 $abs = $site_url ? $site_url . '/' . $path : '';
@@ -341,7 +349,8 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 $page = str_replace(['{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}'],
                     [$menu_html, $google_fonts_link, $brand_color, $font_family, $header_html . '<div style="max-width:1100px; margin:0 auto; padding:0 20px; overflow-x:clip;">' . $inner . '</div>' . $footer_html], $page);
                 $page = str_replace('{{BASE_URL}}', $base_url, $page);
-                $write(__DIR__ . '/../' . $path . 'index.html', $finish($page, $abs, false));
+                $archCol = (string)($pdo->query("SELECT id FROM collections WHERE slug = " . $pdo->quote(explode('/', $path)[0]))->fetchColumn() ?: '');
+                $write(__DIR__ . '/../' . $path . 'index.html', $finish($page, $abs, false, ['kind' => 'archive', 'collection' => $archCol]));
                 $sitemap_urls[] = $abs !== '' ? $abs : ($base_url . $path);
             };
             // One archive: its items in pages of $per (the browse links go on its first page)

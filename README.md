@@ -25,6 +25,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 - **Publishing**: a static site of HTML files, with RSS feeds, a sitemap, a search index with filters, redirects, scheduled
   publishing (a page or item goes live and comes down at a time; `cron.php` for sites nobody edits), and images
   optimised to WebP with responsive sizes.
+- **Popups**: a popup builder with triggers (time, scroll, exit intent, a link) and display rules (pages, devices, visitors, schedule, frequency).
 - **Integrations**: webhooks for forms (signed), Mailchimp and Brevo sign-ups with consent, Google Analytics, Plausible or Matomo, and Stripe
   payment links with a Payment Button block.
 - **Template library**: install starter pages, sections and whole-site kits shared by the community, from a signed library, as drafts you can edit
@@ -62,6 +63,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 │   ├── roles.php          Roles and review: what each role may do, ownership, collection access
 │   ├── library.php        Template library: signed index, kit checks and cleaning, installs
 │   ├── integrations.php   Webhooks, newsletter services, analytics and Stripe payment links
+│   ├── popups.php         Popups: settings, rules, the markup written into published pages (popups.css, popups.js)
 │   ├── blocks/            One definition per block (settings, template, panel), read by PHP and the editor
 │   ├── submit_form.php    Public endpoint for form submissions
 │   ├── install.php        Setup wizard with setup key (delete after use)

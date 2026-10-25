@@ -19,7 +19,8 @@ CanvasCore is where you build and update your website. You put pages together fr
 11. [The menu](#11-the-menu)
 12. [Global Options](#12-global-options)
 13. [Administration (admins only)](#13-administration-admins-only)
-14. [Good to know and troubleshooting](#14-good-to-know-and-troubleshooting)
+14. [Popups](#14-popups)
+15. [Good to know and troubleshooting](#15-good-to-know-and-troubleshooting)
 
 ---
 
@@ -72,7 +73,7 @@ If the current password is wrong, or the two new ones don't match, the box tells
 Every screen except the page editor has a sidebar on the left. On a narrow screen, open it with the menu button at the top left. The top of the sidebar shows your site's name and icon, and the browser tab says "*Site name* · Admin". Both come from **Global Options** (see [Site identity & SEO](#site-identity--seo)); without a favicon, the default CanvasCore icon is shown.
 
 - **Publish Site**: rebuilds and publishes the whole site (see [Publish vs Publish Site](#publish-vs-publish-site)).
-- **Content**: **Pages**, **Collections**, **Reviews** (for authors: **My submissions**), **Templates**, **Media**. Authors and reviewers do not see Templates, or the Site group (Menu, Global Options).
+- **Content**: **Pages**, **Collections**, **Reviews** (for authors: **My submissions**), **Templates**, **Popups**, **Media**. Authors and reviewers do not see Templates, or the Site group (Menu, Global Options).
 - **Site**: **Menu**, **Global Options**.
 - **Administration** (admins only): **Submissions**, **Accounts**, **Backup**, **Updates**, **Block packages**, **Template library**, **Integrations**, **Import from WordPress**.
 
@@ -1066,7 +1067,54 @@ These sections appear under **Administration** in the sidebar only for admins. D
 
 ---
 
-## 14. Good to know and troubleshooting
+## 14. Popups
+
+A **popup** is a window that opens over your pages: a newsletter box after a few seconds, an offer when the visitor is about to leave, a notice for a week… You build it from blocks, like a page, and choose **what makes it appear** and **where, for whom and how often**. Editors and admins make popups (authors and reviewers can see the list but not change popups).
+
+### Making a popup
+
+1. Click **Popups** in the sidebar, then **New popup**, and start from **Blank**, **Newsletter** or **Offer**.
+2. The page editor opens with the popup's blocks. Add any blocks you like: text, images, a button, a **Newsletter Signup** or a **Form**. A form in a popup works like any other form (messages arrive in Submissions and by email, and can go to your webhooks and newsletter services).
+3. With no block selected, the panel on the right shows the **Popup settings** (below). **Preview the popup** shows it open, exactly as visitors will see it.
+4. Set the **Status** to **Published** (or use **Publish** in the top bar), then **Publish Site**. A popup is on the site only when it is published *and* the site has been published. A draft is never shown.
+
+The list under **Popups** shows each popup with what makes it appear and its rules in words, and lets you **Edit**, **Publish** or **Unpublish**, **Duplicate** (as a draft) and **Delete**.
+
+### Look
+
+- **Where it appears**: a centred dialog, a slide-in in the bottom-right or bottom-left corner, or a bar across the top or the bottom.
+- **Width**, **Animation** (fade, slide, zoom or none), **Background**, **Rounded corners** and **Space inside**.
+- For a dialog, **Dim the page behind it** (the overlay: its color and strength) and **Close it when the visitor clicks outside**.
+- **The close button (×)** and **closing with Esc**. Keep at least one way to close a popup.
+
+### What makes it appear
+
+Tick as many as you like: the first to happen shows the popup (if the rules allow).
+
+- **After some time on the page**: a number of seconds (0 = at once).
+- **When the visitor has scrolled far enough**: a percentage of the page.
+- **When the visitor is about to leave (exit intent)**: the mouse leaves through the top of the window. This works with a **mouse only**: on phones and tablets nothing happens, so also tick time or scroll if you want the popup there.
+- **When the visitor clicks a link to it**: make a link or a button with the address shown in the panel (`#popup-…`). It opens the popup whatever the rules say, which is good for a "Subscribe" button.
+
+Only one popup shows at a time on a page. If two are due together, the one with the lower **Priority** number shows. A popup waits while your cookie banner is on screen.
+
+### Display rules
+
+- **Where**: everywhere, only on the pages and collections you choose, or everywhere except them. Choosing a collection covers its items and its listing pages. The popup is never on the "not found" page. This is decided when you publish the site: a popup simply is not in the other pages.
+- **Devices**: computers, tablets (768–1024 px wide) and phones (up to 767 px).
+- **Visitors**: everyone, new visitors (first visit) or returning visitors.
+- **How often**: every time it is due, once per visit, again after some days (7 by default) or only once per visitor. A visitor who **sent a form inside the popup** does not see it again (unless it is set to every time).
+- **Only between these dates**: a start and an end date (both included, in the visitor's own day).
+- **Priority** as above.
+
+What a popup remembers (that it was shown, when, and that it was answered) is kept in the visitor's own browser, not on your server, and nothing is sent anywhere. If you describe your cookies and storage in a privacy policy, mention it.
+
+**Tips**
+- A popup that appears at once on every page is annoying: a delay of a few seconds or a scroll trigger, and "once a week", work well.
+- A bar across the bottom is gentler than a dialog for announcements.
+- Test the rules in a private window (it forgets what was shown), and remember to publish the site after any change.
+
+## 15. Good to know and troubleshooting
 
 **My changes aren't on the live site.**
 You probably saved a draft. Open the page and click **Publish**. In the page list, **Modified** means there are saved changes that aren't online yet. For archive changes, moved or deleted collection items, a renamed collection, a changed global master or new redirects, click **Publish Site**.
