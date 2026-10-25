@@ -10,6 +10,57 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-25 — Template library and integrations
+
+### Added
+- **Integrations** (Administration › **Integrations**, admins): webhooks, newsletter services, analytics and Stripe payment links.
+  - **Webhooks for forms**: every submission of the forms you choose (all, or some) is sent to your own https address as a JSON POST
+    (event, form, fields, page, site), signed with a secret of that webhook (`X-CanvasCore-Signature: sha256=` HMAC-SHA256 of
+    `timestamp.body`, with `X-CanvasCore-Timestamp`, `-Event` and `-Delivery`). It runs after the visitor has been answered; *Send a test*,
+    a new secret on request, and an **Activity** list of deliveries where a failed one can be sent again. Addresses must be public (never a
+    private or internal network, no credentials, https); the connection is pinned to the address that was checked and redirects are not followed.
+  - **Newsletter services**: **Mailchimp** (audience, optional double opt-in) and **Brevo** (list). The email (and name) of a submission is
+    added only **with consent**: a ticked consent box, or a Newsletter block that asks for none (the form is the signup); a plain contact
+    form is never a signup. Choose Newsletter blocks only, every form with a ticked consent box, or chosen forms; *Test the connection* names the list.
+  - **Analytics**: Google Analytics 4, Plausible or Matomo, as a snippet in the head of every published page. Services that use cookies wait for
+    the cookie banner's Accept when the site has one (Plausible does not need to). Ids and addresses are checked strictly (nothing with code in it).
+  - **Stripe payment links**: a Stripe key (a restricted one is enough) lets you create a product, price and payment link from the admin; or add a link
+    made in the Stripe dashboard (no key needed). A new **Payment Button** block (Business) takes a link from that list (or a pasted one), and only
+    `buy.stripe.com` / `donate.stripe.com` addresses work; the visitor pays on Stripe's own page.
+  - Keys live in `integrations.json` in the data folder (0600, never in `settings.json`, never sent to the editor except masked); a key field
+    left empty keeps the saved key. A form's kind and the positions of its email, name and consent fields are now written to `forms.json` at publish.
+    Integration settings and the activity list are not part of a backup.
+  - `integrations-source.php` (not part of a release, kept when a site updates itself) points the services to other addresses (a mirror, a test).
+- **Online template library** (Administration › **Template library**, admins; also *Browse the online library* on the Templates page): starter
+  pages, sections and full-site kits shared by the community, installed from the admin.
+  - **Kinds of kit**: a **page** (one draft page), **sections** (each becomes an entry of *Add › My templates*) and a **site kit** (several
+    draft pages and, if you tick it, its header, footer, menu and colours). Cards show a preview, the kind, author, version and licence; filter
+    by kind, search names, descriptions and tags; installed kits are marked; every install is listed.
+  - **Curated and checked**: the library is an index kept by the CanvasCore maintainers and **signed** (Ed25519, the release keys); a site
+    uses it only if the signature verifies, downloads a kit only from the library's hosts over https, and checks its sha256 against the
+    index. The last good list is kept when the library cannot be reached. Previews are fetched by the server and shown from the site itself.
+  - **A kit is untrusted content**: it passes the cleaning of an editor's save. Custom HTML is emptied, form email addresses and custom
+    CSS/JavaScript are removed, rich text is sanitized, a menu keeps labels and plain addresses only, a design keeps valid colours, text and
+    button styles and a safe font only, images must be real images (SVG without scripts), file names and sizes are checked, and a kit may
+    only use blocks the site has. The page says how many Custom HTML blocks were left empty.
+  - **Nothing is replaced**: pages arrive as drafts with free addresses (a clash gets a number), made by the installer; images go to the
+    Media library (folder *Library*). A site kit's design is applied only when asked, after a **safety copy** that **Restore the previous
+    design** puts back.
+  - **Install from a file**: an admin can install a kit ZIP they have (same checks).
+  - **Developer tools**: `php scripts/library-kit.php check|pack <folder>` for kit authors, `php scripts/library-index.php --key … --kits … --base-url …`
+    for the maintainers (builds and signs the index), and three example kits in `docs/examples/library-kits` (a page, a section kit and a site kit).
+  - `library-source.php` is kept when a site updates itself (like `update-source.php`), and answers nothing when opened directly on Apache (the admin `.htaccess` hides it).
+  - The default library is `github.com/sputlab/canvascore-library` (the index and kits are served from raw.githubusercontent.com); a site can point
+    to another with `library-source.php` in the admin folder, like `update-source.php`.
+
+### Upgrade notes
+- No migration (the schema stays at 15). New in the data folder, created when first used: `library/` and `integrations.json` (it holds API keys and is written readable by the web user only).
+- **Nginx**: add `library|integrations` to the library-file rule and `library-source|integrations-source` to its deny list, in the example of the Administrator Guide (section 4.2); one-click updates do not
+  change your server configuration. Apache needs nothing.
+- The template library lists what the CanvasCore maintainers publish in `sputlab/canvascore-library`; until that repository exists the page says it could not be reached (you can still install a kit from a file).
+- Webhooks, Mailchimp, Brevo, analytics and Stripe need the PHP `curl` extension (the library needs `zip` and `sodium`). Integration settings are not part of a backup.
+- A form's kind and the positions of its email, name and consent fields are written to `forms.json` at the next publish: publish once for newsletter and consent rules to apply to existing forms.
+
 ## [0.23.0] - 2026-10-25 — Roles and review, and image tools
 
 ### Added
@@ -1291,7 +1342,8 @@ security (Phase 1) work, brought to an advanced, stable and usable MVP.
   session) and the "can read but can't save" case caused by a non-writable data dir.
 - Removed dead code and components that did not compile.
 
-[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/sputlab/CanvasCore/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/sputlab/CanvasCore/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/sputlab/CanvasCore/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/sputlab/CanvasCore/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/sputlab/CanvasCore/compare/v0.21.0...v0.21.1

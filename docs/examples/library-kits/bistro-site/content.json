@@ -1,0 +1,540 @@
+{
+    "pages": [
+        {
+            "title": "Home",
+            "slug": "home",
+            "home": true,
+            "layout": "full",
+            "seo_title": "Bistro: fresh food, made daily",
+            "seo_description": "Bistro: fresh food, made daily.",
+            "blocks": [
+                {
+                    "type": "ANNOUNCEMENT_BAR",
+                    "styles": {
+                        "width": "100%",
+                        "padding": "0px"
+                    },
+                    "content": {
+                        "text": "New spring menu now served",
+                        "linkText": "Book a table",
+                        "linkUrl": "#",
+                        "icon": "",
+                        "preset": "info",
+                        "bg": "",
+                        "color": "",
+                        "sticky": false,
+                        "dismissible": true,
+                        "align": "center"
+                    }
+                },
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "0",
+                        "backgroundColor": "#0f172a",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "HERO",
+                            "styles": {
+                                "padding": "100px 20px",
+                                "backgroundColor": "#0f172a",
+                                "color": "#ffffff",
+                                "textAlign": "center",
+                                "width": "100%",
+                                "minHeight": "55vh"
+                            },
+                            "content": {
+                                "title": "<h1>Trattoria del Sole</h1>",
+                                "subtitle": "<p>Seasonal Italian cooking in the old town since 1998.</p>",
+                                "buttons": [
+                                    {
+                                        "text": "Book a table",
+                                        "url": "#",
+                                        "bgColor": "#3b82f6",
+                                        "textColor": "#ffffff",
+                                        "borderRadius": "8px"
+                                    },
+                                    {
+                                        "text": "See the menu",
+                                        "url": "#",
+                                        "bgColor": "transparent",
+                                        "textColor": "#ffffff",
+                                        "borderRadius": "8px"
+                                    }
+                                ],
+                                "bgImage": ""
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "80px 20px",
+                        "backgroundColor": "#ffffff",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "CONTAINER",
+                            "styles": {
+                                "maxWidth": "1100px",
+                                "margin": "0 auto",
+                                "width": "100%"
+                            },
+                            "children": [
+                                {
+                                    "type": "TEXT",
+                                    "styles": {
+                                        "padding": "0 0 30px 0",
+                                        "width": "100%",
+                                        "textAlign": "center"
+                                    },
+                                    "content": {
+                                        "text": "<h2>Signature dishes</h2>"
+                                    }
+                                },
+                                {
+                                    "type": "HOVER_GRID",
+                                    "styles": {
+                                        "width": "100%",
+                                        "padding": "0"
+                                    },
+                                    "content": {
+                                        "columns": 3,
+                                        "gap": 16,
+                                        "radius": 12,
+                                        "aspectRatio": "4 / 3",
+                                        "effect": "slide",
+                                        "overlay": "rgba(15,23,42,0.72)",
+                                        "items": [
+                                            {
+                                                "image": "data:image/png;base64,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",
+                                                "alt": "Fresh pasta",
+                                                "title": "Fresh pasta",
+                                                "text": "Made by hand every morning.",
+                                                "href": ""
+                                            },
+                                            {
+                                                "image": "data:image/png;base64,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",
+                                                "alt": "Grilled fish",
+                                                "title": "Catch of the day",
+                                                "text": "From the market to the grill.",
+                                                "href": ""
+                                            },
+                                            {
+                                                "image": "data:image/png;base64,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",
+                                                "alt": "Tiramisù",
+                                                "title": "Tiramisù",
+                                                "text": "Nonna's recipe, unchanged.",
+                                                "href": ""
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "80px 20px",
+                        "backgroundColor": "#f8fafc",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "CONTAINER",
+                            "styles": {
+                                "maxWidth": "700px",
+                                "margin": "0 auto",
+                                "width": "100%"
+                            },
+                            "children": [
+                                {
+                                    "type": "TEXT",
+                                    "styles": {
+                                        "padding": "0 0 10px 0",
+                                        "width": "100%",
+                                        "textAlign": "center"
+                                    },
+                                    "content": {
+                                        "text": "<h2>Menu</h2>"
+                                    }
+                                },
+                                {
+                                    "type": "TEXT",
+                                    "styles": {
+                                        "padding": "0",
+                                        "width": "100%"
+                                    },
+                                    "content": {
+                                        "text": "<h3>Starters</h3><ul><li><strong>Burrata</strong> with roasted tomatoes · 12</li><li><strong>Soup of the day</strong> · 8</li></ul><h3>Mains</h3><ul><li><strong>Fresh pasta</strong> with lemon and butter · 16</li><li><strong>Grilled fish</strong> with seasonal vegetables · 24</li><li><strong>Mushroom risotto</strong> · 18</li></ul><h3>Desserts</h3><ul><li><strong>Tiramisù</strong> · 8</li><li><strong>Lemon tart</strong> · 7</li></ul>"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "80px 20px",
+                        "backgroundColor": "#ffffff",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "CONTAINER",
+                            "styles": {
+                                "maxWidth": "1100px",
+                                "margin": "0 auto",
+                                "width": "100%"
+                            },
+                            "children": [
+                                {
+                                    "type": "BUSINESS",
+                                    "styles": {
+                                        "width": "100%",
+                                        "padding": "0"
+                                    },
+                                    "content": {
+                                        "name": "Trattoria del Sole",
+                                        "businessType": "Restaurant",
+                                        "address": "Piazza del Sole 4\n50122 Florence",
+                                        "phone": "+39 055 123456",
+                                        "email": "info@example.com",
+                                        "website": "",
+                                        "mapsLink": true,
+                                        "directionsLabel": "Get directions",
+                                        "hoursTitle": "Opening hours",
+                                        "closedLabel": "Closed",
+                                        "note": "",
+                                        "jsonLd": true,
+                                        "hours": [
+                                            {
+                                                "day": "Monday",
+                                                "open": "",
+                                                "close": "",
+                                                "closed": true
+                                            },
+                                            {
+                                                "day": "Tuesday",
+                                                "open": "12:00",
+                                                "close": "23:00",
+                                                "closed": false
+                                            },
+                                            {
+                                                "day": "Wednesday",
+                                                "open": "12:00",
+                                                "close": "23:00",
+                                                "closed": false
+                                            },
+                                            {
+                                                "day": "Thursday",
+                                                "open": "12:00",
+                                                "close": "23:00",
+                                                "closed": false
+                                            },
+                                            {
+                                                "day": "Friday",
+                                                "open": "12:00",
+                                                "close": "23:30",
+                                                "closed": false
+                                            },
+                                            {
+                                                "day": "Saturday",
+                                                "open": "12:00",
+                                                "close": "23:30",
+                                                "closed": false
+                                            },
+                                            {
+                                                "day": "Sunday",
+                                                "open": "12:00",
+                                                "close": "15:00",
+                                                "closed": false
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "type": "MAPS",
+                                    "styles": {
+                                        "width": "100%",
+                                        "padding": "30px 0 0 0"
+                                    },
+                                    "content": {
+                                        "address": "Piazza del Sole 4, Florence",
+                                        "zoom": 16
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "title": "About",
+            "slug": "about",
+            "home": false,
+            "layout": "full",
+            "seo_title": "About the Bistro",
+            "seo_description": "About the Bistro.",
+            "blocks": [
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "90px 20px",
+                        "backgroundColor": "#1e293b",
+                        "color": "#ffffff",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "HERO",
+                            "styles": {
+                                "padding": "40px 0",
+                                "backgroundColor": "transparent",
+                                "color": "#ffffff",
+                                "textAlign": "center",
+                                "width": "100%"
+                            },
+                            "content": {
+                                "title": "<h1>About us</h1>",
+                                "subtitle": "<p>Who we are and what we do.</p>",
+                                "buttons": []
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "70px 20px",
+                        "backgroundColor": "#ffffff",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "CONTAINER",
+                            "styles": {
+                                "maxWidth": "1000px",
+                                "margin": "0 auto",
+                                "width": "100%"
+                            },
+                            "children": [
+                                {
+                                    "type": "IMAGE_TEXT",
+                                    "styles": {
+                                        "padding": "0",
+                                        "width": "100%"
+                                    },
+                                    "content": {
+                                        "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAGQCAYAAAByNR6YAAAYjUlEQVR4Xu3dZ5SV1b3A4W3AgiKKYMWKBcXeNfYudsCCvddoLDe5N+Wu++marJvcqIlGYyyxgF2xd8WKvQt2sYESEKSpEZC79oHzcs7hzMwZ+B9yXXmeT7PPDC/DDGud39p7v/td4JMvvpqRAAAIs4DAAgCIJbAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrAAAIIJLACAYAILACCYwAIACCawAACCCSwAgGACCwAgmMACAAgmsAAAggksAIBgAgsAIJjAAgAIJrDgn2j699+nCRMmp6nTpqbu3bqmDj/6Udh3M3HSlDT562/Skl06p0U7LVK8Pq+add1/Jd988480fuKktFinRVKXxTunBRaI+ddP/W5qGjdhYurQoUPqumSX0P9PQPsILJjPvvn2H+npZ19Nrwx7p/RGWym/Ka64/DJp/d5rpDVWW6l4vVHvvP9RevTJF9OYL8cXr2U/+tECaaUey6XddtgyrbDc0sXrjWrWdX8oRo/5Mt1y5yNzfLtHH7pv6rxop2LcmnyNBx97Ln0y8os0fdr04vWsW9cl0o7bbJp691q93bGVY/exp15Mb771Qfpu6tTi9WyxRTulzTfunbbedP204EILFq8DzSewYD56/pVh6cEhz6Tvv5/R5t+62Ya90x47b506dGh7FiK/yV574z1zBFA9vdZYJR24767/1Ov+kMyYMSNdfOXN6cvxE+b4ts844ZBSFLcm//nb730svfHW+8VrLcnXOvqQvUuzWo1o9P/TQgsumA46YLe0+io9iteA5hJYMJ88++Ib6cHHnm3X35ZnNo4esG/qvFjLsyR5Ruyv19yWJkycXLzWlp6r9kiH9etTmoFqSbOu+0Pz1POvpUefeL7ut91WYM2YkdKtdz2chr87onitLXnW6eSj+7f6O89eeu2tdM9DTxXjRhwzYJ+08orLF2OgeQQWzAfD3vkw3XpX9RJTfmPeedvN0rLLdEsLduyQRo8Zl4a9MyK9Mfy94muyjdZbK+235w7FuNbl196eRo0eU4yzrTffIK2/zhqpS+fFSjMvz730xhxv8ptv1Dv12XWbYlyrWdf9IRk/YVK68LIbWvyW2wqsIU+9mJ589pVinK3Zc+W0zRYbpO5LdU2TpkxJw98ZMcfX5GuefvwhLS4XfvzpqHT1jfcU4yz/md133DItv+zSafr06emjTz9PDz32bPr2H98VX5PD98yTDk2Ld16seA1oDoEFTZY3sp93ycCq/VY5VHbdfou0QJ130BGfjEqDbrm3atnn7FMOT4t3XrQYl70/4tN03a33F+P8BnrikX3Tskt3K14rqxd5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",
+                                        "text": "<h2>Our story</h2><p>Tell your story here. Replace this text and the image with your own content.</p>",
+                                        "layout": "img-left"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "70px 20px",
+                        "backgroundColor": "#f8fafc",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "CONTAINER",
+                            "styles": {
+                                "maxWidth": "720px",
+                                "margin": "0 auto",
+                                "width": "100%"
+                            },
+                            "children": [
+                                {
+                                    "type": "TESTIMONIAL",
+                                    "styles": {
+                                        "padding": "40px",
+                                        "backgroundColor": "#ffffff",
+                                        "borderRadius": "16px",
+                                        "width": "100%"
+                                    },
+                                    "content": {
+                                        "quote": "This product changed how we work.",
+                                        "author": "Jane Doe",
+                                        "role": "CEO, Acme"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "title": "Contact",
+            "slug": "contact",
+            "home": false,
+            "layout": "full",
+            "seo_title": "Find and contact us",
+            "seo_description": "Find and contact us.",
+            "blocks": [
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "70px 20px 30px",
+                        "backgroundColor": "#ffffff",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "CONTAINER",
+                            "styles": {
+                                "maxWidth": "680px",
+                                "margin": "0 auto",
+                                "width": "100%",
+                                "textAlign": "center"
+                            },
+                            "children": [
+                                {
+                                    "type": "TEXT",
+                                    "styles": {
+                                        "width": "100%",
+                                        "textAlign": "center",
+                                        "padding": "0 0 10px 0"
+                                    },
+                                    "content": {
+                                        "text": "<h1>Get in touch</h1><p>We usually reply within one business day.</p>"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "SECTION",
+                    "styles": {
+                        "padding": "0 20px 80px",
+                        "backgroundColor": "#ffffff",
+                        "width": "100%"
+                    },
+                    "children": [
+                        {
+                            "type": "CONTAINER",
+                            "styles": {
+                                "maxWidth": "560px",
+                                "margin": "0 auto",
+                                "width": "100%"
+                            },
+                            "children": [
+                                {
+                                    "type": "FORM",
+                                    "styles": {
+                                        "padding": "32px",
+                                        "backgroundColor": "#f8fafc",
+                                        "borderRadius": "12px",
+                                        "width": "100%"
+                                    },
+                                    "content": {
+                                        "title": "<h3>Contact us</h3>",
+                                        "email": "",
+                                        "btnText": "Send",
+                                        "successMsg": "Thanks! We'll be in touch.",
+                                        "fields": [
+                                            {
+                                                "label": "Name",
+                                                "type": "text",
+                                                "required": true
+                                            },
+                                            {
+                                                "label": "Email",
+                                                "type": "email",
+                                                "required": true
+                                            },
+                                            {
+                                                "label": "Message",
+                                                "type": "textarea",
+                                                "required": true
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "header": [
+        {
+            "type": "SECTION",
+            "content": [],
+            "styles": {
+                "padding": "16px 24px",
+                "backgroundColor": "#fffbeb"
+            },
+            "children": [
+                {
+                    "type": "TEXT",
+                    "content": {
+                        "text": "<p><strong>Bistro</strong> &middot; fresh food, made daily</p>"
+                    },
+                    "styles": {
+                        "width": "100%"
+                    }
+                }
+            ]
+        }
+    ],
+    "footer": [
+        {
+            "type": "SECTION",
+            "content": [],
+            "styles": {
+                "padding": "32px 24px",
+                "backgroundColor": "#451a03",
+                "color": "#fde68a"
+            },
+            "children": [
+                {
+                    "type": "TEXT",
+                    "content": {
+                        "text": "<p>&copy; Bistro. Open every day, 8:00&ndash;22:00.</p>"
+                    },
+                    "styles": {
+                        "width": "100%"
+                    }
+                }
+            ]
+        }
+    ],
+    "menu": {
+        "items": [
+            {
+                "label": "Home",
+                "url": ""
+            },
+            {
+                "label": "About",
+                "url": "about/"
+            },
+            {
+                "label": "Contact",
+                "url": "contact/"
+            }
+        ]
+    },
+    "design": {
+        "brandColor": "#b45309",
+        "fontFamily": "Georgia, 'Times New Roman', serif"
+    }
+}

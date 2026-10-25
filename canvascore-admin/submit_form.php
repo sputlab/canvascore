@@ -16,14 +16,25 @@ const CC_FORM_MAX_BYTES = 65536;    // a whole submission
 const CC_FORM_MAX_VALUE = 5000;     // one field
 const CC_FORM_MAX_ROWS = 20000;     // stored submissions (older ones are still in the email inbox)
 
+// Work to do AFTER the visitor has been answered (webhooks, newsletter services): set by the submission, run by cc_finish()
+$CC_AFTER = null;
 function cc_finish($message, $code = 200) {
+    global $CC_AFTER;
     http_response_code($code);
     $safe = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+    ob_start();
     echo "<!doctype html><meta charset='utf-8'><meta name='robots' content='noindex'><title>Form</title>";
     echo "<div style=\"font-family:system-ui,sans-serif;max-width:480px;margin:80px auto;padding:30px;border:1px solid #e2e8f0;border-radius:12px;text-align:center;\">";
     echo "<p style=\"font-size:16px;color:#0f172a;\">{$safe}</p>";
     echo "<p style=\"margin-top:15px;color:#64748b;font-size:14px;\">Use your browser's Back button to return to the site.</p>";
     echo "</div>";
+    $out = ob_get_clean();
+    // The answer goes out first (and the connection closes); integrations then run without keeping the visitor waiting
+    ignore_user_abort(true);
+    header('Content-Length: ' . strlen($out)); header('Connection: close');
+    echo $out;
+    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request(); else { @ob_flush(); flush(); }
+    if (is_callable($CC_AFTER)) { try { @set_time_limit(60); $CC_AFTER(); } catch (Throwable $e) { error_log('CanvasCore integrations: ' . $e->getMessage()); } }
     exit;
 }
 // Every value as text: a crafted field such as field_0[]=x must not crash the script
@@ -54,7 +65,7 @@ if (!cc_rate_allow('forms', cc_client_ip(), 8, 600)) cc_finish('Too many message
 
 // The fields: the form's own (field_0 … field_N-1, labelled as on the site); anything else is ignored
 $labels = isset($entry['labels']) && is_array($entry['labels']) ? array_values($entry['labels']) : null;
-$fields = [];
+$fields = []; $byIndex = [];
 foreach ($_POST as $k => $v) {
     if (!is_string($k) || !preg_match('/^field_(\d{1,3})$/', $k, $m)) continue;
     $i = (int)$m[1];
@@ -64,11 +75,13 @@ foreach ($_POST as $k => $v) {
     if ($label === '') $label = 'Field ' . ($i + 1);
     while (isset($fields[$label])) $label .= ' ';
     $fields[$label] = mb_substr(cc_str($v), 0, CC_FORM_MAX_VALUE);
+    $byIndex[$i] = $fields[$label];
     if (count($fields) >= 50) break;
 }
 if (!$fields || implode('', $fields) === '') cc_finish('The form is empty.', 400);
 
 // Store the submission in the database (regardless of the email outcome)
+$subId = 0; $pdo = null;
 try {
     $db = $data_dir . '/canvascore.sqlite';
     if (file_exists($db)) {
@@ -79,9 +92,22 @@ try {
             $page_ref = mb_substr((string)($_SERVER['HTTP_REFERER'] ?? ''), 0, 500);
             $pdo->prepare("INSERT INTO form_submissions (form_id, page, data_json) VALUES (?,?,?)")
                 ->execute([$form_id, $page_ref, json_encode($fields, JSON_UNESCAPED_UNICODE)]);
+            $subId = (int)$pdo->lastInsertId();
         }
     }
 } catch (Exception $e) { error_log('CanvasCore form storage: ' . $e->getMessage()); }
+
+// Integrations (Administration › Integrations): webhooks and newsletter services run after the answer. Nothing here changes what the
+// visitor sees, and a demo site never calls out.
+if ($pdo && !cc_demo_on() && is_file($data_dir . '/integrations.json')) {
+    $CC_AFTER = function () use ($pdo, $form_id, $entry, $byIndex, $fields, $subId) {
+        require_once __DIR__ . '/integrations.php';
+        $host = preg_replace('/[^a-zA-Z0-9.:\-]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
+        $base = dirname($_SERVER['SCRIPT_NAME'] ?? '/canvascore-admin/submit_form.php', 2);
+        $site = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . $host . ($base === '/' || $base === '\\' || $base === '.' ? '' : $base) . '/';
+        cc_int_dispatch($pdo, ['id' => $form_id, 'type' => (string)($entry['type'] ?? 'form'), 'meta' => is_array($entry['meta'] ?? null) ? $entry['meta'] : []], $byIndex, $fields, $subId, mb_substr((string)($_SERVER['HTTP_REFERER'] ?? ''), 0, 500), $site);
+    };
+}
 
 // Priority: form-specific recipient (registry) -> global email from the settings.
 $to = $form_to !== '' ? $form_to : trim((string)($settings['adminEmail'] ?? ''));

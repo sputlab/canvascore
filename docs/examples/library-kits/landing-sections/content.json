@@ -1,0 +1,136 @@
+{
+    "sections": [
+        {
+            "name": "Hero",
+            "block": {
+                "type": "SECTION",
+                "styles": {
+                    "padding": "0",
+                    "backgroundColor": "#0f172a",
+                    "width": "100%"
+                },
+                "children": [
+                    {
+                        "type": "HERO",
+                        "styles": {
+                            "padding": "120px 20px",
+                            "backgroundColor": "#0f172a",
+                            "color": "#ffffff",
+                            "textAlign": "center",
+                            "width": "100%",
+                            "minHeight": "60vh"
+                        },
+                        "content": {
+                            "title": "<h1>Build something people love</h1>",
+                            "subtitle": "<p>A clean, fast starting point for your next project.</p>",
+                            "bgImage": "",
+                            "buttons": [
+                                {
+                                    "text": "Get Started",
+                                    "url": "#",
+                                    "bgColor": "#3b82f6",
+                                    "textColor": "#ffffff",
+                                    "borderRadius": "8px"
+                                },
+                                {
+                                    "text": "Learn more",
+                                    "url": "#",
+                                    "bgColor": "transparent",
+                                    "textColor": "#ffffff",
+                                    "borderRadius": "8px"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Features",
+            "block": {
+                "type": "SECTION",
+                "styles": {
+                    "padding": "80px 20px",
+                    "backgroundColor": "#ffffff",
+                    "width": "100%"
+                },
+                "children": [
+                    {
+                        "type": "CONTAINER",
+                        "styles": {
+                            "maxWidth": "1100px",
+                            "margin": "0 auto",
+                            "width": "100%"
+                        },
+                        "children": [
+                            {
+                                "type": "CARDS",
+                                "styles": {
+                                    "padding": "0",
+                                    "width": "100%"
+                                },
+                                "content": {
+                                    "items": [
+                                        "<h3>⚡ Fast</h3><p>Static output, instant loads.</p>",
+                                        "<h3>🎨 Flexible</h3><p>Compose pages with blocks.</p>",
+                                        "<h3>🔒 Secure</h3><p>Hardened by default.</p>"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Call to action",
+            "block": {
+                "type": "SECTION",
+                "styles": {
+                    "padding": "80px 20px",
+                    "backgroundColor": "#f8fafc",
+                    "width": "100%"
+                },
+                "children": [
+                    {
+                        "type": "CONTAINER",
+                        "styles": {
+                            "maxWidth": "800px",
+                            "margin": "0 auto",
+                            "width": "100%",
+                            "textAlign": "center"
+                        },
+                        "children": [
+                            {
+                                "type": "TEXT",
+                                "styles": {
+                                    "padding": "0 0 20px 0",
+                                    "width": "100%",
+                                    "textAlign": "center"
+                                },
+                                "content": {
+                                    "text": "<h2>Ready to start?</h2><p>Create your first page in minutes.</p>"
+                                }
+                            },
+                            {
+                                "type": "BUTTON",
+                                "styles": {
+                                    "textAlign": "center",
+                                    "padding": "14px 32px",
+                                    "backgroundColor": "#3b82f6",
+                                    "color": "#ffffff",
+                                    "borderRadius": "8px"
+                                },
+                                "content": {
+                                    "text": "Start now",
+                                    "url": "#",
+                                    "useGlobal": true
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}

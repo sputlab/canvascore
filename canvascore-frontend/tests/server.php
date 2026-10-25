@@ -371,6 +371,255 @@ check('a draft copy belongs to the page it is a copy of', cc_owner_of_page($rdb,
 check('the migration added the review and ownership columns to pages and items, and the access to collections', (function ($db) { foreach (['pages', 'collection_items'] as $t) { $cols = array_column($db->query("PRAGMA table_info($t)")->fetchAll(PDO::FETCH_ASSOC), 'name'); foreach (['created_by', 'review_state', 'review_note', 'review_by', 'review_at', 'reviewed_by'] as $c) if (!in_array($c, $cols, true)) return false; } return in_array('access_json', array_column($db->query("PRAGMA table_info(collections)")->fetchAll(PDO::FETCH_ASSOC), 'name'), true); })($rdb));
 check('existing pages get their author as creator', (function () { $d = new PDO('sqlite::memory:'); $ms = cc_db_migrations(); ksort($ms); foreach ($ms as $v => $m) { if ($v === 15) { $d->exec("INSERT INTO pages (id, title, author) VALUES ('old', 'Old', 'sam')"); } $m($d); } return $d->query("SELECT created_by FROM pages WHERE id = 'old'")->fetchColumn() === 'sam'; })());
 
+echo "\nTEMPLATE LIBRARY\n";
+require_once __DIR__ . '/../../canvascore-admin/library.php';
+$lt = sys_get_temp_dir() . '/cc_lib_' . getmypid(); @mkdir($lt . '/data', 0755, true); @mkdir($lt . '/uploads', 0755, true);
+$GLOBALS['CC_LIB_DIR'] = $lt . '/lib'; $GLOBALS['CC_LIB_DATA_DIR'] = $lt . '/data'; $GLOBALS['CC_LIB_UPLOADS'] = $lt . '/uploads'; $GLOBALS['CC_MEDIA_META_FILE'] = $lt . '/media.json'; $GLOBALS['CC_MEDIA_FOLDERS_FILE'] = $lt . '/folders.json';
+$GLOBALS['CC_LIB_APP_VERSION'] = '0.24.0';
+$kitsDir = realpath(__DIR__ . '/../../docs/examples/library-kits');
+$cp = function ($from, $to) use (&$cp) { @mkdir($to, 0755, true); foreach (array_diff(scandir($from), ['.', '..']) as $f) is_dir("$from/$f") ? $cp("$from/$f", "$to/$f") : copy("$from/$f", "$to/$f"); };
+$kitN = 0;
+// a kit folder made from an example, changed by $edit(dir)
+$mk = function ($example, $edit = null) use ($kitsDir, $lt, $cp, &$kitN) { $d = $lt . '/k' . (++$kitN); $cp("$kitsDir/$example", $d); if ($edit) $edit($d); return $d; };
+$jr = function ($f) { return json_decode(file_get_contents($f), true); };
+$jw = function ($f, $v) { file_put_contents($f, json_encode($v)); };
+$pk = cc_lib_read($kitsDir . '/coming-soon-page'); $sk = cc_lib_read($kitsDir . '/landing-sections'); $ik = cc_lib_read($kitsDir . '/bistro-site');
+check('the three example kits (page, section, site) are valid', !$pk['errors'] && !$sk['errors'] && !$ik['errors'] && $pk['type'] === 'page' && $sk['type'] === 'section' && $ik['type'] === 'site', json_encode([$pk['errors'], $sk['errors'], $ik['errors']]));
+check('…with their pages, images and preview counted', $pk['pages'] === 1 && count($pk['assets']) === 1 && !empty($pk['preview']) && $ik['pages'] === 3 && count($sk['content']['sections']) === 3);
+$bad = function ($edit, $example = 'coming-soon-page') use ($mk) { $k = cc_lib_read($mk($example, $edit)); return $k['errors']; };
+check('a kit needs kit.json and content.json', count($bad(function ($d) { unlink("$d/kit.json"); })) > 0 && count($bad(function ($d) { unlink("$d/content.json"); })) > 0);
+check('an id, a version and a type are checked', count($bad(function ($d) use ($jr, $jw) { $m = $jr("$d/kit.json"); $m['id'] = 'Bad Id!'; $jw("$d/kit.json", $m); })) > 0 && count($bad(function ($d) use ($jr, $jw) { $m = $jr("$d/kit.json"); $m['version'] = 'x'; $jw("$d/kit.json", $m); })) > 0 && count($bad(function ($d) use ($jr, $jw) { $m = $jr("$d/kit.json"); $m['type'] = 'plugin'; $jw("$d/kit.json", $m); })) > 0);
+$e = $bad(function ($d) use ($jr, $jw) { $m = $jr("$d/kit.json"); $m['minVersion'] = '9.0.0'; $jw("$d/kit.json", $m); });
+check('a kit that needs a newer CanvasCore is refused, saying which', count($e) === 1 && strpos($e[0], '9.0.0') !== false, json_encode($e));
+check('files a kit may not hold (a script, a hidden file) are refused', count($bad(function ($d) { file_put_contents("$d/evil.php", '<?php echo 1;'); })) > 0 && count($bad(function ($d) { file_put_contents("$d/.htaccess", 'x'); })) > 0 && count($bad(function ($d) { mkdir("$d/assets/sub"); file_put_contents("$d/assets/sub/a.png", 'x'); })) > 0);
+$e = $bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['blocks'][] = ['type' => 'NOT_A_BLOCK', 'content' => []]; $jw("$d/content.json", $c); });
+check('a block this site does not have is refused, by name', count($e) === 1 && strpos($e[0], 'NOT_A_BLOCK') !== false, json_encode($e));
+$e = $bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['blocks'][0]['content']['src'] = 'kit:assets/missing.png'; $jw("$d/content.json", $c); });
+check('an image the content points to must be in the kit', count($e) === 1 && strpos($e[0], 'missing.png') !== false, json_encode($e));
+check('an SVG with a script and a file that is not an image are refused', count($bad(function ($d) { file_put_contents("$d/assets/logo.svg", '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'); })) > 0 && count($bad(function ($d) { file_put_contents("$d/assets/photo.png", 'not a png'); })) > 0);
+check('a preview that is too big or not an image is refused', count($bad(function ($d) { file_put_contents("$d/preview.png", str_repeat('x', 400000)); })) > 0 && count($bad(function ($d) { file_put_contents("$d/preview.png", 'nope'); })) > 0);
+check('a page kit with no blocks, a site kit with no pages, a section kit with no sections are refused', count($bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['blocks'] = []; $jw("$d/content.json", $c); })) > 0 && count($bad(function ($d) use ($jw) { $jw("$d/content.json", ['pages' => []]); }, 'bistro-site')) > 0 && count($bad(function ($d) use ($jw) { $jw("$d/content.json", ['sections' => []]); }, 'landing-sections')) > 0);
+check('too many pages and too deep nesting are refused', count($bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['pages'] = array_fill(0, CC_LIB_MAX_PAGES + 1, $c['pages'][0]); $jw("$d/content.json", $c); }, 'bistro-site')) > 0 && count($bad(function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $b = ['type' => 'TEXT', 'content' => ['text' => 'x']]; for ($i = 0; $i < 20; $i++) $b = ['type' => 'SECTION', 'content' => [], 'children' => [$b]]; $c['blocks'] = [$b]; $jw("$d/content.json", $c); })) > 0);
+// ZIPs: layout and real sizes
+$zipOf = function ($names) use ($lt, &$kitN) { $zf = $lt . '/z' . (++$kitN) . '.zip'; $z = new ZipArchive(); $z->open($zf, ZipArchive::CREATE); foreach ($names as $n => $c) $z->addFromString($n, $c); $z->close(); return $zf; };
+$good = ['kit.json' => json_encode(['id' => 'tiny', 'name' => 'Tiny', 'version' => '1.0.0', 'type' => 'page']), 'content.json' => json_encode(['blocks' => [['type' => 'TEXT', 'content' => ['text' => '<p>x</p>']]]])];
+check('a ZIP kit is read', !cc_lib_read($zipOf($good))['errors']);
+check('a ZIP with a path outside the kit (../) or an absolute path is refused', count(cc_lib_read($zipOf($good + ['../evil.json' => '{}']))['errors']) > 0 && count(cc_lib_read($zipOf($good + ['/etc/x.json' => '{}']))['errors']) > 0);
+check('a file that unpacks larger than it should is refused (the declared size is not trusted)', count(cc_lib_read($zipOf(['kit.json' => $good['kit.json'], 'content.json' => json_encode(['blocks' => [['type' => 'TEXT', 'content' => ['text' => str_repeat('a', CC_LIB_MAX_FILE + 10)]]]])]))['errors']) > 0);
+check('something that is not a ZIP is refused', count(cc_lib_read(__FILE__)['errors']) > 0);
+
+// what a kit's blocks become
+$hostile = [['id' => 'x1', 'type' => 'HTML', 'content' => ['code' => '<script>steal()</script>', 'customCss' => 'body{display:none}']],
+            ['id' => 'x2', 'type' => 'FORM', 'content' => ['email' => 'attacker@evil.com', 'title' => '<img src=x onerror=alert(1)>']],
+            ['id' => 'x3', 'type' => 'TEXT', 'content' => ['text' => '<p onclick="x()">Hi<script>bad()</script></p>', 'customJs' => 'alert(1)']],
+            ['id' => 'x4', 'type' => 'SECTION', 'content' => [], 'children' => [['id' => 'x5', 'type' => 'IMAGE', 'content' => ['src' => 'kit:assets/p.png']], ['id' => 'x6', 'type' => 'HTML', 'content' => ['code' => '<b>nested</b>']]]]];
+$dropped = 0; $prep = cc_lib_prepare_blocks($hostile, ['p.png' => '/uploads/1_p.png'], $dropped); $pj = json_encode($prep);
+check('code a kit carries is dropped: Custom HTML is emptied (also nested), form emails and custom CSS/JS removed', $prep[0]['content']['code'] === '' && !isset($prep[0]['content']['customCss']) && $prep[1]['content']['email'] === '' && !isset($prep[2]['content']['customJs']) && $prep[3]['children'][1]['content']['code'] === '' && $dropped === 2, $pj);
+check('…rich text is sanitized, and the kit\'s image addresses become library addresses', strpos($pj, 'onerror') === false && strpos($pj, 'onclick') === false && strpos($pj, '<script') === false && strpos($pj, 'kit:assets') === false && $prep[3]['children'][0]['content']['src'] === '/uploads/1_p.png');
+check('every block gets an id of its own', !in_array('x1', array_column($prep, 'id'), true) && count(array_unique(array_merge(array_column($prep, 'id'), [$prep[3]['children'][0]['id']]))) === 5);
+$mn = cc_lib_menu_clean(['items' => [['label' => '<b>Home</b>', 'url' => ''], ['label' => 'Bad', 'url' => 'javascript:alert(1)'], ['label' => 'Docs', 'url' => 'docs/', 'children' => [['label' => 'A', 'url' => 'https://example.com/a', 'children' => [['label' => 'B', 'url' => '/b', 'children' => [['label' => 'C', 'url' => '/c']]]]]]], ['label' => '', 'url' => '/x']]]);
+check('a menu from a kit keeps labels and plain addresses only (no javascript:, no markup), three levels at most', count($mn) === 3 && $mn[0]['label'] === 'Home' && $mn[1]['url'] === '' && $mn[2]['url'] === 'docs/' && $mn[2]['children'][0]['children'][0]['label'] === 'B' && !isset($mn[2]['children'][0]['children'][0]['children']), json_encode($mn));
+$ds = cc_lib_design_clean(['brandColor' => 'red;}', 'fontFamily' => 'Georgia; background:url(x)', 'colors' => [['id' => 'primary', 'name' => 'Main', 'value' => '#112233'], ['id' => 'bad id', 'value' => 'red']], 'unknown' => 1, 'typography' => 'x']);
+check('a kit\'s design keeps valid colours only; a font family with code in it, and unknown settings, are dropped', ($ds['brandColor'] ?? '') === '#112233' && !isset($ds['fontFamily']) && !isset($ds['unknown']) && strpos(json_encode($ds), 'url(') === false, json_encode($ds));
+check('a font family and a plain brand colour pass', cc_lib_design_clean(['fontFamily' => "Georgia, 'Times New Roman', serif", 'brandColor' => '#b45309'])['fontFamily'] === "Georgia, 'Times New Roman', serif" && cc_lib_design_clean(['brandColor' => '#b45309'])['brandColor'] === '#b45309');
+
+// installing
+$ldb = new PDO('sqlite:' . $lt . '/t.sqlite'); $ldb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+require_once __DIR__ . '/../../canvascore-admin/migrations.php'; cc_migrate($ldb);
+$ldb->exec("INSERT INTO pages (id, title, slug, clean_slug, status, is_draft_copy, is_home) VALUES ('old', 'Coming', 'coming-soon', 'coming-soon', 'published', 0, 1)");
+$ldb->exec("INSERT INTO site_parts (name, content_json) VALUES ('header', '[{\"id\":\"h\",\"type\":\"TEXT\",\"content\":{\"text\":\"<p>Old header</p>\"}}]')");
+file_put_contents($lt . '/data/menu.json', json_encode(['items' => [['id' => 'm', 'label' => 'Old', 'url' => 'old/']], 'settings' => ['theme' => 'dark']]));
+file_put_contents($lt . '/data/settings.json', json_encode(['siteName' => 'Mine', 'brandColor' => '#111111']));
+$r = cc_lib_install($ldb, cc_lib_read($kitsDir . '/coming-soon-page'), [], 'ann', '/site');
+$pg = $ldb->query("SELECT * FROM pages WHERE id != 'old'")->fetch(PDO::FETCH_ASSOC);
+check('a page kit installs as a DRAFT page with a free address, made by the installer; its image is in the library', !empty($r['success']) && $pg['status'] === 'draft' && $pg['clean_slug'] === 'coming-soon-2' && $pg['created_by'] === 'ann' && $pg['title'] === 'Coming Soon' && $pg['layout'] === 'full' && preg_match('#"/site/uploads/\d+_coming-soon-page-logo\.svg"|\\\\/site\\\\/uploads\\\\/\d+_coming-soon-page-logo\.svg#', $pg['content_json']) && count(glob($lt . '/uploads/*logo.svg')) === 1, json_encode($r));
+check('…the image goes into the Media folder Library/<kit>, and the page has a first version in its history', (cc_media_meta_all()[basename(glob($lt . '/uploads/*logo.svg')[0])]['folder'] ?? '') === 'Library/Coming Soon' && (int)$ldb->query("SELECT COUNT(*) FROM page_revisions WHERE owner = '" . $pg['id'] . "'")->fetchColumn() === 1);
+check('the home page was not touched', (int)$ldb->query("SELECT is_home FROM pages WHERE id = 'old'")->fetchColumn() === 1 && (int)$ldb->query("SELECT COUNT(*) FROM pages WHERE is_home = 1")->fetchColumn() === 1);
+$r = cc_lib_install($ldb, cc_lib_read($kitsDir . '/landing-sections'), [], 'ann', '');
+check('a section kit adds its sections to My templates, one entry each', !empty($r['success']) && $r['result']['templates'] === 3 && (int)$ldb->query("SELECT COUNT(*) FROM templates WHERE name LIKE 'Landing sections: %'")->fetchColumn() === 3 && json_decode($ldb->query("SELECT content_json FROM templates WHERE name = 'Landing sections: Hero'")->fetchColumn(), true)['type'] === 'SECTION');
+$r = cc_lib_install($ldb, cc_lib_read($kitsDir . '/bistro-site'), [], 'ann', '');
+check('a site kit without its design adds its pages as drafts and changes nothing else', !empty($r['success']) && count($r['result']['pages']) === 3 && !$r['result']['design'] && (int)$ldb->query("SELECT COUNT(*) FROM pages WHERE created_by = 'ann' AND status = 'draft'")->fetchColumn() === 4 && strpos((string)$ldb->query("SELECT content_json FROM site_parts WHERE name = 'header'")->fetchColumn(), 'Old header') !== false && strpos(file_get_contents($lt . '/data/menu.json'), 'Old') !== false);
+check('…its home page is a draft that is not the Home page (the admin chooses)', (int)$ldb->query("SELECT COUNT(*) FROM pages WHERE is_home = 1")->fetchColumn() === 1 && $r['result']['pages'][0]['home'] === true);
+$r = cc_lib_install($ldb, cc_lib_read($kitsDir . '/bistro-site'), ['design' => true], 'ann', '');
+$hdr = (string)$ldb->query("SELECT content_json FROM site_parts WHERE name = 'header'")->fetchColumn();
+$menu = json_decode(file_get_contents($lt . '/data/menu.json'), true); $set = json_decode(file_get_contents($lt . '/data/settings.json'), true);
+check('with its design: header, footer, menu items and colours are replaced (a second copy of the pages gets numbered addresses)', !empty($r['result']['design']) && strpos($hdr, 'Bistro') !== false && (int)$ldb->query("SELECT COUNT(*) FROM site_parts WHERE name = 'footer'")->fetchColumn() === 1 && $menu['items'][1]['label'] === 'About' && ($menu['settings']['theme'] ?? '') === 'dark' && $set['brandColor'] === '#b45309' && $set['siteName'] === 'Mine' && (int)$ldb->query("SELECT COUNT(*) FROM pages WHERE clean_slug = 'home-3' OR clean_slug = 'home-2'")->fetchColumn() >= 1, json_encode([$menu, $set]));
+$inst = cc_lib_installed();
+check('every install is logged, newest first, with the pages it made and how to undo the design', count($inst) === 4 && $inst[0]['id'] === 'bistro-site' && $inst[0]['design'] === true && preg_match('/^undo-[0-9a-f]{12}\.json$/', $inst[0]['undo']) && count($inst[0]['pages']) === 3 && $inst[1]['design'] === false);
+[$ok, $msg] = cc_lib_undo($ldb, $inst[0]['install_id']);
+$menu2 = json_decode(file_get_contents($lt . '/data/menu.json'), true); $set2 = json_decode(file_get_contents($lt . '/data/settings.json'), true);
+check('undo puts back the previous header, no footer, the old menu and the old colours', $ok && strpos((string)$ldb->query("SELECT content_json FROM site_parts WHERE name = 'header'")->fetchColumn(), 'Old header') !== false && (int)$ldb->query("SELECT COUNT(*) FROM site_parts WHERE name = 'footer'")->fetchColumn() === 0 && $menu2['items'][0]['label'] === 'Old' && $set2['brandColor'] === '#111111' && !is_file($lt . '/lib/' . $inst[0]['undo']), $msg);
+check('…and cannot be done twice, nor for an install that did not change the design, nor with a made-up id', !cc_lib_undo($ldb, $inst[0]['install_id'])[0] && !cc_lib_undo($ldb, $inst[1]['install_id'])[0] && !cc_lib_undo($ldb, '../../x')[0]);
+$r = cc_lib_install($ldb, cc_lib_read($mk('coming-soon-page', function ($d) { unlink("$d/kit.json"); })), [], 'ann', '');
+check('an invalid kit is not installed and nothing is added', empty($r['success']) && !empty($r['errors']) && (int)$ldb->query("SELECT COUNT(*) FROM pages")->fetchColumn() === 8);
+$r = cc_lib_install($ldb, cc_lib_read($mk('coming-soon-page', function ($d) use ($jr, $jw) { $c = $jr("$d/content.json"); $c['blocks'][] = ['type' => 'HTML', 'content' => ['code' => '<script>alert(1)</script>']]; $jw("$d/content.json", $c); })), [], 'ann', '');
+$last = (string)$ldb->query("SELECT content_json FROM pages ORDER BY rowid DESC LIMIT 1")->fetchColumn();
+check('a kit with Custom HTML installs without the code, and says so', !empty($r['success']) && $r['result']['dropped_code'] === 1 && strpos($last, 'alert(1)') === false);
+
+// the signed index
+$pair = sodium_crypto_sign_keypair(); $GLOBALS['CC_LIB_KEYS'] = [sodium_crypto_sign_publickey($pair)];
+$zipK = $lt . '/index-kit.zip'; $z = new ZipArchive(); $z->open($zipK, ZipArchive::CREATE); foreach ($good as $n => $c) $z->addFromString($n, $c); $z->close();
+$sha = hash_file('sha256', $zipK);
+$entry = ['id' => 'tiny', 'name' => 'Tiny <b>kit</b>', 'type' => 'page', 'version' => '1.0.0', 'author' => 'Ann', 'description' => 'A tiny kit', 'tags' => ['a', 'b'], 'sha256' => $sha, 'url' => 'https://raw.githubusercontent.com/sputlab/canvascore-library/main/tiny.zip', 'size' => filesize($zipK), 'pages' => 1];
+$indexBytes = json_encode(['version' => 1, 'kits' => [$entry, ['id' => 'evil-host', 'type' => 'page', 'sha256' => $sha, 'url' => 'https://evil.example/x.zip'], ['id' => 'no-sha', 'type' => 'page', 'url' => 'https://github.com/x.zip'], ['id' => 'bad type', 'type' => 'plugin', 'sha256' => $sha, 'url' => 'https://github.com/x.zip']]]);
+$signed = base64_encode(sodium_crypto_sign_detached(cc_lib_signed_message($indexBytes), sodium_crypto_sign_secretkey($pair)));
+$fetches = 0; $serve = ['index' => $indexBytes, 'sig' => $signed, 'zip' => file_get_contents($zipK)];
+$GLOBALS['CC_LIB_FETCH'] = function ($u, $max) use (&$fetches, &$serve) { $fetches++; if (substr($u, -10) === 'index.json') return $serve['index']; if (substr($u, -4) === '.sig') return $serve['sig']; if (substr($u, -8) === 'tiny.zip') return $serve['zip']; return null; };
+$ix = cc_lib_index(true);
+check('a library index signed with a trusted key is accepted; entries from another host, without a checksum or with a bad type are dropped', count($ix['kits']) === 1 && $ix['kits'][0]['id'] === 'tiny' && $ix['kits'][0]['sha256'] === $sha, json_encode($ix));
+check('…its text is cleaned (no markup in a name)', strpos($ix['kits'][0]['name'], '<') === false);
+$f0 = $fetches; cc_lib_index(false);
+check('the index is kept for an hour: no new download', $fetches === $f0);
+$serve['index'] = $indexBytes . ' ';
+$thrown = ''; try { cc_lib_index(true); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('an index that was changed after signing is refused (the last good copy is not replaced)', strpos($thrown, 'not signed') !== false && cc_lib_read_json($lt . '/lib/index.json')['kits'][0]['id'] === 'tiny');
+$other = sodium_crypto_sign_keypair(); $serve['index'] = $indexBytes; $serve['sig'] = base64_encode(sodium_crypto_sign_detached(cc_lib_signed_message($indexBytes), sodium_crypto_sign_secretkey($other)));
+$thrown = ''; try { cc_lib_index(true); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('…and so is one signed with another key; garbage as a signature too', strpos($thrown, 'not signed') !== false);
+$serve['sig'] = 'xx'; $thrown = ''; try { cc_lib_index(true); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('…garbage as a signature', strpos($thrown, 'not signed') !== false);
+$GLOBALS['CC_LIB_FETCH'] = function () { return null; };
+$st = cc_lib_index(true);
+check('when the library cannot be reached the last good copy is shown, marked as stale', !empty($st['stale']) && $st['kits'][0]['id'] === 'tiny' && !empty($st['error']));
+@unlink($lt . '/lib/index.json'); $thrown = ''; try { cc_lib_index(true); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('…and with no copy at all it says so', $thrown !== '');
+$GLOBALS['CC_LIB_FETCH'] = function ($u, $max) use (&$serve) { return substr($u, -8) === 'tiny.zip' ? $serve['zip'] : null; };
+$tmpZip = cc_lib_download($entry);
+check('a downloaded kit matching the index checksum is used', is_file($tmpZip) && !cc_lib_read($tmpZip)['errors']); @unlink($tmpZip);
+$serve['zip'] .= 'x'; $thrown = ''; try { cc_lib_download($entry); } catch (RuntimeException $e) { $thrown = $e->getMessage(); }
+check('a download that differs from the index is refused', strpos($thrown, 'checksum') !== false);
+check('addresses are limited to the library\'s hosts, over https', cc_update_url_ok('https://raw.githubusercontent.com/a/b', cc_lib_source()) && !cc_update_url_ok('http://raw.githubusercontent.com/a/b', cc_lib_source()) && !cc_update_url_ok('https://evil.example/a', cc_lib_source()) && !cc_update_url_ok('https://user:pw@github.com/a', cc_lib_source()));
+unset($GLOBALS['CC_LIB_FETCH'], $GLOBALS['CC_LIB_KEYS'], $GLOBALS['CC_LIB_DIR'], $GLOBALS['CC_LIB_DATA_DIR'], $GLOBALS['CC_LIB_UPLOADS'], $GLOBALS['CC_MEDIA_META_FILE'], $GLOBALS['CC_MEDIA_FOLDERS_FILE'], $GLOBALS['CC_LIB_APP_VERSION']);
+cc_backup_rrmdir($lt);
+
+echo "\nINTEGRATIONS\n";
+require_once __DIR__ . '/../../canvascore-admin/integrations.php';
+$it = sys_get_temp_dir() . '/cc_int_' . getmypid(); @mkdir($it, 0755, true);
+$GLOBALS['CC_INT_FILE'] = $it . '/integrations.json';
+check('a webhook address must be https and public: private, loopback, link-local, http and odd addresses are refused', cc_int_webhook_url('https://8.8.8.8/hook') === 'https://8.8.8.8/hook' && cc_int_webhook_url('http://8.8.8.8/hook') === '' && cc_int_webhook_url('https://127.0.0.1/x') === '' && cc_int_webhook_url('https://10.0.0.5/x') === '' && cc_int_webhook_url('https://169.254.169.254/latest') === '' && cc_int_webhook_url('https://localhost/x') === '' && cc_int_webhook_url('ftp://8.8.8.8/x') === '' && cc_int_webhook_url('https://user:pw@8.8.8.8/x') === '' && cc_int_webhook_url(str_repeat('a', 600)) === '');
+$wh = cc_int_clean_webhook(['name' => '<b>Zap</b>', 'url' => 'https://8.8.8.8/hook', 'enabled' => 1, 'forms' => ['f_a', 'bad id', 'f_b', 'f_a']]);
+check('a webhook is cleaned: a name without markup, valid form ids only, a secret of its own', $wh['name'] === 'Zap' && $wh['forms'] === ['f_a', 'f_b'] && preg_match('/^wh_[a-f0-9]{10}$/', $wh['id']) && strlen($wh['secret']) === 32 && $wh['enabled'] === true);
+check('editing a webhook keeps its secret', cc_int_clean_webhook(['id' => $wh['id'], 'url' => 'https://8.8.8.8/other'], $wh)['secret'] === $wh['secret']);
+$mcOld = cc_int_defaults()['mailchimp']; $bvOld = cc_int_defaults()['brevo'];
+$mcKey = str_repeat('a1', 16) . '-us21';
+$mc = cc_int_clean_mailchimp(['enabled' => true, 'api_key' => $mcKey, 'list_id' => 'ab12cd34ef', 'double_optin' => 1, 'forms' => 'all'], $mcOld);
+check('a Mailchimp key, audience id and choice are validated; a bad key or id switches it off', $mc['enabled'] && $mc['api_key'] === $mcKey && $mc['list_id'] === 'ab12cd34ef' && $mc['double_optin'] === true && $mc['forms'] === 'all' && !cc_int_clean_mailchimp(['enabled' => true, 'api_key' => 'nope', 'list_id' => 'ab12cd34ef'], $mcOld)['enabled'] && cc_int_clean_mailchimp(['api_key' => $mcKey, 'list_id' => 'X Y'], $mcOld)['list_id'] === '');
+check('a saved key is kept when the form sends it masked or empty, and cleared on request', cc_int_clean_mailchimp(['api_key' => '••••us21', 'list_id' => 'ab12cd34ef', 'enabled' => true], $mc)['api_key'] === $mcKey && cc_int_clean_mailchimp(['api_key' => '', 'list_id' => 'ab12cd34ef'], $mc)['api_key'] === $mcKey && cc_int_clean_mailchimp(['clear_key' => true, 'list_id' => 'ab12cd34ef', 'enabled' => true], $mc)['api_key'] === '');
+$bvKey = 'xkeysib-' . str_repeat('ab', 20);
+$bv = cc_int_clean_brevo(['enabled' => true, 'api_key' => $bvKey, 'list_id' => '7', 'forms' => ['f_x']], $bvOld);
+check('a Brevo key and list are validated the same way', $bv['enabled'] && $bv['list_id'] === '7' && $bv['forms'] === ['f_x'] && !cc_int_clean_brevo(['enabled' => true, 'api_key' => 'sk-123', 'list_id' => '7'], $bvOld)['enabled'] && cc_int_clean_brevo(['api_key' => $bvKey, 'list_id' => '7; drop'], $bvOld)['list_id'] === '');
+$sk = 'sk_test_' . str_repeat('A1', 20);
+check('a Stripe key must be sk_ or rk_ (test or live); anything else changes nothing; masked or empty keeps it', cc_int_clean_stripe_key($sk, '') === $sk && cc_int_clean_stripe_key('pk_test_abc', '') === '' && cc_int_clean_stripe_key('', $sk) === $sk && cc_int_clean_stripe_key('••••AAAA', $sk) === $sk && cc_int_clean_stripe_key('rk_live_' . str_repeat('z', 30), '') !== '');
+$cfg = cc_int_defaults(); $cfg['webhooks'] = [$wh]; $cfg['mailchimp'] = $mc; $cfg['brevo'] = $bv; $cfg['stripe']['api_key'] = $sk;
+$pub = json_encode(cc_int_public($cfg), JSON_UNESCAPED_UNICODE);
+check('what the editor may see has no key and no secret, only hints', strpos($pub, $mcKey) === false && strpos($pub, $bvKey) === false && strpos($pub, $sk) === false && strpos($pub, $wh['secret']) === false && strpos($pub, '••••us21') !== false && strpos($pub, '"mode":"test"') !== false);
+check('the file with the keys is saved readable by the web user only (0600)', cc_int_save($cfg) && (fileperms(cc_int_file()) & 0777) === 0600 && cc_int_load()['mailchimp']['api_key'] === $mcKey);
+// signing
+check('a webhook is signed over "<timestamp>.<body>" with its secret (HMAC-SHA256)', cc_int_sign('s3cret', '1700000000', '{"a":1}') === 'sha256=' . hash_hmac('sha256', '1700000000.{"a":1}', 's3cret') && cc_int_sign('s3cret', '1700000001', '{"a":1}') !== cc_int_sign('s3cret', '1700000000', '{"a":1}'));
+// the real caller refuses what it must (no network is used)
+$ph = function ($m, $u, $o = []) { return cc_int_http($m, $u, null, $o); };
+check('a call to a plain http address, to a private address (public-only calls), to a host that is not the service\'s, or with credentials is refused before any connection', $ph('POST', 'http://8.8.8.8/x', ['public' => true])['code'] === 0 && $ph('POST', 'https://127.0.0.1/x', ['public' => true])['code'] === 0 && $ph('GET', 'https://evil.example/x', ['hosts' => ['api.brevo.com']])['code'] === 0 && $ph('GET', 'https://u:p@api.brevo.com/x', ['hosts' => ['api.brevo.com']])['code'] === 0);
+// dispatch with a stubbed network
+$idb = new PDO('sqlite::memory:'); $idb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$calls = []; $reply = ['code' => 200, 'body' => '{}', 'error' => ''];
+$GLOBALS['CC_INT_HTTP'] = function ($m, $u, $b, $o) use (&$calls, &$reply) { $calls[] = ['m' => $m, 'u' => $u, 'b' => $b, 'o' => $o]; return is_callable($reply) ? $reply($m, $u) : $reply; };
+$cfg['webhooks'][0]['forms'] = 'all'; cc_int_save($cfg);
+$formA = ['id' => 'f_contact', 'type' => 'form', 'meta' => ['email' => 1, 'name' => 0]];
+cc_int_dispatch($idb, $formA, [0 => 'Ann Lee', 1 => 'ann@example.com', 2 => 'Hi'], ['Name' => 'Ann Lee', 'Email' => 'ann@example.com', 'Message' => 'Hi'], 41, 'https://x.test/contact/', 'https://x.test/');
+$c0 = $calls[0] ?? null; $body = json_decode($c0['b'] ?? '', true); $hdrs = implode("\n", $c0['o']['headers'] ?? []);
+check('a submission is posted to the webhook as JSON: event, form, fields, page and site', count($calls) === 1 && $c0['m'] === 'POST' && $c0['u'] === 'https://8.8.8.8/hook' && $body['event'] === 'form.submitted' && $body['form']['id'] === 'f_contact' && $body['submission']['fields']['Email'] === 'ann@example.com' && $body['submission']['id'] === 41 && $body['site'] === 'https://x.test/' && !empty($c0['o']['public']), json_encode($calls));
+preg_match('/X-CanvasCore-Timestamp: (\d+)/', $hdrs, $tm); preg_match('/X-CanvasCore-Signature: (sha256=[a-f0-9]{64})/', $hdrs, $sg);
+check('…with the event, a delivery id, a timestamp and a signature the receiver can check', strpos($hdrs, 'X-CanvasCore-Event: form.submitted') !== false && strpos($hdrs, 'X-CanvasCore-Delivery: ') !== false && !empty($tm[1]) && ($sg[1] ?? '') === cc_int_sign($wh['secret'], $tm[1], $c0['b']) && strpos($hdrs, 'Content-Type: application/json') !== false);
+$log = $idb->query("SELECT * FROM integration_log")->fetchAll(PDO::FETCH_ASSOC);
+check('…and it is logged as sent, without keeping the payload', count($log) === 1 && $log[0]['kind'] === 'webhook' && $log[0]['status'] === 'ok' && (int)$log[0]['code'] === 200 && $log[0]['payload_json'] === '');
+check('a form that was not subscribed to a service is not sent anywhere (Mailchimp and Brevo want "newsletter" forms by default)', count($calls) === 1);
+$calls = []; $reply = ['code' => 500, 'body' => '', 'error' => ''];
+cc_int_dispatch($idb, $formA, [0 => 'Ann', 1 => 'ann@example.com'], ['Name' => 'Ann', 'Email' => 'ann@example.com'], 42, '', 'https://x.test/');
+$fail = $idb->query("SELECT * FROM integration_log ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+check('a webhook that fails is logged as failed, with what to send again', $fail['status'] === 'failed' && (int)$fail['code'] === 500 && strpos($fail['detail'], '500') !== false && json_decode($fail['payload_json'], true)['webhook'] === $wh['id']);
+$calls = []; $reply = ['code' => 204, 'body' => '', 'error' => ''];
+[$ok, $msg] = cc_int_resend($idb, $fail['id']);
+check('"send again" posts the same body again, and when it works the stored payload is dropped', $ok && count($calls) === 1 && json_decode($calls[0]['b'], true)['submission']['id'] === 42 && $idb->query("SELECT payload_json FROM integration_log WHERE id = " . (int)$fail['id'])->fetchColumn() === '' && !cc_int_resend($idb, $fail['id'])[0] && !cc_int_resend($idb, 99999)[0]);
+$cfg['webhooks'][0]['forms'] = ['f_other']; cc_int_save($cfg); $calls = [];
+cc_int_dispatch($idb, $formA, [1 => 'ann@example.com'], ['Email' => 'ann@example.com'], 43, '', 'https://x.test/');
+check('a webhook for chosen forms ignores the others', count($calls) === 0);
+$cfg['webhooks'][0]['forms'] = 'all'; $cfg['webhooks'][0]['enabled'] = false; cc_int_save($cfg);
+cc_int_dispatch($idb, $formA, [1 => 'ann@example.com'], ['Email' => 'ann@example.com'], 44, '', 'https://x.test/');
+check('…and a webhook that is switched off sends nothing', count($calls) === 0);
+// newsletter services
+$cfg['webhooks'] = []; $cfg['mailchimp']['forms'] = 'newsletter'; $cfg['mailchimp']['double_optin'] = false; $cfg['brevo']['forms'] = 'newsletter'; cc_int_save($cfg);
+$nl = ['id' => 'f_news', 'type' => 'newsletter', 'meta' => ['name' => 0, 'email' => 1]];
+$calls = []; $reply = ['code' => 200, 'body' => '{}', 'error' => ''];
+cc_int_dispatch($idb, $nl, [0 => 'Ann Lee', 1 => 'Ann@Example.com'], ['Name' => 'Ann Lee', 'Email' => 'Ann@Example.com'], 50, '', 'https://x.test/');
+$mcCall = $calls[0] ?? []; $bvCall = $calls[1] ?? [];
+check('a Newsletter block with no consent text subscribes the email to Mailchimp: a PUT of the member (md5 of the lower-case address), subscribed, with the name', ($mcCall['m'] ?? '') === 'PUT' && ($mcCall['u'] ?? '') === 'https://us21.api.mailchimp.com/3.0/lists/ab12cd34ef/members/' . md5('ann@example.com') && json_decode($mcCall['b'], true)['status_if_new'] === 'subscribed' && json_decode($mcCall['b'], true)['email_address'] === 'Ann@Example.com' && json_decode($mcCall['b'], true)['merge_fields'] === ['FNAME' => 'Ann', 'LNAME' => 'Lee'] && ($mcCall['o']['userpwd'] ?? '') === 'canvascore:' . $mcKey && $mcCall['o']['hosts'] === ['us21.api.mailchimp.com'], json_encode($mcCall));
+check('…and to Brevo: a POST of the contact into its list, updating an existing one, with the API key header', ($bvCall['m'] ?? '') === 'POST' && ($bvCall['u'] ?? '') === 'https://api.brevo.com/v3/contacts' && json_decode($bvCall['b'], true) === ['email' => 'Ann@Example.com', 'listIds' => [7], 'updateEnabled' => true, 'attributes' => ['FIRSTNAME' => 'Ann', 'LASTNAME' => 'Lee']] && in_array('api-key: ' . $bvKey, $bvCall['o']['headers'], true));
+$cfg['mailchimp']['double_optin'] = true; cc_int_save($cfg); $calls = [];
+cc_int_dispatch($idb, $nl, [0 => '', 1 => 'bo@example.com'], ['Email' => 'bo@example.com'], 51, '', 'https://x.test/');
+check('with double opt-in the member is "pending" (Mailchimp asks for confirmation); no name sends no merge fields', json_decode($calls[0]['b'], true)['status_if_new'] === 'pending' && !isset(json_decode($calls[0]['b'], true)['merge_fields']));
+$calls = [];
+cc_int_dispatch($idb, ['id' => 'f_news2', 'type' => 'newsletter', 'meta' => ['email' => 0, 'consent' => 1]], [0 => 'cy@example.com', 1 => ''], ['Email' => 'cy@example.com'], 52, '', 'https://x.test/');
+check('consent: a Newsletter block with a consent field that is NOT ticked subscribes nobody', count($calls) === 0);
+cc_int_dispatch($idb, ['id' => 'f_news2', 'type' => 'newsletter', 'meta' => ['email' => 0, 'consent' => 1]], [0 => 'cy@example.com', 1 => 'Yes'], ['Email' => 'cy@example.com'], 53, '', 'https://x.test/');
+check('…and one that is ticked does', count($calls) === 2);
+$calls = [];
+cc_int_dispatch($idb, ['id' => 'f_contact', 'type' => 'form', 'meta' => ['email' => 1]], [1 => 'dee@example.com'], ['Email' => 'dee@example.com'], 54, '', 'https://x.test/');
+check('a plain contact form is not a signup: with no consent field nobody is subscribed, even if the service is set to "all forms"', count($calls) === 0 && (function () use (&$cfg, &$calls, $idb) { $cfg['mailchimp']['forms'] = 'all'; cc_int_save($cfg); cc_int_dispatch($idb, ['id' => 'f_contact', 'type' => 'form', 'meta' => ['email' => 1]], [1 => 'dee@example.com'], ['Email' => 'dee@example.com'], 55, '', 'https://x.test/'); return count($calls) === 0; })());
+cc_int_dispatch($idb, ['id' => 'f_contact', 'type' => 'form', 'meta' => ['email' => 1, 'consent' => 2]], [1 => 'dee@example.com', 2 => 'Yes'], ['Email' => 'dee@example.com'], 56, '', 'https://x.test/');
+check('…but a form with a ticked consent field is, when the service takes "all forms" (and Brevo, still on newsletter forms only, is not called)', count($calls) === 1 && strpos($calls[0]['u'], 'mailchimp.com') !== false);
+$calls = [];
+cc_int_dispatch($idb, ['id' => 'f_news', 'type' => 'newsletter', 'meta' => ['email' => 0]], [0 => 'not-an-email'], ['Email' => 'not-an-email'], 57, '', 'https://x.test/');
+check('an address that is not an email is never sent', count($calls) === 0);
+$cfg['mailchimp']['forms'] = ['f_only']; cc_int_save($cfg); $calls = [];
+cc_int_dispatch($idb, $nl, [0 => 'A', 1 => 'ann@example.com'], ['Email' => 'ann@example.com'], 58, '', 'https://x.test/');
+check('a service limited to chosen forms ignores the others (Brevo still takes the newsletter forms)', count($calls) === 1 && strpos($calls[0]['u'], 'brevo') !== false);
+$reply = ['code' => 400, 'body' => json_encode(['title' => 'Member Exists', 'detail' => 'ann@example.com is already a list member <b>x</b>']), 'error' => ''];
+$cfg['mailchimp']['forms'] = 'newsletter'; cc_int_save($cfg);
+cc_int_dispatch($idb, $nl, [0 => 'A', 1 => 'ann@example.com'], ['Email' => 'ann@example.com'], 59, '', 'https://x.test/');
+$ff = $idb->query("SELECT * FROM integration_log WHERE kind = 'newsletter' AND status = 'failed' ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+check('a refusal by the service is logged with its reason (no markup) and can be sent again', $ff && strpos($ff['detail'], 'already a list member') !== false && strpos($ff['detail'], '<b>') === false && json_decode($ff['payload_json'], true)['email'] === 'ann@example.com');
+$reply = ['code' => 200, 'body' => json_encode(['name' => 'Customers <i>VIP</i>']), 'error' => ''];
+check('"test the connection" says which list it reached (Mailchimp and Brevo), without markup', cc_int_test_service('mailchimp', $cfg['mailchimp'])[1] === 'Connected to the audience “Customers VIP”.' && cc_int_test_service('brevo', $cfg['brevo'])[1] === 'Connected to the list “Customers VIP”.' && !cc_int_test_service('brevo', ['api_key' => '', 'list_id' => ''])[0]);
+$reply = ['code' => 401, 'body' => json_encode(['message' => 'Key not found']), 'error' => ''];
+check('…or why it could not', strpos(cc_int_test_service('brevo', $cfg['brevo'])[1], 'Key not found') !== false && !cc_int_test_service('mailchimp', $cfg['mailchimp'])[0]);
+check('the log keeps the newest entries only', (function ($db) { for ($i = 0; $i < CC_INT_LOG_KEEP + 20; $i++) cc_int_log($db, 'webhook', 't', 'e', true, 200, ''); return (int)$db->query("SELECT COUNT(*) FROM integration_log")->fetchColumn() === CC_INT_LOG_KEEP; })($idb));
+// the form registry: where the email, name and consent fields are
+$GLOBALS['__reg'] = cc_form_registry();
+$rb = function ($b) { render_block($b); $r = cc_form_registry(); return end($r); };
+$e1 = $rb(['id' => 'nl1', 'type' => 'NEWSLETTER', 'content' => ['askName' => true, 'consentText' => 'I agree']]);
+$e2 = $rb(['id' => 'nl2', 'type' => 'NEWSLETTER', 'content' => []]);
+$e3 = $rb(['id' => 'fm1', 'type' => 'FORM', 'content' => ['fields' => [['label' => 'Full name', 'type' => 'text'], ['label' => 'Email', 'type' => 'email'], ['label' => 'Message', 'type' => 'textarea']]]]);
+$e4 = $rb(['id' => 'wz1', 'type' => 'WIZARD', 'content' => ['steps' => [['title' => 'A', 'fields' => [['label' => 'Your name', 'type' => 'text'], ['label' => 'E-mail', 'type' => 'email']]], ['title' => 'B', 'fields' => [['label' => 'OK?', 'type' => 'consent']]]]]]);
+check('the registry says what each form is and where its email, name and consent are: Newsletter (with and without name and consent)', ($e1['type'] ?? '') === 'newsletter' && $e1['meta'] === ['name' => 0, 'email' => 1, 'consent' => 2] && $e2['meta'] === ['email' => 0], json_encode([$e1, $e2]));
+check('…Form (by field type and a "name" label) and Multi-step Form (across its steps)', ($e3['type'] ?? '') === 'form' && $e3['meta'] === ['name' => 0, 'email' => 1] && ($e4['type'] ?? '') === 'wizard' && $e4['meta'] === ['name' => 0, 'email' => 1, 'consent' => 2], json_encode([$e3, $e4]));
+// analytics
+$ga = cc_int_analytics_html(['provider' => 'ga4', 'ga4_id' => 'g-abcd1234', 'consent' => true], true);
+check('Google Analytics: the loader and the config, both held back until the visitor accepts cookies when the site has a banner', strpos($ga, 'type="text/plain" data-cc-consent async src="https://www.googletagmanager.com/gtag/js?id=G-ABCD1234"') !== false && strpos($ga, "gtag('config','G-ABCD1234')") !== false && substr_count($ga, 'data-cc-consent') === 2);
+$ga2 = cc_int_analytics_html(['provider' => 'ga4', 'ga4_id' => 'G-ABCD1234', 'consent' => true], false);
+check('…and plain scripts when there is no banner, or when waiting is switched off', strpos($ga2, 'data-cc-consent') === false && strpos($ga2, '<script async src=') !== false && strpos(cc_int_analytics_html(['provider' => 'ga4', 'ga4_id' => 'G-ABCD1234', 'consent' => false], true), 'data-cc-consent') === false);
+$pl = cc_int_analytics_html(['provider' => 'plausible', 'plausible_domain' => 'Example.com'], true);
+check('Plausible (no cookies) never waits; a custom host is used when set', strpos($pl, 'data-cc-consent') === false && strpos($pl, 'data-domain="example.com" src="https://plausible.io/js/script.js"') !== false && strpos(cc_int_analytics_html(['provider' => 'plausible', 'plausible_domain' => 'a.com', 'plausible_host' => 'stats.a.com'], false), 'src="https://stats.a.com/js/script.js"') !== false);
+$mt = cc_int_analytics_html(['provider' => 'matomo', 'matomo_url' => 'https://m.example.com/analytics', 'matomo_site' => '3'], true);
+check('Matomo: its tracker address and site id, held back for the banner', strpos($mt, 'data-cc-consent') !== false && strpos($mt, '"https:\/\/m.example.com\/analytics\/"') !== false && strpos($mt, '"3"') !== false);
+check('an id with code in it, a http Matomo address, or a missing id gives no snippet at all', cc_int_analytics_html(['provider' => 'ga4', 'ga4_id' => "G-AAAA'); alert(1);//"], false) === '' && cc_int_analytics_html(['provider' => 'matomo', 'matomo_url' => 'http://m.example.com/', 'matomo_site' => '3'], false) === '' && cc_int_analytics_html(['provider' => 'matomo', 'matomo_url' => 'https://m.example.com/', 'matomo_site' => '3);alert(1'], false) === '' && cc_int_analytics_html(['provider' => 'plausible', 'plausible_domain' => 'x.com"><script>'], false) === '' && cc_int_analytics_html(['provider' => 'none'], false) === '' && cc_int_analytics_html(['provider' => 'ga4'], false) === '');
+// Stripe
+check('only Stripe payment links are accepted as such', cc_int_stripe_link_ok('https://buy.stripe.com/test_abc123XYZ') && cc_int_stripe_link_ok('https://donate.stripe.com/abcd1234?prefilled_amount=500') && !cc_int_stripe_link_ok('http://buy.stripe.com/abcd1234') && !cc_int_stripe_link_ok('https://evil.example/buy.stripe.com/abcd1234') && !cc_int_stripe_link_ok('https://buy.stripe.com.evil.com/abcd1234') && !cc_int_stripe_link_ok('javascript:alert(1)') && !cc_int_stripe_link_ok('https://buy.stripe.com/ab'));
+$calls = [];
+$reply = function ($m, $u) { if (substr($u, -9) === '/products') return ['code' => 200, 'body' => json_encode(['id' => 'prod_123']), 'error' => '']; if (substr($u, -7) === '/prices') return ['code' => 200, 'body' => json_encode(['id' => 'price_123']), 'error' => '']; return ['code' => 200, 'body' => json_encode(['id' => 'plink_abcdefgh12', 'url' => 'https://buy.stripe.com/test_xyz789']), 'error' => '']; };
+[$link, $msg] = cc_int_stripe_create_link($sk, ['name' => 'Course <b>1</b>', 'amount' => '19,90', 'currency' => 'EUR', 'adjustable' => true]);
+parse_str($calls[1]['b'] ?? '', $priceForm); parse_str($calls[2]['b'] ?? '', $linkForm);
+check('a payment link is made with three Stripe calls: product, price in the smallest unit, link (with the quantity the buyer can change)', $link && $link['url'] === 'https://buy.stripe.com/test_xyz789' && $link['name'] === 'Course 1' && $link['currency'] === 'eur' && $link['stripe_id'] === 'plink_abcdefgh12' && count($calls) === 3 && $priceForm['unit_amount'] === '1990' && $priceForm['currency'] === 'eur' && $priceForm['product'] === 'prod_123' && $linkForm['line_items']['0']['price'] === 'price_123' && ($linkForm['line_items']['0']['adjustable_quantity']['enabled'] ?? '') === 'true' && in_array('Authorization: Bearer ' . $sk, $calls[0]['o']['headers'], true) && $calls[0]['o']['hosts'] === ['api.stripe.com'], json_encode($calls));
+$calls = []; [$jp] = cc_int_stripe_create_link($sk, ['name' => 'Ticket', 'amount' => '500', 'currency' => 'jpy']); parse_str($calls[1]['b'] ?? '', $jpForm);
+check('a currency with no decimals (yen) is sent as it is', $jp && $jpForm['unit_amount'] === '500');
+check('a name, a price at least 0.50, a known currency are required before Stripe is called', cc_int_stripe_create_link($sk, ['name' => '', 'amount' => '5', 'currency' => 'eur'])[0] === null && cc_int_stripe_create_link($sk, ['name' => 'X', 'amount' => '0.10', 'currency' => 'eur'])[0] === null && cc_int_stripe_create_link($sk, ['name' => 'X', 'amount' => '-3', 'currency' => 'eur'])[0] === null && cc_int_stripe_create_link($sk, ['name' => 'X', 'amount' => 'abc', 'currency' => 'eur'])[0] === null && cc_int_stripe_create_link($sk, ['name' => 'X', 'amount' => '5', 'currency' => 'xyz'])[0] === null);
+$reply = ['code' => 401, 'body' => json_encode(['error' => ['message' => 'Invalid API Key provided']]), 'error' => ''];
+[$no, $m2] = cc_int_stripe_create_link($sk, ['name' => 'X', 'amount' => '5', 'currency' => 'eur']);
+check('a Stripe refusal is reported with its reason, and no link is made', $no === null && strpos($m2, 'Invalid API Key') !== false);
+$reply = ['code' => 200, 'body' => json_encode(['id' => 'plink_abcdefgh12', 'active' => false]), 'error' => '']; $calls = [];
+check('a link can be switched off at Stripe (a plink_ id only), and the active flag is sent', cc_int_stripe_set_active($sk, 'plink_abcdefgh12', false)[0] && strpos($calls[0]['u'], '/payment_links/plink_abcdefgh12') !== false && strpos($calls[0]['b'], 'active=false') !== false && !cc_int_stripe_set_active($sk, '../prices', false)[0]);
+unset($GLOBALS['CC_INT_HTTP'], $GLOBALS['CC_INT_FILE']);
+cc_backup_rrmdir($it);
+
 echo "\nREDIRECTS, COOKIE BANNER, SEARCH\n";
 check('redirect paths are normalized and validated', cc_redirect_path('old-page') === null && cc_redirect_path('/Old-Page') === '/old-page/' && cc_redirect_path('/') === null && cc_redirect_path('/a b/') === null && cc_redirect_target('https://x.com/a') === 'https://x.com/a');
 $rdb = new PDO('sqlite::memory:'); $rdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

@@ -6,8 +6,15 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/blockdef.php';
 require_once __DIR__ . '/blockpkg.php';
 
-// Registry of the forms collected during the build (formId => recipient email)
+// Registry of the forms collected during the build (formId => recipient email, labels, message, kind, and where the email, name and
+// consent fields are: what the integrations (webhooks, newsletter services) read)
 function &cc_form_registry() { static $r = []; return $r; }
+// Notes the position of a form's email, name and consent field (the first of each) while its fields are listed
+function cc_form_meta_note(array &$meta, $type, $label, $index) {
+    if ($type === 'email' && !isset($meta['email'])) $meta['email'] = $index;
+    elseif ($type === 'consent' && !isset($meta['consent'])) $meta['consent'] = $index;
+    elseif (($type === 'text' || $type === '') && !isset($meta['name']) && preg_match('/\b(name|nome|nombre|nom|vorname)\b/iu', (string)$label)) $meta['name'] = $index;
+}
 
 // An image address: http(s), a relative or root path, or an inline raster image; any other scheme (javascript:,
 // data:text/html…) -> ''. Mirrors ccImgUrl() in renderBlock.mjs.
@@ -1867,7 +1874,8 @@ function cc_render_block_body($block) {
             // shows only this message (nothing a visitor sends decides either)
             $regLabels = [];
             foreach (($block['content']['fields'] ?? [['label' => 'Name'], ['label' => 'Email'], ['label' => 'Message']]) as $rf) $regLabels[] = mb_substr((string)($rf['label'] ?? ''), 0, 200);
-            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $regLabels, 'success' => (string)(($block['content']['successMsg'] ?? '') !== '' ? $block['content']['successMsg'] : 'Sent!')];
+            $fmeta = []; foreach (($block['content']['fields'] ?? [['label' => 'Name', 'type' => 'text'], ['label' => 'Email', 'type' => 'email']]) as $fk => $rf) cc_form_meta_note($fmeta, in_array($rf['type'] ?? '', CC_FORM_TYPES, true) ? $rf['type'] : 'text', $rf['label'] ?? '', $fk);
+            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $regLabels, 'success' => (string)(($block['content']['successMsg'] ?? '') !== '' ? $block['content']['successMsg'] : 'Sent!'), 'type' => 'form', 'meta' => $fmeta];
 
             $html = "<div id=\"$innerId\" class=\"cc-form-block$animClass$innerClass\"$styleString>\n<div style=\"margin-bottom:20px;\">$title</div>\n<form id=\"$form_id\" action=\"{{BASE_URL}}canvascore-admin/submit_form.php\" method=\"POST\">\n<input type=\"hidden\" name=\"_form\" value=\"$form_id\">\n<input type=\"hidden\" name=\"_success\" value=\"$successMsg\">\n<input type=\"text\" name=\"_hp\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\" style=\"position:absolute; left:-9999px; width:0; height:0; opacity:0;\">\n";
 
@@ -2042,7 +2050,7 @@ function cc_render_block_body($block) {
             $form_id = !empty($c['customId'])
                 ? 'f_' . preg_replace('/[^a-zA-Z0-9_-]/', '', cc_str($c['customId']))
                 : 'f_' . substr(sha1('w|' . ($block['id'] ?? '') . '|' . $raw_email), 0, 16);
-            $fi = 0; $stepsHtml = ''; $dotsHtml = ''; $regLabels = [];
+            $fi = 0; $stepsHtml = ''; $dotsHtml = ''; $regLabels = []; $wzMeta = [];
             foreach ($steps as $si => $st) {
                 $fields = array_slice($objs($st['fields'] ?? []), 0, 12);
                 $stTitle = cc_esc($st['title'] ?? '');
@@ -2057,6 +2065,7 @@ function cc_render_block_body($block) {
                     $req = ($f['required'] ?? false) === true ? ' required' : '';
                     $opts = array_map(function ($o) { return mb_substr($o, 0, 100); }, array_slice(cc_lines(cc_str($f['options'] ?? '')), 0, 20));
                     $regLabels[] = mb_substr($labelRaw, 0, 200);
+                    cc_form_meta_note($wzMeta, $type, $labelRaw, $fi);
                     $fi++;
                     $inner .= '<input type="hidden" name="_label_' . $name . '" value="' . $label . '">' . "\n";
                     if ($type === 'radio' || $type === 'checkboxes') {
@@ -2081,7 +2090,7 @@ function cc_render_block_body($block) {
                     . $inner . '</fieldset>' . "\n";
                 $dotsHtml .= '<li class="cc-wz-dot' . ($si === 0 ? ' is-current' : '') . '"' . ($si === 0 ? ' aria-current="step"' : '') . '><span class="cc-wz-dot-n">' . ($si + 1) . '</span><span class="cc-wz-dot-t">' . ($stTitle !== '' ? $stTitle : 'Step ' . ($si + 1)) . '</span></li>';
             }
-            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $regLabels, 'success' => $successMsg];
+            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $regLabels, 'success' => $successMsg, 'type' => 'wizard', 'meta' => $wzMeta];
             $pct = $n > 0 ? number_format(100 / $n, 1, '.', '') : '100.0';
             $progress = '<div class="cc-wz-progress" hidden style="margin-bottom:24px;">'
                 . ($dots ? '<ol class="cc-wz-dots" style="list-style:none; display:flex; gap:8px; margin:0 0 10px 0; padding:0;">' . $dotsHtml . '</ol>' : '<div class="cc-wz-track" style="height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden;"><div class="cc-wz-fill" style="height:100%; width:' . $pct . '%; background:' . $accent . '; border-radius:999px;"></div></div>')
@@ -2133,7 +2142,7 @@ function cc_render_block_body($block) {
             $button = '<button type="submit" class="cc-nl-submit" style="padding:12px 24px; border:none; border-radius:8px; background:' . $accent . '; color:#ffffff; font:700 15px/1 inherit; cursor:pointer; ' . ($inline ? '' : 'width:100%;') . '">' . $text($c['buttonText'] ?? '', 'Subscribe', 40) . '</button>';
             $consentHtml = '';
             if ($consent !== '') { $consentHtml = '<input type="hidden" name="_label_field_' . $fi . '" value="' . htmlspecialchars($consent) . '"><label class="cc-nl-consent" style="display:flex; align-items:flex-start; gap:8px; flex:1 1 100%; font-size:13px; line-height:1.5; color:#64748b;"><input type="checkbox" name="field_' . $fi . '" value="Yes" required style="width:18px; height:18px; margin-top:1px; accent-color:' . $accent . ';"><span>' . htmlspecialchars($consent) . '</span></label>'; $labels[] = $consent; }
-            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $labels, 'success' => $successMsg];
+            $reg =& cc_form_registry(); $reg[$form_id] = ['to' => $raw_email, 'labels' => $labels, 'success' => $successMsg, 'type' => 'newsletter', 'meta' => array_filter(['name' => $askName ? 0 : null, 'email' => $askName ? 1 : 0, 'consent' => $consent !== '' ? ($askName ? 2 : 1) : null], function ($v) { return $v !== null; })];
             return $customCss . '<style>#' . $innerId . ' input:focus-visible,#' . $innerId . ' button:focus-visible{outline:2px solid ' . $accent . ';outline-offset:2px}#' . $innerId . ' .cc-nl-submit:hover{filter:brightness(.93)}@media(max-width:600px){#' . $innerId . ' .cc-nl-card{padding:20px !important}}</style>'
                 . '<div id="' . $innerId . '" class="cc-newsletter' . $animClass . $innerClass . '" style="' . $styleAttr . '">' . "\n"
                 . '<div class="cc-nl-card" style="' . ($card ? 'background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:32px; box-shadow:0 4px 18px rgba(15,23,42,0.06);' : 'padding:0;') . '">'

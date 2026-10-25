@@ -189,3 +189,31 @@ export function HeroButtonLook({ item, patch }) {
     </div>
   );
 }
+
+// A payment link for the Payment Button: pick one of the links kept in Administration › Integrations › Stripe, or paste one made in the Stripe dashboard.
+// (The block accepts only https://buy.stripe.com/… and https://donate.stripe.com/… addresses: anything else leaves the button empty.)
+export function PaymentLink({ ctx, k, item, patch }) {
+  // at the top of a block's content the panel gives no patchItem: ctx.set(key, value) is the way
+  const put = (v) => (patch ? patch({ [k]: v }) : ctx.set(k, v));
+  const [links, setLinks] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetch('api.php?action=integrations_payment_links').then((r) => r.json()).then((d) => { if (alive) setLinks(d && d.success ? d.links : []); }).catch(() => { if (alive) setLinks([]); });
+    return () => { alive = false; };
+  }, []);
+  const value = (item && item[k]) || '';
+  const known = (links || []).some((l) => l.url === value);
+  return (
+    <>
+      <label style={labelStyle}>Stripe payment link</label>
+      <select style={inputStyle} aria-label="Choose a payment link" value={known ? value : ''} onChange={(e) => put(e.target.value)}>
+        <option value="">{links === null ? 'Loading…' : links.length ? 'Choose a payment link…' : 'No payment links yet'}</option>
+        {(links || []).map((l) => <option key={l.id} value={l.url}>{l.name}{l.amount ? ` — ${l.amount} ${String(l.currency || '').toUpperCase()}` : ''}</option>)}
+      </select>
+      <label style={{ ...labelStyle, marginTop: 8 }}>Or paste a link</label>
+      <input style={inputStyle} aria-label="Payment link address" type="url" placeholder="https://buy.stripe.com/…" value={value} onChange={(e) => put(e.target.value.trim())} />
+      {value && !/^https:\/\/(buy|donate)\.stripe\.com\//.test(value) && <p role="alert" style={{ fontSize: 11, color: '#fbbf24', margin: '6px 0 0' }}>This is not a Stripe payment link, so the button stays empty.</p>}
+      {(links || []).length === 0 && links !== null && <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>Add links in Administration › Integrations › Stripe.</p>}
+    </>
+  );
+}

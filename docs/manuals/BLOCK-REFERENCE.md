@@ -82,6 +82,7 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | | [Site Search](#site-search) | A search box that finds your pages and items |
 | | [Table of Contents](#table-of-contents) | A list of the page's headings, which follows you down the page |
 | | [Share Bar](#share-bar) | Buttons to share the page on social networks, by email or by copying the link |
+| | [Payment Button](#payment-button) | A button that takes the visitor to a Stripe payment page, with an optional title, description and price |
 
 Tip: the **Search blocks…** box in the Add tab also finds blocks by keyword, for example "carousel" finds Slider and "faq" finds Accordion and FAQ.
 
@@ -1020,6 +1021,22 @@ Buttons to share the page.
 - The buttons include Facebook, X, LinkedIn, WhatsApp, Telegram, email, copy link and print, and the phone's own share sheet where the phone has one.
 - The link is the address of the page the visitor is on.
 - Nothing is loaded from the networks until a visitor clicks a button.
+
+---
+
+### Payment Button
+
+A button that takes the visitor to a **Stripe** payment page (a *payment link*), so the payment happens on Stripe and no card data touches your site.
+
+- **Stripe payment link**: choose one of the links kept under **Administration › Integrations › Stripe** (made there with your Stripe key, or added by their address), or paste a link made in the Stripe dashboard. Only `https://buy.stripe.com/…` and `https://donate.stripe.com/…` addresses work; anything else leaves the block without a button.
+- **Button text** (default “Buy now”) and **Price shown above the button** (for example `€19.00`, only text: the real price is the one on Stripe).
+- **Title** and **Description** (optional; one line per row), **Look** (a **Card** or **Button only**), **Alignment** and **Button color** (empty = the brand color).
+- **Show “Secure payment by Stripe”**: a small note under the button.
+
+**Tips**
+- In the editor an empty block shows “Choose a payment link in the panel”; on the published page it shows nothing for the button until a valid link is set.
+- Make the link in Stripe with the price you want; if you change the price, make a new link (a link's price does not change).
+- The block is a plain link, so it needs nothing from the visitor's browser; Stripe's own page handles the card, the receipt and the confirmation.
 
 ---
 

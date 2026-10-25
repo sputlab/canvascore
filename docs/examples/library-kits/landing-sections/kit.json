@@ -1,0 +1,14 @@
+{
+    "id": "landing-sections",
+    "name": "Landing sections",
+    "version": "1.0.0",
+    "type": "section",
+    "author": "CanvasCore examples",
+    "description": "Three ready-made sections for a landing page: a hero, a features row and a call to action. They appear under Add › My templates.",
+    "license": "CC0-1.0",
+    "tags": [
+        "landing",
+        "sections"
+    ],
+    "minVersion": "0.24.0"
+}

@@ -852,6 +852,212 @@ $own->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => 
 check('"everyone" opens it again', in_array('Roles blog', $names($ed2), true));
 check('a role never gives access to the admin-only areas', empty($au1->api('get_users')['json']['success'] ?? null) && strpos((string)($au1->api('get_users')['json']['message'] ?? ''), 'Only admins') !== false && empty($rv->api('backup_info')['json']['success']) && empty($au1->api('pkg_info')['json']['success']) && empty($au1->api('wp_info')['json']['success']));
 
+echo "\nTEMPLATE LIBRARY (over HTTP)\n";
+$lkp = sodium_crypto_sign_keypair(); $lsk = sodium_crypto_sign_secretkey($lkp);
+file_put_contents($admin . '/update-keys.php', "<?php\nreturn ['" . base64_encode(sodium_crypto_sign_publickey($lkp)) . "'];\n");
+file_put_contents($admin . '/library-source.php', "<?php\nreturn ['index' => 'http://127.0.0.1:$port/libfeed/index.json', 'sig' => 'http://127.0.0.1:$port/libfeed/index.json.sig', 'hosts' => ['127.0.0.1'], 'https' => false];\n");
+@mkdir($web . '/libfeed');
+$exDir = realpath(__DIR__ . '/../../docs/examples/library-kits');
+$kitZip = function ($example, $id, $edit = null) use ($exDir, $web) {
+    $files = [];
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$exDir/$example", FilesystemIterator::SKIP_DOTS)) as $f) $files[str_replace('\\', '/', substr($f->getPathname(), strlen("$exDir/$example") + 1))] = file_get_contents($f->getPathname());
+    $m = json_decode($files['kit.json'], true); $m['id'] = $id; unset($m['minVersion']); $files['kit.json'] = json_encode($m);
+    if ($edit) $files = $edit($files);
+    $zf = "$web/libfeed/$id.zip"; @unlink($zf); $z = new ZipArchive(); $z->open($zf, ZipArchive::CREATE);
+    foreach ($files as $n => $c) $z->addFromString($n, $c);
+    $z->close();
+    return $zf;
+};
+$publish = function (array $kits, $tamperSha = []) use ($web, $port, $lsk, $exDir) {
+    $entries = [];
+    foreach ($kits as $id => [$zf, $type, $name]) {
+        $e = ['id' => $id, 'name' => $name, 'type' => $type, 'version' => '1.0.0', 'author' => 'Test', 'description' => "The $name kit", 'tags' => ['t'], 'pages' => 1, 'size' => filesize($zf),
+              'sha256' => $tamperSha[$id] ?? hash_file('sha256', $zf), 'url' => "http://127.0.0.1:$port/libfeed/$id.zip", 'preview' => "http://127.0.0.1:$port/libfeed/preview.png"];
+        $entries[] = $e;
+    }
+    copy("$exDir/coming-soon-page/preview.png", "$web/libfeed/preview.png");
+    $bytes = json_encode(['version' => 1, 'kits' => $entries]);
+    file_put_contents("$web/libfeed/index.json", $bytes);
+    file_put_contents("$web/libfeed/index.json.sig", base64_encode(sodium_crypto_sign_detached("canvascore-library-v1\n" . hash('sha256', $bytes), $lsk)));
+    return $bytes;
+};
+$kPage = $kitZip('coming-soon-page', 'lib-page'); $kSite = $kitZip('bistro-site', 'lib-site'); $kSec = $kitZip('landing-sections', 'lib-sections');
+$kEvil = $kitZip('coming-soon-page', 'lib-evil', function ($f) {
+    $c = json_decode($f['content.json'], true);
+    $c['blocks'][] = ['type' => 'HTML', 'content' => ['code' => '<script>steal()</script>', 'customCss' => 'body{display:none}']];
+    $c['blocks'][] = ['type' => 'FORM', 'content' => ['email' => 'attacker@evil.com']];
+    $c['blocks'][] = ['type' => 'TEXT', 'content' => ['text' => '<p onclick="x()">Hello<script>bad()</script></p>']];
+    $f['content.json'] = json_encode($c); return $f;
+});
+$bytes = $publish(['lib-page' => [$kPage, 'page', 'Coming Soon'], 'lib-site' => [$kSite, 'site', 'Bistro'], 'lib-sections' => [$kSec, 'section', 'Landing sections'], 'lib-evil' => [$kEvil, 'page', 'Evil']]);
+
+check('nobody signed out can use the library', (new Client())->api('library_index')['code'] === 401);
+check('an editor cannot browse, install or undo', strpos((string)($ed->api('library_index')['json']['message'] ?? ''), 'Only admins') !== false && strpos((string)($ed->api('library_install', ['id' => 'lib-page'])['json']['message'] ?? ''), 'Only admins') !== false && strpos((string)($ed->api('library_undo', ['install_id' => 'x'])['json']['message'] ?? ''), 'Only admins') !== false);
+$r = $own->api('library_index&refresh=1');
+$ids = array_column($r['json']['kits'] ?? [], 'id');
+check('an admin sees the kits of the signed index, without their download addresses or checksums', !empty($r['json']['success']) && count($ids) === 4 && in_array('lib-site', $ids, true) && strpos($r['body'], '/libfeed/') === false && strpos($r['body'], 'sha256') === false && ($r['json']['kits'][0]['preview'] ?? null) === true, $r['body']);
+$pv = $own->req('GET', '/canvascore-admin/api.php?action=library_preview&id=lib-page', null, [], false);
+check('a kit\'s preview is served from the site itself, as an image, with no sniffing', $pv['code'] === 200 && stripos($pv['head'], 'content-type: image/png') !== false && stripos($pv['head'], 'x-content-type-options: nosniff') !== false && substr($pv['body'], 1, 3) === 'PNG');
+check('…and an unknown kit has none', $own->req('GET', '/canvascore-admin/api.php?action=library_preview&id=nope', null, [], false)['code'] === 404 && $ed->req('GET', '/canvascore-admin/api.php?action=library_preview&id=lib-page', null, [], false)['json']['success'] === false);
+$before = (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn();
+$r = $own->api('library_install', ['id' => 'lib-page']);
+$np = db()->query("SELECT * FROM pages ORDER BY rowid DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+check('installing a page kit adds a draft page made by the admin, and says what it did', !empty($r['json']['success']) && (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $before + 1 && $np['status'] === 'draft' && $np['title'] === 'Coming Soon' && $np['created_by'] !== '' && count($r['json']['result']['pages'] ?? []) === 1, $r['body']);
+check('…its image is in the Media library (folder Library/…)', count(glob($web . '/uploads/*lib-page-logo.svg')) === 1);
+check('a kit that is not in the library cannot be installed', empty($own->api('library_install', ['id' => 'nope'])['json']['success']) && empty($own->api('library_install', ['id' => '../../x'])['json']['success']));
+$r = $own->api('library_install', ['id' => 'lib-sections']);
+check('a section kit adds its sections to My templates', !empty($r['json']['success']) && ($r['json']['result']['templates'] ?? 0) === 3 && count(array_filter($own->api('get_templates')['json'] ?? [], function ($t) { return strpos($t['name'], 'Landing sections: ') === 0; })) === 3, $r['body']);
+$brandBefore = $own->api('get_settings')['json']['brandColor'] ?? '';
+$r = $own->api('library_install', ['id' => 'lib-site', 'options' => ['design' => true]]);
+$iid = $r['json']['result']['install_id'] ?? '';
+check('a site kit adds its pages as drafts and, when asked, its header, footer, menu and colours', !empty($r['json']['success']) && count($r['json']['result']['pages'] ?? []) === 3 && !empty($r['json']['result']['design']) && ($own->api('get_settings')['json']['brandColor'] ?? '') === '#b45309' && (($own->api('get_menu')['json']['items'] ?? [])[1]['label'] ?? '') === 'About' && strpos(json_encode($own->api('get_parts')['json'] ?? []), 'Bistro') !== false, $r['body']);
+$inst = $own->api('library_index')['json']['installed'] ?? [];
+check('the install is listed, and installed kits are marked in the library', ($inst[0]['id'] ?? '') === 'lib-site' && !empty($inst[0]['design']) && count($inst) === 3 && count(array_filter($own->api('library_index')['json']['kits'], function ($k) { return $k['id'] === 'lib-site' && $k['installed'] === '1.0.0'; })) === 1);
+$r = $own->api('library_undo', ['install_id' => $iid]);
+check('undo puts back the colours, the menu, the header and the footer from before', !empty($r['json']['success']) && ($own->api('get_settings')['json']['brandColor'] ?? '') === $brandBefore && (($own->api('get_menu')['json']['items'] ?? [])[1]['label'] ?? '') !== 'About' && strpos(json_encode($own->api('get_parts')['json'] ?? []), 'Bistro') === false, $r['body']);
+check('…once only', empty($own->api('library_undo', ['install_id' => $iid])['json']['success']));
+$r = $own->api('library_install', ['id' => 'lib-evil']);
+$all = json_encode($own->api('get_pages')['json'] ?? []);
+check('a kit with code in it installs WITHOUT the code: no script, no handler, no form email, no custom CSS', !empty($r['json']['success']) && ($r['json']['result']['dropped_code'] ?? 0) === 1 && strpos($all, 'steal()') === false && strpos($all, 'bad()') === false && strpos($all, 'onclick') === false && strpos($all, 'attacker@evil.com') === false && strpos($all, 'display:none') === false, $r['body']);
+$pagesNow = (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn();
+$bytes = $publish(['lib-page' => [$kPage, 'page', 'Coming Soon']], ['lib-page' => str_repeat('0', 64)]);
+$own->api('library_index&refresh=1');
+$r = $own->api('library_install', ['id' => 'lib-page']);
+check('a kit whose download differs from the index checksum is refused, and nothing is added', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'checksum') !== false && (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $pagesNow, $r['body']);
+$bytes = $publish(['lib-page' => [$kPage, 'page', 'Coming Soon']]);
+file_put_contents($web . '/libfeed/index.json', $bytes . ' ');
+$r = $own->api('library_index&refresh=1');
+check('an index changed after it was signed is refused; the last good list stays', strpos((string)($r['json']['error'] ?? '') . (string)($r['json']['warning'] ?? ''), 'not signed') !== false, $r['body']);
+file_put_contents($web . '/libfeed/index.json', $bytes);
+$ru = function ($client, $zf, $opts = []) { return $client->req('POST', '/canvascore-admin/api.php?action=library_install_file', ['kit' => new CURLFile($zf, 'application/zip', 'kit.zip'), 'options' => json_encode($opts)], [], false); };
+check('only an admin can install a kit from a file', strpos((string)($ru($ed, $kPage)['json']['message'] ?? ''), 'Only admins') !== false && $ru(new Client(), $kPage)['code'] === 401);
+$trav = $web . '/libfeed/trav.zip'; $z = new ZipArchive(); $z->open($trav, ZipArchive::CREATE); $z->addFromString('kit.json', json_encode(['id' => 'trav', 'name' => 'T', 'version' => '1.0.0', 'type' => 'page'])); $z->addFromString('content.json', json_encode(['blocks' => [['type' => 'TEXT', 'content' => ['text' => 'x']]]])); $z->addFromString('../../evil.php', '<?php echo 1;'); $z->close();
+$r = $ru($own, $trav);
+check('a kit file with a path outside the kit, or a script in it, is refused with the reasons, and nothing is installed or written', empty($r['json']['success']) && !empty($r['json']['errors']) && !is_file($web . '/../evil.php') && !is_file($web . '/evil.php'), $r['body']);
+$countBefore = (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn();
+$r = $ru($own, $kPage);
+check('a good kit file installs like one from the library', !empty($r['json']['success']) && (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $countBefore + 1, $r['body']);
+check('the library code answers 404 when opened directly', $own->req('GET', '/canvascore-admin/library.php', null, [], false)['code'] === 404);
+
+echo "\nINTEGRATIONS (over HTTP)\n";
+$wl = function ($url) { return ['name' => 'x', 'url' => $url, 'enabled' => true, 'forms' => 'all']; };
+foreach (['https://127.0.0.1/hook', 'https://localhost/hook', 'https://10.1.2.3/hook', 'https://169.254.169.254/latest/meta-data', 'http://example.com/hook', 'ftp://example.com/x', 'https://u:p@example.com/x'] as $u) {
+    $r = $own->api('integrations_save', ['section' => 'webhooks', 'data' => [$wl($u)]]);
+    check("a webhook to $u is refused (https and public only)", empty($r['json']['success']), $r['body']);
+}
+check('nobody signed out can open the integrations', (new Client())->api('integrations_get')['code'] === 401 && (new Client())->api('integrations_payment_links')['code'] === 401);
+check('an editor cannot read or change them, or make payment links', strpos((string)($ed->api('integrations_get')['json']['message'] ?? ''), 'Only admins') !== false && strpos((string)($ed->api('integrations_save', ['section' => 'analytics', 'data' => ['provider' => 'ga4', 'ga4_id' => 'G-ABCD1234']])['json']['message'] ?? ''), 'Only admins') !== false && strpos((string)($ed->api('stripe_link_create', ['name' => 'x', 'amount' => '5', 'currency' => 'eur'])['json']['message'] ?? ''), 'Only admins') !== false);
+check('…but every signed-in user can read the list of payment links (the block panel needs it)', !empty($ed->api('integrations_payment_links')['json']['success']));
+// a fake Mailchimp, Brevo, Stripe and webhook receiver served by the test server, and the installation pointed at them
+@mkdir($web . '/fake');
+file_put_contents($web . '/fake/api.php', <<<'PHPCODE'
+<?php
+$path = $_SERVER['PATH_INFO'] ?? ''; $body = file_get_contents('php://input');
+file_put_contents(__DIR__ . '/log.jsonl', json_encode(['m' => $_SERVER['REQUEST_METHOD'], 'p' => $path, 'b' => $body, 'h' => getallheaders()]) . "\n", FILE_APPEND | LOCK_EX);
+header('Content-Type: application/json');
+if ($path === '/hookfail') { http_response_code(500); echo '{}'; exit; }
+if ($path === '/stripe/v1/products') { echo json_encode(['id' => 'prod_fake1']); exit; }
+if ($path === '/stripe/v1/prices') { echo json_encode(['id' => 'price_fake1']); exit; }
+if ($path === '/stripe/v1/payment_links') { echo json_encode(['id' => 'plink_fakelink123', 'url' => 'https://buy.stripe.com/test_fake12345']); exit; }
+if (strpos($path, '/stripe/v1/payment_links/') === 0) { echo json_encode(['id' => 'plink_fakelink123', 'active' => false]); exit; }
+if (preg_match('#^/mailchimp/3.0/lists/[a-f0-9]+$#', $path)) { echo json_encode(['name' => 'Fake audience']); exit; }
+if (strpos($path, '/brevo/v3/contacts/lists/') === 0) { echo json_encode(['name' => 'Fake list']); exit; }
+if ($path === '/brevo/v3/contacts') { http_response_code(201); echo json_encode(['id' => 1]); exit; }
+echo '{}';
+PHPCODE
+);
+file_put_contents($admin . '/integrations-source.php', "<?php\nreturn ['mailchimp' => 'http://127.0.0.1:$port/fake/api.php/mailchimp/3.0', 'brevo' => 'http://127.0.0.1:$port/fake/api.php/brevo/v3', 'stripe' => 'http://127.0.0.1:$port/fake/api.php/stripe/v1', 'allow_private' => true];\n");
+$fakeLog = function () use ($web) { $rows = []; foreach (@file($web . '/fake/log.jsonl', FILE_IGNORE_NEW_LINES) ?: [] as $l) $rows[] = json_decode($l, true); return $rows; };
+$waitLog = function ($pred, $secs = 6) use ($fakeLog) { $end = microtime(true) + $secs; do { $hit = array_values(array_filter($fakeLog(), $pred)); if ($hit) return $hit; usleep(150000); } while (microtime(true) < $end); return []; };
+$hookUrl = "http://127.0.0.1:$port/fake/api.php/hook";
+$r = $own->api('integrations_save', ['section' => 'webhooks', 'data' => [['name' => 'Hook', 'url' => $hookUrl, 'enabled' => true, 'forms' => 'all'], ['name' => 'Broken', 'url' => "http://127.0.0.1:$port/fake/api.php/hookfail", 'enabled' => true, 'forms' => 'all']]]);
+$wid = array_keys($r['json']['new_secrets'] ?? []); $secret1 = ($r['json']['new_secrets'] ?? [])[$wid[0] ?? ''] ?? '';
+check('an admin saves webhooks; the secret of each new one is returned this once', !empty($r['json']['success']) && count($wid) === 2 && strlen($secret1) === 32, $r['body']);
+$mcKey = str_repeat('ab12', 8) . '-us21'; $bvKey = 'xkeysib-' . str_repeat('cd', 24); $skKey = 'sk_test_' . str_repeat('Zz9', 12);
+$own->api('integrations_save', ['section' => 'mailchimp', 'data' => ['enabled' => true, 'api_key' => $mcKey, 'list_id' => 'ab12cd34ef', 'forms' => 'newsletter']]);
+$own->api('integrations_save', ['section' => 'brevo', 'data' => ['enabled' => true, 'api_key' => $bvKey, 'list_id' => '7', 'forms' => 'newsletter']]);
+$own->api('integrations_save', ['section' => 'stripe_key', 'data' => ['api_key' => $skKey]]);
+$g = $own->api('integrations_get');
+check('what the admin gets back holds no key and no secret: only hints', !empty($g['json']['success']) && strpos($g['body'], $mcKey) === false && strpos($g['body'], $bvKey) === false && strpos($g['body'], $skKey) === false && strpos($g['body'], $secret1) === false && ($g['json']['config']['mailchimp']['has_key'] ?? false) === true && ($g['json']['config']['stripe']['mode'] ?? '') === 'test', $g['body']);
+check('the keys are stored in the data folder only, readable by the web user only; settings.json has none', is_file($data . '/integrations.json') && (fileperms($data . '/integrations.json') & 0777) === 0600 && strpos((string)@file_get_contents($data . '/settings.json'), $mcKey) === false && strpos(json_encode($own->api('get_settings')['json'] ?? []), $mcKey) === false);
+check('a key that does not look like one is not saved', strpos(json_encode($own->api('integrations_save', ['section' => 'stripe_key', 'data' => ['api_key' => 'pk_test_notasecret']])['json'] ?? []), 'not a Stripe') !== false);
+$r = $own->api('integrations_test', ['kind' => 'webhook', 'id' => $wid[0]]);
+$tl = $waitLog(function ($x) { return $x['p'] === '/hook' && strpos($x['b'], 'webhook.test') !== false; });
+$hh = array_change_key_case($tl[0]['h'] ?? [], CASE_LOWER);
+check('"send a test" posts a sample the receiver can verify: the signature is HMAC-SHA256 of "<timestamp>.<body>" with the secret', !empty($r['json']['success']) && !empty($tl) && ($hh['x-canvascore-signature'] ?? '') === 'sha256=' . hash_hmac('sha256', ($hh['x-canvascore-timestamp'] ?? '') . '.' . $tl[0]['b'], $secret1) && ($hh['x-canvascore-event'] ?? '') === 'webhook.test', $r['body'] . json_encode($tl));
+check('"test the connection" reaches the list of each service', ($own->api('integrations_test', ['kind' => 'mailchimp'])['json']['message'] ?? '') === 'Connected to the audience “Fake audience”.' && ($own->api('integrations_test', ['kind' => 'brevo'])['json']['message'] ?? '') === 'Connected to the list “Fake list”.');
+$mcCall = $waitLog(function ($x) { return strpos($x['p'], '/mailchimp/3.0/lists/ab12cd34ef') === 0 && $x['m'] === 'GET'; });
+check('…with the key sent the way each service wants (Basic auth for Mailchimp, an api-key header for Brevo)', strpos(array_change_key_case($mcCall[0]['h'] ?? [], CASE_LOWER)['authorization'] ?? '', 'Basic ') === 0 && !empty($waitLog(function ($x) use ($bvKey) { return strpos($x['p'], '/brevo/v3/contacts/lists/7') === 0 && (array_change_key_case($x['h'], CASE_LOWER)['api-key'] ?? '') === $bvKey; })));
+// forms: a Newsletter block and a contact form, published
+$own->api('save_page', ['id' => 'int-forms', 'title' => 'Forms', 'slug' => 'int-forms', 'publish' => true, 'blocks' => [
+    ['id' => 'nl', 'type' => 'NEWSLETTER', 'content' => ['title' => 'Join', 'customId' => 'int-news']],
+    ['id' => 'ct', 'type' => 'FORM', 'content' => ['customId' => 'int-contact', 'fields' => [['label' => 'Name', 'type' => 'text'], ['label' => 'Email', 'type' => 'email'], ['label' => 'Message', 'type' => 'textarea']]]]]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$reg = json_decode((string)@file_get_contents($data . '/forms.json'), true) ?: [];
+check('the publish writes what each form is and where its email, name and consent fields are', ($reg['f_int-news']['type'] ?? '') === 'newsletter' && ($reg['f_int-news']['meta'] ?? null) === ['email' => 0] && ($reg['f_int-contact']['type'] ?? '') === 'form' && ($reg['f_int-contact']['meta'] ?? null) === ['name' => 0, 'email' => 1], json_encode($reg));
+$post = function ($fields) { return (new Client())->req('POST', '/canvascore-admin/submit_form.php', http_build_query($fields), ['Content-Type: application/x-www-form-urlencoded'], false); };
+$before = count($fakeLog());
+$t0 = microtime(true);
+$r = $post(['_form' => 'f_int-news', 'field_0' => 'Visitor@Example.com']);
+$answered = microtime(true) - $t0;
+check('a newsletter signup is answered normally (the visitor sees the usual message), even though one webhook is down', $r['code'] === 200 && strpos($r['body'], 'your message was received') !== false && $answered < 4, $answered . ' ' . $r['body']);
+$hookHit = $waitLog(function ($x) { return $x['p'] === '/hook' && strpos($x['b'], 'form.submitted') !== false; });
+$hb = json_decode($hookHit[0]['b'] ?? '{}', true); $hh = array_change_key_case($hookHit[0]['h'] ?? [], CASE_LOWER);
+check('the webhook gets the submission: event, form, fields and a verifiable signature', ($hb['event'] ?? '') === 'form.submitted' && ($hb['form']['id'] ?? '') === 'f_int-news' && ($hb['form']['type'] ?? '') === 'newsletter' && ($hb['submission']['fields']['Email'] ?? '') === 'Visitor@Example.com' && ($hb['submission']['id'] ?? 0) > 0 && ($hh['x-canvascore-signature'] ?? '') === 'sha256=' . hash_hmac('sha256', ($hh['x-canvascore-timestamp'] ?? '') . '.' . $hookHit[0]['b'], $secret1), json_encode($hookHit));
+$mcPut = $waitLog(function ($x) { return $x['m'] === 'PUT' && strpos($x['p'], '/mailchimp/3.0/lists/ab12cd34ef/members/' . md5('visitor@example.com')) === 0; });
+$bvPost = $waitLog(function ($x) { return $x['m'] === 'POST' && $x['p'] === '/brevo/v3/contacts'; });
+check('the email is added to Mailchimp (the member of the lower-case address, subscribed) and to Brevo (its list, updating an existing contact)', json_decode($mcPut[0]['b'] ?? '{}', true)['status_if_new'] === 'subscribed' && json_decode($bvPost[0]['b'] ?? '{}', true)['listIds'] === [7] && json_decode($bvPost[0]['b'] ?? '{}', true)['email'] === 'Visitor@Example.com', json_encode([$mcPut, $bvPost]));
+$subs = (int)db()->query("SELECT COUNT(*) FROM form_submissions WHERE form_id = 'f_int-news'")->fetchColumn();
+check('the submission is stored as before', $subs === 1);
+$lg = $own->api('integrations_get')['json']['log'] ?? [];
+$failed = array_values(array_filter($lg, function ($l) { return $l['status'] === 'failed' && $l['kind'] === 'webhook'; }));
+check('the broken webhook shows in Activity as failed, with the reason, and can be sent again', count($failed) === 1 && $failed[0]['can_resend'] === true && strpos($failed[0]['detail'], '500') !== false && count(array_filter($lg, function ($l) { return $l['status'] === 'ok' && $l['kind'] === 'newsletter'; })) === 2, json_encode($lg));
+$r = $own->api('integrations_resend', ['id' => $failed[0]['id']]);
+check('…sending it again reports that it still fails', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'again') !== false, $r['body']);
+$n1 = count($fakeLog());
+$r = $post(['_form' => 'f_int-contact', 'field_0' => 'Dee', 'field_1' => 'dee@example.com', 'field_2' => 'Hello']);
+$ct = $waitLog(function ($x) { return $x['p'] === '/hook' && strpos($x['b'], 'f_int-contact') !== false; });
+usleep(600000);
+$after = array_slice($fakeLog(), $n1);
+check('a contact form goes to the webhooks (all forms) but is not a signup: nobody is added to Mailchimp or Brevo', $r['code'] === 200 && !empty($ct) && count(array_filter($after, function ($x) { return strpos($x['p'], '/mailchimp/') === 0 || strpos($x['p'], '/brevo/') === 0; })) === 0);
+$n2 = count($fakeLog());
+$post(['_form' => 'f_int-news', 'field_0' => 'bot@example.com', '_hp' => 'gotcha']); usleep(800000);
+check('a robot that fills the hidden field triggers nothing', count($fakeLog()) === $n2);
+$post(['_form' => 'f_int-news', 'field_0' => 'not an email']); usleep(800000);
+check('…and something that is not an email is never sent to a service', count(array_filter(array_slice($fakeLog(), $n2), function ($x) { return strpos($x['p'], '/mailchimp/') === 0 && $x['m'] === 'PUT'; })) === 0);
+// analytics
+$st = $own->api('get_settings')['json'] ?? [];
+$own->api('save_settings', array_merge($st, ['cookieBanner' => ['enabled' => true, 'text' => 'Cookies?']]));
+$own->api('integrations_save', ['section' => 'analytics', 'data' => ['provider' => 'ga4', 'ga4_id' => 'g-abcd1234', 'consent' => true]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pg = (string)@file_get_contents($web . '/int-forms/index.html');
+check('with a cookie banner the Google Analytics snippet is in the head of every page but only runs after Accept', strpos($pg, 'type="text/plain" data-cc-consent async src="https://www.googletagmanager.com/gtag/js?id=G-ABCD1234"') !== false && strpos($pg, "gtag('config','G-ABCD1234')") !== false && strpos($pg, 'id="cc-consent"') !== false && strpos($pg, 'googletagmanager') < strpos($pg, '</head>'));
+$own->api('save_settings', array_merge($st, ['cookieBanner' => ['enabled' => false]]));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pg = (string)@file_get_contents($web . '/int-forms/index.html');
+check('without a banner it is a plain script', strpos($pg, 'googletagmanager.com/gtag/js?id=G-ABCD1234') !== false && strpos($pg, 'data-cc-consent async') === false);
+$bad = $own->api('integrations_save', ['section' => 'analytics', 'data' => ['provider' => 'ga4', 'ga4_id' => "G-AAAA');alert(1);//"]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('an analytics id with code in it is dropped: no snippet, nothing injected', strpos((string)@file_get_contents($web . '/int-forms/index.html'), 'alert(1)') === false && strpos((string)@file_get_contents($web . '/int-forms/index.html'), 'googletagmanager') === false);
+$own->api('integrations_save', ['section' => 'analytics', 'data' => ['provider' => 'none']]);
+// Stripe payment links and the block
+$r = $own->api('stripe_link_create', ['name' => 'Course', 'amount' => '19.90', 'currency' => 'eur']);
+$sp = $waitLog(function ($x) { return $x['p'] === '/stripe/v1/prices'; });
+parse_str($sp[0]['b'] ?? '', $pf);
+check('an admin makes a payment link: product, price (in cents) and link, with the key as a bearer token', !empty($r['json']['success']) && ($r['json']['link']['url'] ?? '') === 'https://buy.stripe.com/test_fake12345' && ($pf['unit_amount'] ?? '') === '1990' && strpos(array_change_key_case($sp[0]['h'] ?? [], CASE_LOWER)['authorization'] ?? '', 'Bearer ' . $skKey) === 0 && strpos($r['body'], $skKey) === false, $r['body']);
+check('…and every signed-in user can pick it for a block (name, price and address only)', ($ed->api('integrations_payment_links')['json']['links'][0]['url'] ?? '') === 'https://buy.stripe.com/test_fake12345' && strpos(json_encode($ed->api('integrations_payment_links')['json']), 'plink_') === false);
+check('a link that is not a Stripe payment link is refused when added by hand', empty($own->api('stripe_link_add', ['name' => 'X', 'url' => 'https://evil.example/pay'])['json']['success']) && !empty($own->api('stripe_link_add', ['name' => 'Hand', 'url' => 'https://buy.stripe.com/abcd1234'])['json']['success']));
+$own->api('save_page', ['id' => 'int-pay', 'title' => 'Pay', 'slug' => 'int-pay', 'publish' => true, 'blocks' => [
+    ['id' => 'p1', 'type' => 'PAYMENT_BUTTON', 'content' => ['link' => 'https://buy.stripe.com/test_fake12345', 'label' => 'Buy <b>now</b>', 'title' => 'Course']],
+    ['id' => 'p2', 'type' => 'PAYMENT_BUTTON', 'content' => ['link' => 'javascript:alert(1)', 'label' => 'Evil']],
+    ['id' => 'p3', 'type' => 'PAYMENT_BUTTON', 'content' => ['link' => 'https://evil.example/https://buy.stripe.com/abcd1234', 'label' => 'Evil2']]]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$pp = (string)@file_get_contents($web . '/int-pay/index.html');
+check('a published Payment Button links to the Stripe page; a link that is not Stripe\'s gives a button with no link at all', strpos($pp, '<a class="cc-pay-btn" href="https://buy.stripe.com/test_fake12345" rel="noopener"') !== false && strpos($pp, 'Buy &lt;b&gt;now&lt;/b&gt;') !== false && substr_count($pp, 'cc-pay-btn') === 1 && strpos($pp, 'javascript:') === false && strpos($pp, 'evil.example') === false);
+$own->api('integrations_save', ['section' => 'webhooks', 'data' => []]);
+@unlink($admin . '/integrations-source.php');
+check('the integrations file answers 404 when opened directly', $own->req('GET', '/canvascore-admin/integrations.php', null, [], false)['code'] === 404);
+
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
 $kp = sodium_crypto_sign_keypair(); $tsk = sodium_crypto_sign_secretkey($kp);
@@ -941,7 +1147,7 @@ $r = $own->api('update_install', ['version' => '9.9.9']);
 check('a signed release installs: downloaded, verified, backed up, swapped and checked', !empty($r['json']['success']) && ($r['json']['to'] ?? '') === '9.9.9' && count($r['json']['steps'] ?? []) >= 7, $r['body']);
 check('…the server now runs the new version, and the session goes on', ($own->api('version')['json']['app'] ?? '') === '9.9.9' && strpos((string)file_get_contents($admin . '/index.html'), 'editor 9.9.9') !== false);
 check('…the content is untouched and the old folder is gone from the site', (int)db()->query("SELECT COUNT(*) FROM pages")->fetchColumn() === $pagesBefore && !$leftovers());
-check('…the site\'s own files in the admin folder are kept', is_file($admin . '/update-source.php') && strpos((string)file_get_contents($admin . '/.htaccess'), 'CanvasCore') !== false);
+check('…the site\'s own files in the admin folder are kept (update-source.php and library-source.php)', is_file($admin . '/update-source.php') && is_file($admin . '/library-source.php') && strpos((string)file_get_contents($admin . '/.htaccess'), 'CanvasCore') !== false);
 check('…the history records it', ($own->api('update_info')['json']['history'][0]['result'] ?? '') === 'updated');
 check('…and checking again finds nothing newer', ($own->api('update_check')['json']['release']['available'] ?? null) === false);
 

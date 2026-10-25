@@ -1,0 +1,131 @@
+{
+  "type": "PAYMENT_BUTTON",
+  "settings": {
+    "link": {
+      "type": "text",
+      "default": "",
+      "pattern": "^https://(buy|donate)\\.stripe\\.com/[A-Za-z0-9_/-]{4,120}(\\?[A-Za-z0-9_=&%.-]{0,200})?$",
+      "label": "Stripe payment link",
+      "control": "widget:paymentLink"
+    },
+    "label": {
+      "type": "text",
+      "default": "Buy now",
+      "fallbackWhenEmpty": true,
+      "label": "Button text",
+      "placeholder": "Buy now"
+    },
+    "priceText": {
+      "type": "text",
+      "default": "",
+      "label": "Price shown above the button (optional)",
+      "placeholder": "€19.00"
+    },
+    "title": {
+      "type": "text",
+      "default": "",
+      "label": "Title (optional)"
+    },
+    "description": {
+      "type": "text",
+      "default": "",
+      "label": "Description (optional, one line per row)",
+      "control": "textarea",
+      "rows": 3
+    },
+    "descHtml": {
+      "type": "text",
+      "key": "description",
+      "default": "",
+      "transform": "lines2br",
+      "hidden": true
+    },
+    "layout": {
+      "type": "enum",
+      "default": "card",
+      "label": "Look",
+      "options": [
+        {
+          "value": "card",
+          "label": "Card"
+        },
+        {
+          "value": "plain",
+          "label": "Button only"
+        }
+      ]
+    },
+    "align": {
+      "type": "enum",
+      "default": "left",
+      "label": "Alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Centered"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ]
+    },
+    "accent": {
+      "type": "color",
+      "default": "",
+      "label": "Button color (empty = brand color)",
+      "placeholder": "Brand color"
+    },
+    "note": {
+      "type": "bool",
+      "default": true,
+      "label": "Show “Secure payment by Stripe”"
+    }
+  },
+  "panel": [
+    {
+      "title": "Payment",
+      "icon": "CreditCard",
+      "open": true,
+      "keys": [
+        "link",
+        "label",
+        "priceText"
+      ],
+      "hint": "Payment links are made or added in Administration › Integrations › Stripe. The visitor pays on Stripe's own page."
+    },
+    {
+      "title": "Content",
+      "icon": "Type",
+      "keys": [
+        "title",
+        "description",
+        "note"
+      ]
+    },
+    {
+      "title": "Look",
+      "icon": "Sliders",
+      "keys": [
+        "layout",
+        "align",
+        "accent"
+      ]
+    }
+  ],
+  "template": [
+    "<div id=\"{{_id}}\" class=\"cc-pay cc-pay-{{layout}}{{_classes}}\" style=\"{{{_style}}} text-align:{{align}};\">",
+    "<div class=\"cc-pay-card\" style=\"display:inline-block; width:100%; max-width:420px; box-sizing:border-box; text-align:{{align}};{{#layout=card}} background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:28px; box-shadow:0 4px 18px rgba(15,23,42,0.06); text-align:left;{{/layout=card}}\">",
+    "{{^title=}}<div class=\"cc-pay-title\" style=\"font-size:20px; font-weight:700; color:#0f172a; margin-bottom:6px;\">{{title}}</div>{{/title=}}",
+    "{{^description=}}<p class=\"cc-pay-desc\" style=\"margin:0 0 14px 0; font-size:15px; line-height:1.55; color:#475569;\">{{{descHtml}}}</p>{{/description=}}",
+    "{{^priceText=}}<div class=\"cc-pay-price\" style=\"font-size:28px; font-weight:800; color:#0f172a; margin:0 0 14px 0;\">{{priceText}}</div>{{/priceText=}}",
+    "{{#link?}}<a class=\"cc-pay-btn\" href=\"{{link}}\" rel=\"noopener\" style=\"display:inline-block; padding:13px 28px; border-radius:8px; background:{{#accent?}}{{accent}}{{/accent?}}{{^accent?}}var(--brand-color, #3b82f6){{/accent?}}; color:#ffffff; font-weight:700; font-size:16px; text-decoration:none;\">{{label}}</a>{{/link?}}",
+    "{{^link?}}{{#_editing}}<span class=\"cc-pay-empty\" style=\"display:inline-block; padding:13px 28px; border-radius:8px; border:2px dashed #94a3b8; color:#64748b; font-size:14px;\">Choose a payment link in the panel</span>{{/_editing}}{{/link?}}",
+    "{{#link?}}{{#note}}<div class=\"cc-pay-note\" style=\"margin-top:10px; font-size:12px; color:#64748b;\">&#128274; Secure payment by Stripe</div>{{/note}}{{/link?}}",
+    "</div></div>\n"
+  ]
+}
