@@ -1490,6 +1490,55 @@ if (strpos($action, 'wp_') === 0) {
 }
 
 // ---------------------------------------------------------------------------
+// Popups (popups.php): blocks shown over the site when a trigger fires, with display rules. Edited in the page editor like a page; everyone signed in
+// can read them (the editor lists them), editors and admins change them (authors and reviewers cannot: CC_CONTRIBUTOR_DENIED).
+// ---------------------------------------------------------------------------
+if (in_array($action, ['get_popups', 'get_popup', 'save_popup', 'delete_popup'], true)) {
+    require_once __DIR__ . '/popups.php';
+    if ($action === 'get_popups') {
+        $rows = $pdo->query("SELECT id, name, status, content_json, settings_json, updated_at, created_by FROM popups ORDER BY created_at, id")->fetchAll(PDO::FETCH_ASSOC);
+        $out = [];
+        foreach ($rows as $r) { $b = json_decode((string)$r['content_json'], true); $out[] = ['id' => $r['id'], 'name' => $r['name'], 'status' => $r['status'], 'blocks' => is_array($b) ? count($b) : 0, 'settings' => cc_popup_row_settings($r), 'updated_at' => $r['updated_at'], 'created_by' => $r['created_by']]; }
+        echo json_encode($out); exit;
+    }
+    if ($action === 'get_popup') {
+        $st = $pdo->prepare("SELECT * FROM popups WHERE id = ?"); $st->execute([cc_popup_id($_GET['id'] ?? '')]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$r) { echo json_encode(null); exit; }
+        $content = (string)$r['content_json'];
+        if (!$is_admin) $content = cc_redact_content_json($content);
+        echo json_encode(['id' => $r['id'], 'name' => $r['name'], 'status' => $r['status'], 'content_json' => $content, 'settings' => cc_popup_row_settings($r), 'updated_at' => $r['updated_at']]); exit;
+    }
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') { echo json_encode(['success' => false, 'message' => 'Not found.']); exit; }
+    if (cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'Popups cannot be changed in the demo.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    if ($action === 'delete_popup') {
+        $pdo->prepare("DELETE FROM popups WHERE id = ?")->execute([cc_popup_id($d['id'] ?? '')]);
+        echo json_encode(['success' => true]); exit;
+    }
+    // save_popup
+    $id = cc_popup_id($d['id'] ?? '');
+    $prev = null;
+    if ($id !== '') { $st = $pdo->prepare("SELECT content_json FROM popups WHERE id = ?"); $st->execute([$id]); $prev = $st->fetchColumn(); }
+    if ($prev === false || $prev === null) {
+        if ((int)$pdo->query("SELECT COUNT(*) FROM popups")->fetchColumn() >= CC_POP_MAX) { echo json_encode(['success' => false, 'message' => 'A site can have ' . CC_POP_MAX . ' popups at most.']); exit; }
+        if ($id === '') $id = cc_popup_new_id();
+    }
+    $name = trim(mb_substr(preg_replace('/[\x00-\x1f\x7f<>]/u', ' ', (string)($d['name'] ?? '')), 0, 100)) ?: 'Untitled popup';
+    $status = ($d['status'] ?? '') === 'published' ? 'published' : 'draft';
+    $blocks = isset($d['blocks']) && is_array($d['blocks']) ? array_values($d['blocks']) : [];
+    if (!$is_admin) cc_keep_code_surfaces($blocks, is_string($prev) ? $prev : '[]');
+    cc_sanitize_blocks($blocks);
+    if ($status === 'published' && !$blocks) { echo json_encode(['success' => false, 'code' => 'empty', 'message' => 'A popup needs some content before it is published: add a block.']); exit; }
+    $settings = cc_popup_settings_clean($d['settings'] ?? []);
+    $now = date('Y-m-d H:i:s');
+    $pdo->prepare("INSERT INTO popups (id, name, status, content_json, settings_json, content_schema, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(id) DO UPDATE SET name = excluded.name, status = excluded.status, content_json = excluded.content_json, settings_json = excluded.settings_json, content_schema = excluded.content_schema, updated_at = excluded.updated_at")
+        ->execute([$id, $name, $status, json_encode($blocks), json_encode($settings), cc_version()['content_schema'], $username, $now, $now]);
+    echo json_encode(['success' => true, 'id' => $id, 'status' => $status, 'message' => $status === 'published' ? 'Popup published. Publish the site to put it on the pages.' : 'Popup saved.']); exit;
+}
+
+// ---------------------------------------------------------------------------
 // Integrations (integrations.php): webhooks, newsletter services, analytics and Stripe payment links. Admins only (they hold keys);
 // the keys are never sent back, only masked. The list of payment links is the one thing every signed-in user may read.
 // ---------------------------------------------------------------------------

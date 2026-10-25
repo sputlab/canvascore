@@ -117,6 +117,15 @@ export default function VisualEditor() {
         return data;
       } catch { notify('Error saving the design.', 'error'); return null; }
     }
+    // A popup: saved to its own table; "published" means it goes on the pages at the next publish of the site
+    if (activePage.__popup) {
+      try {
+        const res = await fetch('api.php?action=save_popup', { method: 'POST', body: JSON.stringify({ id: activePage.id, name: activePage.title, status: publish ? 'published' : (activePage.status || 'draft'), blocks, settings: activePage.settings || {} }) });
+        const data = await res.json();
+        if (data.success) updateActivePage({ id: data.id, status: data.status });
+        return data;
+      } catch { notify('Error saving the popup.', 'error'); return null; }
+    }
     // Collection item: saved to collection_items
     if (activePage.__item) {
       try {
@@ -245,7 +254,7 @@ export default function VisualEditor() {
   useEffect(() => { saveDraftRef.current = isEditingMaster ? null : saveDraft; });
 
   // Review: an author submits their work (it is saved first, so the reviewer sees what was written); a reviewer approves by publishing
-  const real = !activePage?.__part && !activePage?.__design && !isEditingMaster;
+  const real = !activePage?.__part && !activePage?.__design && !activePage?.__popup && !isEditingMaster;
   const review = reviewOf(activePage);
   const pendingReview = review.state === 'pending';
   const directPublish = canPublishDirect(userRole);
@@ -270,7 +279,7 @@ export default function VisualEditor() {
   const leave = async () => {
     if (useStore.getState().editorDirty && !(await confirmDialog({ title: 'Leave with unsaved changes?', message: 'They stay backed up on this device and will be offered next time you open the page, but they are NOT saved to the site.', confirmLabel: 'Leave anyway', cancelLabel: 'Stay' }))) return;
     setSelectedBlockId(null);
-    setView(activePage?.__item || activePage?.__design ? 'collections' : activePage?.__part ? 'settings' : 'manager');
+    setView(activePage?.__item || activePage?.__design ? 'collections' : activePage?.__part ? 'settings' : activePage?.__popup ? 'popups' : 'manager');
   };
 
   const parentId = getValidParentId();
@@ -288,10 +297,10 @@ export default function VisualEditor() {
     }).catch(() => {});
     return () => { alive = false; };
   }, [activePage?.__item, activePage?.collection_id]);
-  const liveUrl = livePageUrl(activePage, pages, colSlug);
+  const liveUrl = activePage?.__popup ? null : livePageUrl(activePage, pages, colSlug);
 
-  const kind = activePage?.__part ? (activePage.__part === 'header' ? 'Global header' : 'Global footer') : activePage?.__design ? 'Collection design' : activePage?.__item ? 'Collection item' : null;
-  const backLabel = activePage?.__item || activePage?.__design ? 'Collections' : activePage?.__part ? 'Global Options' : 'Pages';
+  const kind = activePage?.__part ? (activePage.__part === 'header' ? 'Global header' : 'Global footer') : activePage?.__design ? 'Collection design' : activePage?.__item ? 'Collection item' : activePage?.__popup ? 'Popup' : null;
+  const backLabel = activePage?.__item || activePage?.__design ? 'Collections' : activePage?.__part ? 'Global Options' : activePage?.__popup ? 'Popups' : 'Pages';
 
   return (
     <div className="cc-editor">
@@ -326,7 +335,7 @@ export default function VisualEditor() {
             <IconButton icon={ExternalLink} size="sm" disabled={!liveUrl}
               label={liveUrl ? 'View the published page in a new tab (changes not yet published are not shown)' : 'Not published yet: publish it to view it online'}
               onClick={() => { if (liveUrl) window.open(liveUrl, '_blank', 'noopener,noreferrer'); }} />
-            {!activePage?.__part && (
+            {!activePage?.__part && !activePage?.__popup && (
               <IconButton icon={History} label="Version history" size="sm" onClick={() => setHistoryOpen(true)} />
             )}
             {activePage?.is_draft_copy == 1 && (

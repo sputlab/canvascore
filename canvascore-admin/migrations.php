@@ -242,6 +242,15 @@ function cc_db_migrations() {
             $pdo->exec("UPDATE pages SET created_by = author WHERE created_by = '' AND author IS NOT NULL");
             cc_add_col($pdo, 'collections', 'access_json', "TEXT DEFAULT '{}'");
         },
+
+        // v16 — popups: blocks shown over the site when a trigger fires (time, scroll, exit intent, a click), with the rules that decide where,
+        // to whom and how often (settings_json)
+        16 => function ($pdo) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS popups (
+                id TEXT PRIMARY KEY, name TEXT DEFAULT '', status TEXT DEFAULT 'draft', content_json TEXT DEFAULT '[]', settings_json TEXT DEFAULT '{}',
+                content_schema INTEGER DEFAULT 1, created_by TEXT DEFAULT '', created_at TEXT DEFAULT '', updated_at TEXT DEFAULT ''
+            )");
+        },
     ];
 }
 

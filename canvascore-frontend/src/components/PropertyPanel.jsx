@@ -120,7 +120,7 @@ export default function PropertyPanel() {
   };
 
   if (!selectedBlock) {
-    return <PageSettings ctx={{ activePage, updateActivePage, pages, collections, coverInputRef }} />;
+    return <PageSettings ctx={{ activePage, updateActivePage, pages, collections, coverInputRef, blocks }} />;
   }
 
   const info = blockInfo(selectedBlock.type);

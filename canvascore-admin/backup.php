@@ -18,7 +18,7 @@ require_once __DIR__ . '/media.php';   // cc_media_kind(), cc_media_sniff()
 
 const CC_BACKUP_FORMAT = 1;
 // Always replaced on restore (the site's content)
-const CC_BACKUP_TABLES = ['pages', 'templates', 'master_components', 'site_parts', 'collections', 'collection_items', 'redirects', 'collection_taxonomies', 'collection_terms'];
+const CC_BACKUP_TABLES = ['pages', 'templates', 'master_components', 'site_parts', 'collections', 'collection_items', 'redirects', 'collection_taxonomies', 'collection_terms', 'popups'];
 // Optional: replaced only when the backup contains them
 const CC_BACKUP_OPTIONAL_TABLES = ['page_revisions' => 'history', 'form_submissions' => 'submissions'];
 const CC_BACKUP_DATA_FILES = ['settings.json', 'menu.json', 'media.json', 'media-folders.json'];

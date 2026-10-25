@@ -94,6 +94,8 @@ export default function Canvas() {
   // What the canvas shows here: the design of a collection, or an item built from it (read-only layout)
   const banner = pageMode && pageMode.__design
     ? 'The design of this collection: every item page is built from these blocks. Type {{field:key}} to show a field of each item, or {{item:title}} for its title. Publish the site to update the items.'
+    : pageMode && pageMode.__popup
+      ? 'You are editing a popup: these blocks appear in a window over your pages when its trigger fires. Use “Preview the popup” in the panel to see it as visitors will, and set when it appears there too.'
     : pageMode && pageMode.__locked
       ? 'This item is built from its collection\'s design, so its layout is read-only here. Change the layout in Collections › Design; the fields and settings of the item are edited in the panel.'
       : null;

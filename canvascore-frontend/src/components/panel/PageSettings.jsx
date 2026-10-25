@@ -7,11 +7,13 @@ import { slugify, slugOwner, uniqueSlug } from '../../utils/slug';
 import ItemFieldsSection from './ItemFieldsSection';
 import ItemTermsSection from './ItemTermsSection';
 import ScheduleSection from './ScheduleSection';
+import PopupSettings from './PopupSettings';
 
 // Page settings, shown when no block is selected: page info, URL, structure, SEO (and item fields for collection items).
 export default function PageSettings({ ctx }) {
   const { activePage, updateActivePage, pages, collections, coverInputRef } = ctx;
   const [sharePicker, setSharePicker] = useState(false);
+  if (activePage?.__popup) return <PopupSettings ctx={ctx} />;   // a popup has its own settings (look, triggers, display rules)
   // Hide the draft suffix from the user in the UI to avoid confusion
   const displaySlug = activePage?.slug || '';
   // Pages and collections share the top-level URLs (collection items are checked by the server)

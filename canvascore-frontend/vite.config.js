@@ -12,6 +12,8 @@ const version = readJson('../canvascore-admin/version.json', { app: '0.0.0', bui
 const blockDefs = readJson('../canvascore-admin/blocks.json', { _baseStyles: {}, types: {} })
 // Block effects CSS (same file the published pages inline), for the editor canvas
 let effectsCss = ''
+let popupsCss = ''
+try { popupsCss = readFileSync(fileURLToPath(new URL('../canvascore-admin/popups.css', import.meta.url)), 'utf-8') } catch { /* optional */ }
 try { effectsCss = readFileSync(fileURLToPath(new URL('../canvascore-admin/effects.css', import.meta.url)), 'utf-8') } catch { /* optional */ }
 
 // Content Security Policy of the built editor (index.html): scripts only from the editor's own files, so nothing
@@ -45,5 +47,6 @@ export default defineConfig({
     __APP_BUILD__: JSON.stringify(version.build || 0),
     __BLOCK_DEFS__: JSON.stringify(blockDefs),
     __EFFECTS_CSS__: JSON.stringify(effectsCss),
+    __POPUPS_CSS__: JSON.stringify(popupsCss),
   },
 })

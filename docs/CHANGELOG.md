@@ -10,6 +10,25 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **Popups** (Content › **Popups**, admins and editors): windows that open over the site, built from blocks like a page in the editor, with
+  their own settings panel.
+  - **Look**: a centred dialog (with a dimming overlay) or a slide-in in a corner or a bar across the top or bottom; width, animation (fade, slide,
+    zoom, none), background, rounded corners, spacing, a close button, closing by a click outside or by Esc. *Preview the popup* shows it as visitors
+    will see it. Starters: blank, newsletter, offer.
+  - **Triggers**: after some seconds, when the visitor has scrolled a percentage of the page, **exit intent** (the mouse leaves through the top of the
+    window: mouse devices only) and a **click on a link** to it (`#popup-<id>`, which opens it whatever the rules say). The first that happens shows it;
+    one popup at a time, the lower priority number first; it waits while the cookie banner is on screen.
+  - **Display rules**: where (everywhere, only chosen pages and collections, or everywhere except them: decided when the site is published, so a popup
+    is simply absent from the other pages), devices (computers, tablets, phones), new or returning visitors, a schedule (from and until a date), and
+    how often (every time, once per visit, again after N days, once). A popup whose form was sent does not come back. What it remembers stays in the
+    visitor's own browser (`localStorage`).
+  - Published popups are written into the pages they apply to at the next **Publish Site** (a page with none gets nothing); drafts are never published.
+    Forms in a popup work like any form (stored, mailed, sent to webhooks and newsletter services). A popup carries no code of its own: Custom HTML,
+    form emails and custom CSS/JS follow the same rules as in a page (an editor cannot add code), rich text is sanitized, and every setting is checked
+    by the server. Authors and reviewers can read popups but not change them.
+  - Migration 16 adds the `popups` table (included in site backups).
+
 ## [0.24.0] - 2026-10-25 — Template library and integrations
 
 ### Added
