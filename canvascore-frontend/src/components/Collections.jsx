@@ -10,6 +10,8 @@ import { starterBlocks } from '../editor/starters';
 import CollectionFields from './CollectionFields';
 import CollectionTaxonomies from './CollectionTaxonomies';
 import CollectionArchives from './CollectionArchives';
+import CollectionAccess from './CollectionAccess';
+import { canCreate, canManageSite, reviewOf, REVIEW_LABEL } from '../session/permissions';
 
 // An item's custom field values as an object (the server keeps them as JSON text)
 const parseFieldValues = (raw) => {
@@ -18,7 +20,10 @@ const parseFieldValues = (raw) => {
 };
 
 export default function Collections() {
-  const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync, activePage } = useStore();
+  const { setView, userRole, setActivePage, setBlocks, setSelectedBlockId, publishSiteAsync, activePage, setPendingItem } = useStore();
+  const mayCreate = canCreate(userRole);
+  const manage = canManageSite(userRole);   // bulk actions, archiving, deleting any item
+  const mayDelete = (it) => manage || (userRole === 'author' && it.status !== 'published');
   const [collections, setCollections] = useState([]);
   const [loadState, setLoadState] = useState('loading'); // loading | ready | error (never "empty" while still loading)
   const [active, setActive] = useState(null); // selected collection
@@ -53,11 +58,6 @@ export default function Collections() {
   };
   // Choosing a collection: the previous items go away at once, then the new ones load
   const choose = (c) => { activeRef.current = c ? c.id : null; setItems([]); setSelected(new Set()); setLastClicked(null); setMoveTo(''); setActive(c); if (c) loadItems(c.id); };
-  // Coming back from editing an item: reopen its collection
-  useEffect(() => {
-    const backTo = activePage && activePage.__item ? activePage.collection_id : null;
-    loadCollections().then((list) => { if (list && backTo) { const c = list.find((x) => x.id === backTo); if (c) choose(c); } });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createCollection = async (e) => {
     if (e) e.preventDefault();
@@ -115,13 +115,13 @@ export default function Collections() {
     setSelectedBlockId(null);
     setView('editor');
   };
-  const editItem = async (item, starter = null) => {
-    let full = { id: item?.id, collection_id: active.id, title: 'New Item', slug: 'new-item', excerpt: '', cover_image: '', date: new Date().toISOString().slice(0, 10), status: 'draft', archived: 0, seo_title: '', seo_description: '', blocks: starter ? starterBlocks(starter) : [] };
+  const editItem = async (item, starter = null, col = active) => {
+    let full = { id: item?.id, collection_id: col.id, title: 'New Item', slug: 'new-item', excerpt: '', cover_image: '', date: new Date().toISOString().slice(0, 10), status: 'draft', archived: 0, seo_title: '', seo_description: '', blocks: starter ? starterBlocks(starter) : [] };
     if (item) {
       try {
         const res = await fetch('api.php?action=get_item&id=' + encodeURIComponent(item.id));
         const data = await res.json();
-        if (!data || !data.id) { notify('This item no longer exists (deleted elsewhere?).', 'error'); loadItems(active.id); return; }
+        if (!data || !data.id) { notify('This item no longer exists (deleted elsewhere?).', 'error'); loadItems(col.id); return; }
         let blocks = [];
         try { blocks = JSON.parse(data.content_json || '[]'); } catch { blocks = []; }
         full = { ...data, blocks, field_values: parseFieldValues(data.field_values), terms: parseFieldValues(data.terms_json) };
@@ -129,39 +129,53 @@ export default function Collections() {
     }
     // the collection's categories and tags, for the item's settings
     let taxes = [];
-    try { taxes = await (await fetch('api.php?action=get_taxonomies&collection=' + encodeURIComponent(active.id))).json(); } catch { taxes = []; }
+    try { taxes = await (await fetch('api.php?action=get_taxonomies&collection=' + encodeURIComponent(col.id))).json(); } catch { taxes = []; }
     if (!Array.isArray(taxes)) taxes = [];
     // open the block editor on the item's content
     setActivePage({
       id: full.id || ('item_' + Date.now()),
-      __item: true, collection_id: active.id,
+      __item: true, collection_id: col.id,
       title: full.title, slug: full.slug, excerpt: full.excerpt, cover_image: full.cover_image,
       date: full.date, status: full.status === 'published' ? 'published' : 'draft',
       archived: Number(full.archived) ? 1 : 0,
       seo_title: full.seo_title || '', seo_description: full.seo_description || '',
       // the custom fields: their definitions (for the inputs and the Item Field block) and this item's values
-      __fieldDefs: active.fields || [], field_values: full.field_values || {},
+      __fieldDefs: col.fields || [], field_values: full.field_values || {},
       // categories and tags: the collection's taxonomies, and the terms this item has (taxonomy id => term ids)
       __taxonomies: taxes, terms: full.terms || {},
       // scheduled publishing of the item
       publish_at: full.publish_at || '', unpublish_at: full.unpublish_at || '',
+      // who made it and where it is in the review (the editor's top bar)
+      created_by: full.created_by || '', review_state: full.review_state || '', review_note: full.review_note || '', review_by: full.review_by || '', review_at: full.review_at || '',
       layout: 'full', bg_color: '#ffffff', boxed_width: '1100px',
     });
     // With a design, the item's page is the design: its blocks come from the design and stay as they are (read-only)
     let blocks = Array.isArray(full.blocks) ? full.blocks : [];
     let locked = false;
-    if (active.has_design) {
+    if (col.has_design) {
       try {
-        const d = await (await fetch('api.php?action=get_collection_design&collection=' + encodeURIComponent(active.id))).json();
+        const d = await (await fetch('api.php?action=get_collection_design&collection=' + encodeURIComponent(col.id))).json();
         blocks = Array.isArray(d.blocks) ? d.blocks : [];
         locked = blocks.length > 0;
       } catch { notify('Could not open the item (connection problem).', 'error'); return; }
     }
-    setActivePage({ ...useStore.getState().activePage, __locked: locked, __collectionSlug: active.slug });
+    setActivePage({ ...useStore.getState().activePage, __locked: locked, __collectionSlug: col.slug });
     setBlocks(blocks);
     setSelectedBlockId(null);
     setView('editor');
   };
+  // Coming back from editing an item: reopen its collection
+  useEffect(() => {
+    const pend = useStore.getState().pendingItem;   // the Reviews page asked for an item
+    const backTo = pend ? pend.collection_id : (activePage && activePage.__item ? activePage.collection_id : null);
+    loadCollections().then((list) => {
+      if (!list || !backTo) return;
+      const c = list.find((x) => x.id === backTo);
+      if (!c) return;
+      choose(c);
+      if (pend) { setPendingItem(null); editItem({ id: pend.id }, null, c); }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Bulk actions (also used for a single item): move, archive, unarchive, delete
   const runBulk = async (op, ids, extra = {}) => {
     setBulkBusy(true);
@@ -247,7 +261,12 @@ export default function Collections() {
     loadItems(active.id); loadCollections();
   };
 
-  const statusBadge = (it) => (Number(it.archived) ? <Badge>Archived</Badge> : <StatusBadge status={it.status} />);
+  const statusBadge = (it) => (Number(it.archived) ? <Badge>Archived</Badge> : (
+    <>
+      <StatusBadge status={it.status} />
+      {reviewOf(it).state && <span style={{ marginLeft: 6 }} data-testid="item-review"><Badge tone={it.review_state === 'pending' ? 'draft' : 'neutral'}>{REVIEW_LABEL[it.review_state]}</Badge></span>}
+    </>
+  ));
   const others = collections.filter((c) => c.id !== active?.id);
   return (
     <>
@@ -328,7 +347,7 @@ export default function Collections() {
                 <span className="ui-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
                   {userRole === 'admin' && <Button size="sm" icon={Pencil} onClick={() => startRename(active)}>Rename</Button>}
                   {userRole === 'admin' && <Button size="sm" icon={LayoutTemplate} onClick={() => openDesign(active)} title={active.has_design ? 'Edit the design every item page is built from' : 'Design the item pages of this collection'}>{active.has_design ? 'Design' : 'Make the design'}</Button>}
-                  <Button variant="primary" size="sm" icon={Plus} onClick={() => setPicking(true)}>New Item</Button>
+                  {mayCreate && <Button variant="primary" size="sm" icon={Plus} onClick={() => setPicking(true)}>New Item</Button>}
                 </span>
               </div>
 
@@ -336,8 +355,9 @@ export default function Collections() {
                 onSaved={() => loadCollections().then((d) => { if (Array.isArray(d)) { const c = d.find((x) => x.id === active.id); if (c) setActive(c); } })} />
               <CollectionTaxonomies key={`tax-${active.id}`} collection={active} canEdit={userRole === 'admin'} onSaved={() => loadCollections()} />
               <CollectionArchives key={`arc-${active.id}`} collection={active} canEdit={userRole === 'admin'} onSaved={() => loadCollections()} />
+              <CollectionAccess key={`acc-${active.id}`} collection={active} canEdit={userRole === 'admin'} onSaved={() => loadCollections().then((d) => { if (Array.isArray(d)) { const c = d.find((x) => x.id === active.id); if (c) setActive(c); } })} />
 
-              {n > 0 && (
+              {n > 0 && manage && (
                 <div className="cc-media-selbar" role="toolbar" aria-label="Selected items" style={{ marginBottom: 12 }}>
                   <CheckSquare size={16} aria-hidden="true" /> <strong>{n} selected</strong>
                   <span style={{ flex: 1 }} />
@@ -360,7 +380,7 @@ export default function Collections() {
               ) : itemsState === 'error' ? (
                 <div><p className="ui-error" style={{ marginBottom: 8 }}>The items could not be loaded.</p><Button size="sm" onClick={() => loadItems(active.id)}>Retry</Button></div>
               ) : items.length === 0 ? (
-                <EmptyState icon={FileText} title="No items yet" action={<Button variant="primary" icon={Plus} onClick={() => setPicking(true)}>Create the first item</Button>} />
+                <EmptyState icon={FileText} title="No items yet" action={mayCreate ? <Button variant="primary" icon={Plus} onClick={() => setPicking(true)}>Create the first item</Button> : null} />
               ) : (
                 <div className="ui-table-wrap">
                   <table className="ui-table cc-col-table">
@@ -377,9 +397,9 @@ export default function Collections() {
                           <td className="cc-col-status">{statusBadge(it)}</td>
                           <td className="ui-cell-actions">
                             <span className="ui-row" style={{ justifyContent: 'flex-end', gap: 4, flexWrap: 'nowrap' }}>
-                              <IconButton icon={Number(it.archived) ? ArchiveRestore : Archive} label={Number(it.archived) ? 'Unarchive' : 'Archive'} size="sm" onClick={() => toggleArchive(it)} disabled={bulkBusy} />
+                              {manage && <IconButton icon={Number(it.archived) ? ArchiveRestore : Archive} label={Number(it.archived) ? 'Unarchive' : 'Archive'} size="sm" onClick={() => toggleArchive(it)} disabled={bulkBusy} />}
                               <IconButton icon={Pencil} label={`Edit ${it.title}`} size="sm" onClick={() => editItem(it)} />
-                              <IconButton icon={Trash2} label={`Delete ${it.title}`} size="sm" onClick={() => removeItem(it)} style={{ color: '#f87171' }} />
+                              {mayDelete(it) && <IconButton icon={Trash2} label={`Delete ${it.title}`} size="sm" onClick={() => removeItem(it)} style={{ color: '#f87171' }} />}
                             </span>
                           </td>
                         </tr>

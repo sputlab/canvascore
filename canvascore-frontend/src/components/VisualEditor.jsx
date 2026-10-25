@@ -12,12 +12,14 @@ import AddBlocksPanel from './AddBlocksPanel';
 import RevisionHistory from './RevisionHistory';
 import {
   ChevronLeft, Monitor, Tablet, Smartphone, Undo2, Redo2, Save, Globe, Layers, PlusCircle, Crown, AlertCircle,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, History, ExternalLink,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, History, ExternalLink, ClipboardCheck,
 } from 'lucide-react';
 import { Button, IconButton, Segmented, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { CONTAINER_TYPES } from '../editor/blockCatalog';
-import { confirmDialog } from '../ui/dialog';
+import { confirmDialog, promptDialog } from '../ui/dialog';
+import ReviewBar from './ReviewBar';
+import { canPublishDirect, canReview, reviewOf } from '../session/permissions';
 import { livePageUrl } from '../editor/liveUrl';
 
 // Remembered per browser: which side panels are open
@@ -29,7 +31,7 @@ export default function VisualEditor() {
     activePage, setView, blocks, addBlock, updateActivePage,
     viewport, setViewport, undo, redo, pastBlocks, futureBlocks,
     fetchTemplates, publishSiteAsync, selectedBlockId, setSelectedBlockId,
-    fetchMasters, isEditingMaster, exitMasterEditMode, setPages,
+    fetchMasters, isEditingMaster, exitMasterEditMode, setPages, userRole, username,
   } = useStore();
 
   const [isPublishing, setIsPublishing] = useState(false);
@@ -130,7 +132,7 @@ export default function VisualEditor() {
           terms: activePage.terms || {}
         }) });
         const data = await res.json();
-        if (data.success && publish) updateActivePage({ status: 'published' });
+        if (data.success && publish) updateActivePage({ status: 'published', review_state: '', review_note: '', review_by: '', review_at: '' });
         return data;
       } catch { notify('Error saving the item.', 'error'); return null; }
     }
@@ -152,7 +154,7 @@ export default function VisualEditor() {
       }
       // If we published a draft copy, the ID goes back to being the parent's
       if (publish && data.new_id) {
-         updateActivePage({ id: data.new_id, is_draft_copy: 0, status: 'published' });
+         updateActivePage({ id: data.new_id, is_draft_copy: 0, status: 'published', review_state: '', review_note: '', review_by: '', review_at: '' });
       }
       return data;
     } catch { notify('Error saving the page.', 'error'); return null; }
@@ -242,6 +244,29 @@ export default function VisualEditor() {
   });
   useEffect(() => { saveDraftRef.current = isEditingMaster ? null : saveDraft; });
 
+  // Review: an author submits their work (it is saved first, so the reviewer sees what was written); a reviewer approves by publishing
+  const real = !activePage?.__part && !activePage?.__design && !isEditingMaster;
+  const review = reviewOf(activePage);
+  const pendingReview = review.state === 'pending';
+  const directPublish = canPublishDirect(userRole);
+  const approving = !directPublish && canReview(userRole) && pendingReview;     // a reviewer: Publish = approve, only for what was submitted
+  const showPublish = directPublish || (real && approving);
+  const locked = userRole === 'author' && pendingReview;                         // it waits for a reviewer: no changes meanwhile
+  const liveUnchanged = activePage?.__item ? activePage.status === 'published' : (activePage?.status === 'published' && Number(activePage?.is_draft_copy) !== 1);
+  const showSubmit = real && userRole !== 'reviewer' && !directPublish && !pendingReview && !liveUnchanged;
+  const submitForReview = async () => {
+    const note = await promptDialog({ title: 'Submit for review', message: 'A reviewer is told this is ready. You cannot change it while it waits (you can withdraw it).', label: 'A note for the reviewer (optional)', required: false, confirmLabel: 'Submit' });
+    if (note === null) return;
+    const saved = await savePage(false);
+    if (!saved || !saved.success) { notify('Not submitted: saving failed' + (saved && saved.message ? ' (' + saved.message + ')' : '') + '.', 'error'); return; }
+    const cur = useStore.getState().activePage;
+    try {
+      const d = await (await fetch('api.php?action=review_submit', { method: 'POST', body: JSON.stringify({ kind: cur.__item ? 'item' : 'page', id: cur.id, note }) })).json();
+      if (d.success) { notify('Submitted for review.'); updateActivePage({ review_state: 'pending', review_note: note, review_by: username, review_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }); }
+      else notify(d.message || 'Not submitted.', 'error');
+    } catch { notify('Not submitted (connection problem).', 'error'); }
+  };
+
   const leave = async () => {
     if (useStore.getState().editorDirty && !(await confirmDialog({ title: 'Leave with unsaved changes?', message: 'They stay backed up on this device and will be offered next time you open the page, but they are NOT saved to the site.', confirmLabel: 'Leave anyway', cancelLabel: 'Stay' }))) return;
     setSelectedBlockId(null);
@@ -307,11 +332,14 @@ export default function VisualEditor() {
             {activePage?.is_draft_copy == 1 && (
               <Button variant="danger" size="sm" icon={AlertCircle} onClick={discardChanges} title="Throw away the draft and go back to the published version"><span className="cc-ed-hide-md">Discard draft</span></Button>
             )}
-            <Button size="sm" icon={Save} onClick={saveDraft} disabled={isSaving || isPublishing} title="Save draft (Ctrl+S)"><span className="cc-ed-hide-sm">{activePage?.__part ? 'Save' : 'Save Draft'}</span></Button>
-            <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title="Publish this page, then update the whole site (menus and lists)">{isPublishing ? 'Publishing…' : 'Publish'}</Button>
+            <Button size="sm" icon={Save} onClick={saveDraft} disabled={isSaving || isPublishing || locked} title={locked ? 'Waiting for review: withdraw the submission to change it' : 'Save draft (Ctrl+S)'}><span className="cc-ed-hide-sm">{activePage?.__part ? 'Save' : 'Save Draft'}</span></Button>
+            {showSubmit && <Button variant="primary" size="sm" icon={ClipboardCheck} onClick={submitForReview} disabled={isSaving || isPublishing}>{review.state === 'changes' ? 'Submit again' : 'Submit for review'}</Button>}
+            {showPublish && <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title={approving ? 'Approve: publish this page and update the whole site' : 'Publish this page, then update the whole site (menus and lists)'}>{isPublishing ? 'Publishing…' : approving ? 'Approve & publish' : 'Publish'}</Button>}
           </div>
         </header>
       )}
+
+      {real && <ReviewBar page={activePage} role={userRole} username={username} onChange={(patch) => updateActivePage(patch)} />}
 
       <div className="cc-ed-body">
         <aside className="cc-ed-left" data-open={panels.left} aria-label="Add blocks and page structure">

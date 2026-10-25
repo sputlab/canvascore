@@ -731,6 +731,127 @@ check('an editor gets the same checks', empty($r['json']['success']));
 $r = $own->api('media_import_url', ['url' => str_repeat('a', 2100)]);
 check('an address that is far too long is refused', empty($r['json']['success']));
 
+echo "\nROLES AND REVIEW (over HTTP)\n";
+$mkUser = function ($name, $role) use ($own) {
+    $own->api('add_user', ['username' => $name, 'password' => 'Temp-pass-1', 'role' => $role]);
+    $c = new Client(); $c->login($name, 'Temp-pass-1');
+    $r = $c->api('change_own_password', ['current' => 'Temp-pass-1', 'password' => 'Real-pass-22']); if (!empty($r['json']['csrf'])) $c->csrf = $r['json']['csrf'];
+    return $c;
+};
+$au1 = $mkUser('rolauth1', 'author'); $au2 = $mkUser('rolauth2', 'author'); $rv = $mkUser('rolrev', 'reviewer'); $ed2 = $mkUser('roledit', 'editor');
+$lg = (new Client())->login('rolauth1', 'Real-pass-22');
+check('the sign-in answer reports the role (author, not "editor")', ($lg['json']['role'] ?? '') === 'author', $lg['body']);
+$users = $own->api('get_users')['json'] ?? [];
+$roles = []; foreach ($users as $u) $roles[$u['username']] = $u['role'];
+check('accounts can be added as author, reviewer or editor', ($roles['rolauth1'] ?? '') === 'author' && ($roles['rolrev'] ?? '') === 'reviewer' && ($roles['roledit'] ?? '') === 'editor');
+$own->api('add_user', ['username' => 'rolweird', 'password' => 'Temp-pass-1', 'role' => 'superuser']);
+$roles = []; foreach (($own->api('get_users')['json'] ?? []) as $u) $roles[$u['username']] = $u['role'] . '#' . $u['id'];
+check('an unknown role becomes editor (never more than that)', strpos($roles['rolweird'] ?? '', 'editor#') === 0);
+$uid = function ($n) use ($roles) { return (int)explode('#', $roles[$n] ?? '0#0')[1]; };
+check('they report their role when signed in', ($au1->api('check_auth')['json']['role'] ?? '') === 'author' && ($rv->api('check_auth')['json']['role'] ?? '') === 'reviewer');
+check('only an admin changes roles', empty($ed2->api('set_role', ['id' => $uid('rolauth2'), 'role' => 'admin'])['json']['success']) && empty($au1->api('set_role', ['id' => $uid('rolauth1'), 'role' => 'admin'])['json']['success']));
+$r = $own->api('set_role', ['id' => $uid('rolweird'), 'role' => 'reviewer']);
+check('an admin can change a role; a nonsense role is refused', !empty($r['json']['success']) && empty($own->api('set_role', ['id' => $uid('rolweird'), 'role' => 'god'])['json']['success']));
+$myId = 0; foreach (($own->api('get_users')['json'] ?? []) as $u) if ($u['role'] === 'admin') $myId = (int)$u['id'];
+check('the last admin cannot be demoted', empty($own->api('set_role', ['id' => $myId, 'role' => 'editor'])['json']['success']));
+
+// pages: ownership and publishing
+$page = function ($id, $title, $extra = []) { return array_merge(['id' => $id, 'title' => $title, 'slug' => $id, 'blocks' => [['id' => 'b1', 'type' => 'TEXT', 'content' => ['text' => '<p>' . $title . '</p>']]]], $extra); };
+$own->api('save_page', $page('role-admin-page', 'Admin page', ['publish' => true]));
+$r = $au1->api('save_page', $page('role-a1', 'Author one page'));
+check('an author creates a page (a draft)', !empty($r['json']['success']), $r['body']);
+$r = $au1->api('save_page', $page('role-a1', 'Author one page', ['publish' => true]));
+check('…but cannot publish it: they are told to submit it for review', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'needs_review', $r['body']);
+$r = $au1->api('save_page', $page('role-admin-page', 'Taken over'));
+check('…nor save over a page that is not theirs', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'forbidden', $r['body']);
+$titles = array_column($au1->api('get_pages')['json'] ?? [], 'title');
+check('an author sees only their own pages', $titles === ['Author one page'], json_encode($titles));
+$au2->api('save_page', $page('role-a2', 'Author two page'));
+check('…another author does not see them', array_column($au2->api('get_pages')['json'] ?? [], 'title') === ['Author two page']);
+check('an editor, a reviewer and an admin see every page', count($rv->api('get_pages')['json'] ?? []) >= 3 && count($ed2->api('get_pages')['json'] ?? []) >= 3);
+check('an author cannot delete or discard what is not theirs', empty($au1->api('delete_page', ['id' => 'role-a2'])['json']['success']) && empty($au1->api('discard_draft', ['id' => 'role-a2'])['json']['success']));
+foreach (['save_settings' => ['siteName' => 'x'], 'save_menu' => ['items' => []], 'save_template' => ['name' => 't', 'blocks' => []], 'save_master' => ['name' => 'm', 'blocks' => []], 'save_part' => ['name' => 'header', 'blocks' => []], 'delete_media' => ['name' => 'x.png'], 'media_folder_create' => ['path' => 'Nope'], 'bulk_items' => ['op' => 'delete', 'ids' => ['x']], 'set_schedule' => ['kind' => 'page', 'id' => 'role-a1']] as $act => $body) {
+    foreach (['author' => $au1, 'reviewer' => $rv] as $who => $cl) {
+        $r = $cl->api($act, $body);
+        check("a $who cannot use $act", empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'forbidden', $r['body']);
+    }
+}
+$r = $au1->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('an author cannot publish the site', $r['code'] === 403, $r['code'] . ' ' . $r['body']);
+$r = $au1->req('POST', '/canvascore-admin/api.php?action=upload_media', ['file' => new CURLFile($T . '/tool.jpg', 'image/jpeg', 'author.jpg')], [], false);
+check('…but can upload images', !empty($r['json']['success']), $r['body']);
+
+// the review flow
+$r = $au1->api('review_submit', ['kind' => 'page', 'id' => 'role-a2']);
+check('an author cannot submit someone else\'s page', empty($r['json']['success']));
+$r = $au1->api('review_submit', ['kind' => 'page', 'id' => 'role-a1', 'note' => 'Please check the tone']);
+check('an author submits their page for review, with a note', !empty($r['json']['success']) && ($r['json']['review']['review_state'] ?? '') === 'pending' && ($r['json']['review']['review_by'] ?? '') === 'rolauth1', $r['body']);
+$r = $au1->api('save_page', $page('role-a1', 'Author one page v2'));
+check('while it waits, the author cannot change it', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'in_review', $r['body']);
+$q = $rv->api('review_queue')['json'] ?? [];
+check('the reviewer finds it in the queue, with who sent it and the note', count($q['items'] ?? []) === 1 && $q['items'][0]['id'] === 'role-a1' && $q['items'][0]['by'] === 'rolauth1' && $q['items'][0]['note'] === 'Please check the tone' && $q['items'][0]['state'] === 'pending', json_encode($q));
+check('the author\'s own list shows their submission; another author sees nothing', count($au1->api('review_queue')['json']['items'] ?? []) === 1 && count($au2->api('review_queue')['json']['items'] ?? []) === 0);
+check('another author cannot withdraw it; the one who sent it can', empty($au2->api('review_withdraw', ['kind' => 'page', 'id' => 'role-a1'])['json']['success']));
+$r = $rv->api('save_page', $page('role-admin-page', 'Admin page', ['publish' => true]));
+check('a reviewer cannot publish a page that was not submitted', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'needs_review', $r['body']);
+check('a reviewer cannot create a page', empty($rv->api('save_page', $page('role-r1', 'By reviewer'))['json']['success']));
+check('sending back needs a note, and an author cannot send back', empty($rv->api('review_back', ['kind' => 'page', 'id' => 'role-a1'])['json']['success']) && empty($au1->api('review_back', ['kind' => 'page', 'id' => 'role-a1', 'note' => 'x'])['json']['success']));
+$r = $rv->api('review_back', ['kind' => 'page', 'id' => 'role-a1', 'note' => 'Shorter intro please']);
+check('the reviewer sends it back with a note', !empty($r['json']['success']) && ($r['json']['review']['review_state'] ?? '') === 'changes', $r['body']);
+$mine = array_values(array_filter($au1->api('get_pages')['json'] ?? [], function ($p) { return $p['id'] === 'role-a1'; }));
+check('the author sees the note on their page and can edit again', ($mine[0]['review_state'] ?? '') === 'changes' && ($mine[0]['review_note'] ?? '') === 'Shorter intro please' && !empty($au1->api('save_page', $page('role-a1', 'Author one page v2'))['json']['success']));
+$r = $au1->api('review_submit', ['kind' => 'page', 'id' => 'role-a1']);
+check('…and submits it again', !empty($r['json']['success']));
+$r = $rv->api('save_page', $page('role-a1', 'Author one page v2', ['publish' => true]));
+check('the reviewer approves it by publishing it', !empty($r['json']['success']), $r['body']);
+$mine = array_values(array_filter($au1->api('get_pages')['json'] ?? [], function ($p) { return $p['id'] === 'role-a1'; }));
+check('it is published, the review is over and the approver is recorded', ($mine[0]['status'] ?? '') === 'published' && ($mine[0]['review_state'] ?? 'x') === '' && ($mine[0]['reviewed_by'] ?? '') === 'rolrev', json_encode($mine[0] ?? null));
+check('the queue is empty again', count($rv->api('review_queue')['json']['items'] ?? []) === 0);
+$r = $au1->api('save_page', $page('role-a1', 'Author one page v3'));
+$copy = $r['json']['new_id'] ?? '';
+check('an author can keep working on their published page: the changes are a draft copy', !empty($r['json']['success']) && $copy !== '' && $copy !== 'role-a1', $r['body']);
+$r = $au1->api('review_submit', ['kind' => 'page', 'id' => $copy, 'note' => 'v3']);
+check('…which they submit like any draft', !empty($r['json']['success']), $r['body']);
+check('…and then cannot edit the page either until it is withdrawn', ($au1->api('save_page', $page($copy, 'again', ['slug' => 'role-a1']))['json']['code'] ?? '') === 'in_review');
+check('the person who sent it can withdraw it', !empty($au1->api('review_withdraw', ['kind' => 'page', 'id' => $copy])['json']['success']) && !empty($au1->api('save_page', $page($copy, 'again', ['slug' => 'role-a1']))['json']['success']));
+$rd1 = $au2->api('delete_page', ['id' => 'role-a2']); $rd2 = $au1->api('delete_page', ['id' => 'role-a1']);
+check('an author deletes their own never-published page, not a published one', !empty($rd1['json']['success']) && empty($rd2['json']['success']), $rd1['body'] . ' | ' . $rd2['body']);
+check('a reviewer deletes nothing', empty($rv->api('delete_page', ['id' => 'role-a1'])['json']['success']));
+$r = $ed2->api('save_page', $page('role-ed', 'Editor page', ['publish' => true]));
+check('an editor still publishes directly', !empty($r['json']['success']), $r['body']);
+
+// collections: items, review and per-collection access
+$col = $own->api('save_collection', ['name' => 'Roles blog'])['json'] ?? [];
+$cid = $col['id'] ?? '';
+$item = function ($id, $title, $status = 'draft', $extra = []) use ($cid) { return array_merge(['id' => $id, 'collection_id' => $cid, 'title' => $title, 'slug' => $id, 'status' => $status, 'blocks' => [['id' => 'i1', 'type' => 'TEXT', 'content' => ['text' => '<p>x</p>']]]], $extra); };
+check('(setup) a collection exists', $cid !== '');
+$r = $au1->api('save_item', $item('role-i1', 'Author item'));
+check('an author creates an item (a draft)', !empty($r['json']['success']), $r['body']);
+check('…cannot publish it, nor create it as published', ($au1->api('save_item', $item('role-i1', 'Author item', 'published'))['json']['code'] ?? '') === 'needs_review' && ($au1->api('save_item', $item('role-i2', 'Another', 'published'))['json']['code'] ?? '') === 'needs_review');
+check('an author sees their own items only', count($au1->api('get_items&collection=' . $cid)['json'] ?? []) === 1 && count($au2->api('get_items&collection=' . $cid)['json'] ?? []) === 0 && count($rv->api('get_items&collection=' . $cid)['json'] ?? []) === 1);
+check('…and cannot open or change another author\'s item', $au2->api('get_item&id=role-i1')['json'] === null && ($au2->api('save_item', $item('role-i1', 'Hijack'))['json']['code'] ?? '') === 'forbidden');
+check('a reviewer cannot create an item', ($rv->api('save_item', $item('role-i3', 'By reviewer'))['json']['code'] ?? '') === 'forbidden');
+check('an author submits their item; it is then locked for them', !empty($au1->api('review_submit', ['kind' => 'item', 'id' => 'role-i1', 'note' => 'ok?'])['json']['success']) && ($au1->api('save_item', $item('role-i1', 'Author item v2'))['json']['code'] ?? '') === 'in_review');
+$qi = array_values(array_filter($rv->api('review_queue')['json']['items'] ?? [], function ($x) { return $x['kind'] === 'item'; }));
+check('the reviewer sees it in the queue with its collection', count($qi) === 1 && $qi[0]['collection'] === 'Roles blog' && $qi[0]['note'] === 'ok?');
+$r = $rv->api('save_item', $item('role-i1', 'Author item', 'published'));
+check('the reviewer approves it by publishing it; the review is over', !empty($r['json']['success']) && count($rv->api('review_queue')['json']['items'] ?? []) === 0, $r['body']);
+check('the author cannot change it once it is published (an editor does)', ($au1->api('save_item', $item('role-i1', 'Author item', 'published', ['title' => 'Edited']))['json']['code'] ?? '') === 'published_locked');
+check('an author deletes their own draft items, not published ones; a reviewer deletes none', !empty($au1->api('save_item', $item('role-i4', 'Throwaway'))['json']['success']) && !empty($au1->api('delete_item', ['id' => 'role-i4'])['json']['success']) && empty($au1->api('delete_item', ['id' => 'role-i1'])['json']['success']) && empty($rv->api('delete_item', ['id' => 'role-i1'])['json']['success']));
+
+$r = $own->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => ['mode' => 'selected', 'users' => ['rolauth1', 'rolrev', 'bad name!']]]);
+check('an admin limits a collection to selected people', !empty($r['success'] ?? $r['json']['success'] ?? null) || !empty($r['json']['success']), $r['body']);
+$names = function ($cl) { return array_column($cl->api('get_collections')['json'] ?? [], 'name'); };
+check('those people see it; the others (even an editor) do not, and cannot work in it', in_array('Roles blog', $names($au1), true) && in_array('Roles blog', $names($rv), true) && !in_array('Roles blog', $names($au2), true) && !in_array('Roles blog', $names($ed2), true) && in_array('Roles blog', $names($own), true));
+check('…no items, no saves, no taxonomies for them', ($ed2->api('get_items&collection=' . $cid)['json'] ?? 'x') === [] && ($ed2->api('save_item', $item('role-i5', 'Sneaky'))['json']['code'] ?? '') === 'forbidden' && ($au2->api('save_item', $item('role-i6', 'Sneaky'))['json']['code'] ?? '') === 'forbidden' && $ed2->api('get_item&id=role-i1')['json'] === null);
+$acc = array_values(array_filter($own->api('get_collections')['json'] ?? [], function ($c) { return $c['name'] === 'Roles blog'; }))[0]['access'] ?? null;
+check('the admin sees the access list, cleaned (a bad name is dropped); others are not told', ($acc['mode'] ?? '') === 'selected' && ($acc['users'] ?? []) === ['rolauth1', 'rolrev'] && array_key_exists('access', $au1->api('get_collections')['json'][0]) && $au1->api('get_collections')['json'][0]['access'] === null);
+check('a member of the collection still works in it (an author, as before)', !empty($au1->api('save_item', $item('role-i7', 'Member draft'))['json']['success']));
+check('an editor cannot change who has access', empty($ed2->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => ['mode' => 'all']])['json']['success']));
+$own->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => ['mode' => 'all']]);
+check('"everyone" opens it again', in_array('Roles blog', $names($ed2), true));
+check('a role never gives access to the admin-only areas', empty($au1->api('get_users')['json']['success'] ?? null) && strpos((string)($au1->api('get_users')['json']['message'] ?? ''), 'Only admins') !== false && empty($rv->api('backup_info')['json']['success']) && empty($au1->api('pkg_info')['json']['success']) && empty($au1->api('wp_info')['json']['success']));
+
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
 $kp = sodium_crypto_sign_keypair(); $tsk = sodium_crypto_sign_secretkey($kp);

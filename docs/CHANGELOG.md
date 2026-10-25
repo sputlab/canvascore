@@ -11,6 +11,24 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 ## [Unreleased]
 
 ### Added
+- **Roles and review.** Two new roles next to admin and editor, chosen in **Accounts** (each account has a role menu; an admin can
+  change a role at any time, never the last admin's).
+  - **Author**: writes their own pages and items, saves drafts and **submits them for review**. Sees only their own pages and items,
+    cannot publish (nor publish the site), cannot change what belongs to the whole site (menu, Global Options, templates, masters,
+    media management, bulk actions, scheduling). Can upload images, delete their own never-published drafts and keep working on a
+    published page of their own (the changes are a draft copy, submitted like any draft). Published *items* are changed by an editor.
+  - **Reviewer**: sees and can edit all content, creates nothing, and **approves** what was submitted (approving = publishing it, and
+    Publish Site) or **sends it back with a note**. A reviewer cannot publish what nobody submitted.
+  - **Editor** and **admin** work as before (editors publish directly; they also see the submissions and can send them back).
+  - **Review flow**: *Submit for review* (with an optional note) saves the page first. While it waits, the author cannot change it
+    (they can withdraw it). The reviewer finds it in **Reviews** (an author's own page there is **My submissions**) and opens it;
+    a banner shows who submitted it and the note, with *Send back…* and *Approve & publish*. A page sent back shows the reviewer's
+    note to the author, who changes it and submits it again. Page and item lists show where each stands.
+  - **Per-collection access** (Collections › *Who can work here*, admins): everyone, or only the people chosen. Others do not see the
+    collection, its items or its categories and cannot save items in it; bulk actions skip it.
+  - Enforced by the server (`roles.php`), not only hidden in the editor. Migration 15 adds `created_by` and the review columns to pages
+    and items (existing pages keep their author as creator) and `access_json` to collections; items made before have no creator, so only
+    editors and admins change them.
 - **Image tools in the media library.** Each image has a **Crop** button (the frame can be dragged and resized, or typed in pixels;
   shapes: free, original, 1:1, 4:3, 3:2, 16:9, 4:5, 9:16, 3:1) that saves the crop as a **new image** or **over the original**
   (same address: every page that uses it shows the cropped image; the page lists where it is used and asks first). JPEG, PNG and WebP;

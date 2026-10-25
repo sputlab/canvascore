@@ -89,7 +89,7 @@ $GLOBALS['CC_HT_ADMIN'] =
     "  Header always set Referrer-Policy \"same-origin\"\n" .
     "  Header always set Cross-Origin-Opener-Policy \"same-origin\"\n" .
     "</IfModule>\n" .
-    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|update|update-keys|update-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
+    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|update|update-keys|update-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
     "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
     "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n" .
     "</FilesMatch>\n" .
@@ -1434,7 +1434,7 @@ function cc_session_login(array $user) {
     $_SESSION['logged_in'] = true;
     $_SESSION['user_id'] = (int)$user['id'];
     $_SESSION['username'] = (string)$user['username'];
-    $_SESSION['role'] = $user['role'] === 'admin' ? 'admin' : 'editor';
+    $_SESSION['role'] = cc_role_clean($user['role']);
     $_SESSION['gen'] = (int)($user['session_gen'] ?? 0);
     $_SESSION['started'] = time();
     $_SESSION['last_seen'] = time();
@@ -1452,6 +1452,11 @@ function cc_session_logout() {
 // The signed-in account must still exist, unchanged: a deleted account, a password reset or a password change
 // elsewhere ends its other sessions at once. The role always comes from the database. Returns the account row
 // (id, username, role, must_change_pw), or null after logging the session out.
+// Roles: admin (everything), editor (all content, publishes directly), reviewer (all content; approves what authors submit; creates
+// nothing), author (their own pages and items; submits them for review). Anything else counts as editor, as before roles existed.
+const CC_ROLES = ['admin', 'editor', 'reviewer', 'author'];
+function cc_role_clean($r) { return in_array($r, CC_ROLES, true) ? $r : 'editor'; }
+
 function cc_session_account($pdo) {
     if (!cc_session_is_logged_in()) return null;
     try {
@@ -1470,7 +1475,7 @@ function cc_session_account($pdo) {
     }
     $_SESSION['user_id'] = (int)$u['id'];
     $_SESSION['gen'] = (int)$u['session_gen'];
-    $_SESSION['role'] = $u['role'] === 'admin' ? 'admin' : 'editor';
+    $_SESSION['role'] = cc_role_clean($u['role']);
     return $u;
 }
 

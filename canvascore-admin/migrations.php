@@ -231,6 +231,17 @@ function cc_db_migrations() {
             cc_add_col($pdo, 'collection_items', 'publish_at', "TEXT DEFAULT ''");
             cc_add_col($pdo, 'collection_items', 'unpublish_at', "TEXT DEFAULT ''");
         },
+
+        // v15 — roles and review: who made a page or an item (an author sees and edits only their own), where it is in the review
+        // ('' none, 'pending' waiting for a reviewer, 'changes' sent back with a note), who submitted and approved it, and who may
+        // work in a collection (access_json: { mode: all | selected, users: [...] })
+        15 => function ($pdo) {
+            foreach (['pages', 'collection_items'] as $t) {
+                foreach (['created_by', 'review_state', 'review_note', 'review_by', 'review_at', 'reviewed_by'] as $c) cc_add_col($pdo, $t, $c, "TEXT DEFAULT ''");
+            }
+            $pdo->exec("UPDATE pages SET created_by = author WHERE created_by = '' AND author IS NOT NULL");
+            cc_add_col($pdo, 'collections', 'access_json', "TEXT DEFAULT '{}'");
+        },
     ];
 }
 

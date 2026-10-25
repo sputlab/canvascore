@@ -355,6 +355,22 @@ check('an image address without an extension is stored with the right one (from 
 array_map('unlink', array_filter(array_merge(glob("$it/_cc/*") ?: [], glob("$it/*") ?: []), 'is_file')); @rmdir("$it/_cc"); @rmdir($it);
 unset($GLOBALS['CC_MEDIA_META_FILE']);
 
+echo "\nROLES: HELPERS\n";
+require_once __DIR__ . '/../../canvascore-admin/roles.php';
+check('a role is one of admin, editor, reviewer, author; anything else counts as editor', cc_role_clean('author') === 'author' && cc_role_clean('reviewer') === 'reviewer' && cc_role_clean('admin') === 'admin' && cc_role_clean('root') === 'editor' && cc_role_clean(null) === 'editor' && cc_role_clean(['admin']) === 'editor');
+check('what each role may do', cc_can_create('author') && !cc_can_create('reviewer') && cc_can_publish_directly('editor') && !cc_can_publish_directly('reviewer') && !cc_can_publish_directly('author') && !cc_can_publish_site('author') && cc_can_publish_site('reviewer') && !cc_can_edit_any('author') && cc_is_contributor('author') && cc_is_contributor('reviewer') && !cc_is_contributor('editor'));
+check('the actions closed to authors and reviewers are site-wide ones', in_array('save_settings', CC_CONTRIBUTOR_DENIED, true) && in_array('delete_media', CC_CONTRIBUTOR_DENIED, true) && in_array('bulk_items', CC_CONTRIBUTOR_DENIED, true) && !in_array('save_page', CC_CONTRIBUTOR_DENIED, true) && !in_array('upload_media', CC_CONTRIBUTOR_DENIED, true));
+check('collection access is cleaned: a mode, and a list of valid, distinct names', cc_collection_access_clean(['mode' => 'selected', 'users' => ['ann', 'ann', 'a b', 'x', str_repeat('z', 40), 'bob.smith', 7]]) === ['mode' => 'selected', 'users' => ['ann', 'bob.smith']] && cc_collection_access_clean('x') === ['mode' => 'all', 'users' => []] && cc_collection_access_clean(['mode' => 'weird'])['mode'] === 'all');
+$rdb = new PDO('sqlite::memory:'); $rdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+foreach (cc_db_migrations() as $mig) $mig($rdb);
+$rdb->exec("INSERT INTO collections (id, name, slug, access_json) VALUES ('open', 'Open', 'open', '{}'), ('shut', 'Shut', 'shut', '{\"mode\":\"selected\",\"users\":[\"ann\"]}')");
+check('a collection with no list is open to all; one limited to people only to them; admins always', cc_collection_allowed($rdb, 'open', 'author', 'zed') && !cc_collection_allowed($rdb, 'shut', 'editor', 'zed') && cc_collection_allowed($rdb, 'shut', 'author', 'ann') && cc_collection_allowed($rdb, 'shut', 'admin', 'zed') && cc_collections_denied_ids($rdb, 'author', 'zed') === ['shut'] && cc_collections_denied_ids($rdb, 'admin', 'zed') === []);
+$rdb->exec("INSERT INTO pages (id, title, created_by, is_draft_copy, status) VALUES ('pg', 'P', 'ann', 0, 'published'), ('cp', 'P', 'zed', 1, 'draft')");
+$rdb->exec("UPDATE pages SET parent_id = 'pg' WHERE id = 'cp'");
+check('a draft copy belongs to the page it is a copy of', cc_owner_of_page($rdb, ['id' => 'cp', 'parent_id' => 'pg', 'is_draft_copy' => 1, 'created_by' => 'zed']) === 'ann' && cc_owner_of_page($rdb, ['id' => 'pg', 'created_by' => 'ann', 'is_draft_copy' => 0]) === 'ann');
+check('the migration added the review and ownership columns to pages and items, and the access to collections', (function ($db) { foreach (['pages', 'collection_items'] as $t) { $cols = array_column($db->query("PRAGMA table_info($t)")->fetchAll(PDO::FETCH_ASSOC), 'name'); foreach (['created_by', 'review_state', 'review_note', 'review_by', 'review_at', 'reviewed_by'] as $c) if (!in_array($c, $cols, true)) return false; } return in_array('access_json', array_column($db->query("PRAGMA table_info(collections)")->fetchAll(PDO::FETCH_ASSOC), 'name'), true); })($rdb));
+check('existing pages get their author as creator', (function () { $d = new PDO('sqlite::memory:'); $ms = cc_db_migrations(); ksort($ms); foreach ($ms as $v => $m) { if ($v === 15) { $d->exec("INSERT INTO pages (id, title, author) VALUES ('old', 'Old', 'sam')"); } $m($d); } return $d->query("SELECT created_by FROM pages WHERE id = 'old'")->fetchColumn() === 'sam'; })());
+
 echo "\nREDIRECTS, COOKIE BANNER, SEARCH\n";
 check('redirect paths are normalized and validated', cc_redirect_path('old-page') === null && cc_redirect_path('/Old-Page') === '/old-page/' && cc_redirect_path('/') === null && cc_redirect_path('/a b/') === null && cc_redirect_target('https://x.com/a') === 'https://x.com/a');
 $rdb = new PDO('sqlite::memory:'); $rdb->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
