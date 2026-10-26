@@ -440,10 +440,13 @@ function cc_update_install(PDO $pdo, $want, $user = '', $health = null) {
         if ($swapped) {
             $rolled_back = cc_update_unswap($admin, $old, $parent . '/.cc-update-failed-' . $tag);
             // the new version may have migrated the database: it is put back as it was before the update
+            $db_back = true;
             if ($rolled_back && $db_copy && is_file($db_copy)) {
                 $tmp = $db_file . '.restore-' . $tag;
-                if (@copy($db_copy, $tmp)) @rename($tmp, $db_file);
+                $db_back = @copy($db_copy, $tmp) && @filesize($tmp) === @filesize($db_copy) && @rename($tmp, $db_file);
+                if (!$db_back) @unlink($tmp);
             }
+            if ($rolled_back && !$db_back) { $step('The previous version ' . $from . ' is back, but its database could not be put back: copy ' . $db_copy . ' over ' . $db_file . ' by hand.', false); $rolled_back = false; }
             $step($rolled_back ? 'Rolled back: the previous version ' . $from . ' and its database are back in place.' : 'The rollback failed: restore the copy of the code saved in the data folder (updates/).', $rolled_back);
             $msg = $rolled_back ? 'The update was rolled back, nothing changed: ' . $msg : 'The update failed and could not be rolled back: ' . $msg;
         }

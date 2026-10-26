@@ -21,6 +21,7 @@ import {
   TOOLSETS, BLOCK_FORMATS, FONTS, SIZES, TEXT_COLORS, HIGHLIGHTS, SITE_COLOR, TB_ATTR,
   exec, insertHtml, applyInlineStyle, setRegionHtml, closestIn, selectionNode, tableOp, tableHtml, escAttr, isInToolbar, useRegionHandlers,
 } from './commands';
+import { __ } from '../i18n/index.js';
 
 let brandPromise = null;
 function useBrandColor() {
@@ -132,7 +133,7 @@ export function RichToolbar({ region, variant = 'full', floating = false, onComm
       case '|': items.push(<span key={'sep' + i} style={sep} />); break;
       case 'block':
         items.push(
-          <select key="block" title="Text style" aria-label="Text style" value={state.block || 'p'} style={tbSelect}
+          <select key="block" title={__("Text style")} aria-label={__("Text style")} value={state.block || 'p'} style={tbSelect}
             onFocus={saveRange} onChange={(e) => { const v = e.target.value; run(() => exec('formatBlock', v === 'p' ? 'p' : v)); }}>
             {BLOCK_FORMATS[variant === 'basic' ? 'basic' : 'full'].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             {!BLOCK_FORMATS.full.some(([v]) => v === state.block) && <option value={state.block}>{state.block}</option>}
@@ -141,47 +142,47 @@ export function RichToolbar({ region, variant = 'full', floating = false, onComm
         break;
       case 'font':
         items.push(
-          <select key="font" title="Font" aria-label="Font" value="" style={{ ...tbSelect, width: 96 }} onFocus={saveRange}
+          <select key="font" title={__("Font")} aria-label={__("Font")} value="" style={{ ...tbSelect, width: 96 }} onFocus={saveRange}
             onChange={(e) => { const v = e.target.value; run(() => applyInlineStyle(region, 'font-family', v)); e.target.value = ''; }}>
-            <option value="" disabled hidden>Font</option>
+            <option value="" disabled hidden>{__("Font")}</option>
             {FONTS.map(([v, l]) => <option key={l} value={v}>{l}</option>)}
           </select>,
         );
         break;
       case 'size':
         items.push(
-          <select key="size" title="Text size" aria-label="Text size" value="" style={{ ...tbSelect, width: 84 }} onFocus={saveRange}
+          <select key="size" title={__("Text size")} aria-label={__("Text size")} value="" style={{ ...tbSelect, width: 84 }} onFocus={saveRange}
             onChange={(e) => { const v = e.target.value; run(() => applyInlineStyle(region, 'font-size', v)); e.target.value = ''; }}>
-            <option value="" disabled hidden>Size</option>
+            <option value="" disabled hidden>{__("Size")}</option>
             {SIZES.map(([v, l]) => <option key={l} value={v}>{l}</option>)}
           </select>,
         );
         break;
-      case 'bold': items.push(btn(t, Bold, 'Bold (Ctrl+B)', () => run(() => exec('bold')), state.bold)); break;
-      case 'italic': items.push(btn(t, Italic, 'Italic (Ctrl+I)', () => run(() => exec('italic')), state.italic)); break;
-      case 'underline': items.push(btn(t, Underline, 'Underline (Ctrl+U)', () => run(() => exec('underline')), state.underline)); break;
-      case 'strike': items.push(btn(t, Strikethrough, 'Strikethrough', () => run(() => exec('strikeThrough')), state.strike)); break;
-      case 'sub': items.push(btn(t, Subscript, 'Subscript', () => run(() => exec('subscript')), state.sub)); break;
-      case 'sup': items.push(btn(t, Superscript, 'Superscript', () => run(() => exec('superscript')), state.sup)); break;
-      case 'color': items.push(btn(t, Baseline, 'Text color', () => toggle('color'), open === 'color')); break;
-      case 'highlight': items.push(btn(t, Highlighter, 'Highlight', () => toggle('highlight'), open === 'highlight')); break;
+      case 'bold': items.push(btn(t, Bold, __("Bold (Ctrl+B)"), () => run(() => exec('bold')), state.bold)); break;
+      case 'italic': items.push(btn(t, Italic, __("Italic (Ctrl+I)"), () => run(() => exec('italic')), state.italic)); break;
+      case 'underline': items.push(btn(t, Underline, __("Underline (Ctrl+U)"), () => run(() => exec('underline')), state.underline)); break;
+      case 'strike': items.push(btn(t, Strikethrough, __("Strikethrough"), () => run(() => exec('strikeThrough')), state.strike)); break;
+      case 'sub': items.push(btn(t, Subscript, __("Subscript"), () => run(() => exec('subscript')), state.sub)); break;
+      case 'sup': items.push(btn(t, Superscript, __("Superscript"), () => run(() => exec('superscript')), state.sup)); break;
+      case 'color': items.push(btn(t, Baseline, __("Text color"), () => toggle('color'), open === 'color')); break;
+      case 'highlight': items.push(btn(t, Highlighter, __("Highlight"), () => toggle('highlight'), open === 'highlight')); break;
       case 'align':
-        items.push(btn('al', AlignLeft, 'Align left', () => run(() => exec('justifyLeft')), state.left && !state.center && !state.right && !state.justify));
-        items.push(btn('ac', AlignCenter, 'Center', () => run(() => exec('justifyCenter')), state.center));
-        items.push(btn('ar', AlignRight, 'Align right', () => run(() => exec('justifyRight')), state.right));
-        if (variant !== 'basic') items.push(btn('aj', AlignJustify, 'Justify', () => run(() => exec('justifyFull')), state.justify));
+        items.push(btn('al', AlignLeft, __("Align left"), () => run(() => exec('justifyLeft')), state.left && !state.center && !state.right && !state.justify));
+        items.push(btn('ac', AlignCenter, __("Center"), () => run(() => exec('justifyCenter')), state.center));
+        items.push(btn('ar', AlignRight, __("Align right"), () => run(() => exec('justifyRight')), state.right));
+        if (variant !== 'basic') items.push(btn('aj', AlignJustify, __("Justify"), () => run(() => exec('justifyFull')), state.justify));
         break;
-      case 'ul': items.push(btn(t, List, 'Bulleted list', () => run(() => exec('insertUnorderedList')), state.ul)); break;
-      case 'ol': items.push(btn(t, ListOrdered, 'Numbered list', () => run(() => exec('insertOrderedList')), state.ol)); break;
-      case 'quote': items.push(btn(t, Quote, 'Quote', () => run(() => exec('formatBlock', state.block === 'blockquote' ? 'p' : 'blockquote')), state.block === 'blockquote')); break;
-      case 'hr': items.push(btn(t, Minus, 'Horizontal line', () => run(() => exec('insertHorizontalRule')))); break;
-      case 'link': items.push(btn(t, Link, 'Link (Ctrl+K)', () => toggle('link'), open === 'link' || state.link)); break;
-      case 'image': items.push(btn(t, ImageIcon, 'Image', () => toggle('image'), open === 'image')); break;
-      case 'table': items.push(btn(t, Table, 'Table', () => toggle('table'), open === 'table' || state.table)); break;
-      case 'clear': items.push(btn(t, RemoveFormatting, 'Clear formatting', () => run(() => { exec('removeFormat'); exec('unlink'); if (state.block !== 'p') exec('formatBlock', 'p'); }))); break;
-      case 'undo': items.push(btn(t, Undo2, 'Undo (Ctrl+Z)', () => run(() => exec('undo')))); break;
-      case 'redo': items.push(btn(t, Redo2, 'Redo (Ctrl+Shift+Z)', () => run(() => exec('redo')))); break;
-      case 'source': items.push(btn(t, Code, 'Edit HTML', () => toggle('source'), open === 'source')); break;
+      case 'ul': items.push(btn(t, List, __("Bulleted list"), () => run(() => exec('insertUnorderedList')), state.ul)); break;
+      case 'ol': items.push(btn(t, ListOrdered, __("Numbered list"), () => run(() => exec('insertOrderedList')), state.ol)); break;
+      case 'quote': items.push(btn(t, Quote, __("Quote"), () => run(() => exec('formatBlock', state.block === 'blockquote' ? 'p' : 'blockquote')), state.block === 'blockquote')); break;
+      case 'hr': items.push(btn(t, Minus, __("Horizontal line"), () => run(() => exec('insertHorizontalRule')))); break;
+      case 'link': items.push(btn(t, Link, __("Link (Ctrl+K)"), () => toggle('link'), open === 'link' || state.link)); break;
+      case 'image': items.push(btn(t, ImageIcon, __("Image"), () => toggle('image'), open === 'image')); break;
+      case 'table': items.push(btn(t, Table, __("Table"), () => toggle('table'), open === 'table' || state.table)); break;
+      case 'clear': items.push(btn(t, RemoveFormatting, __("Clear formatting"), () => run(() => { exec('removeFormat'); exec('unlink'); if (state.block !== 'p') exec('formatBlock', 'p'); }))); break;
+      case 'undo': items.push(btn(t, Undo2, __("Undo (Ctrl+Z)"), () => run(() => exec('undo')))); break;
+      case 'redo': items.push(btn(t, Redo2, __("Redo (Ctrl+Shift+Z)"), () => run(() => exec('redo')))); break;
+      case 'source': items.push(btn(t, Code, __("Edit HTML"), () => toggle('source'), open === 'source')); break;
       default: break;
     }
   });
@@ -197,9 +198,9 @@ export function RichToolbar({ region, variant = 'full', floating = false, onComm
   const close = () => { setOpen(null); restore(); };
   const popover = open && (
     <div style={popStyle} role="dialog" aria-label={POP_LABEL[open]}>
-      {open === 'color' && <ColorPop brand={brand} colors={TEXT_COLORS} label="Text color"
+      {open === 'color' && <ColorPop brand={brand} colors={TEXT_COLORS} label={__("Text color")}
         onPick={(c) => { run(() => applyInlineStyle(region, 'color', c)); setOpen(null); }} />}
-      {open === 'highlight' && <ColorPop brand={brand} colors={HIGHLIGHTS} label="Highlight" highlight
+      {open === 'highlight' && <ColorPop brand={brand} colors={HIGHLIGHTS} label={__("Highlight")} highlight
         onPick={(c) => { run(() => applyInlineStyle(region, 'background-color', c)); setOpen(null); }} />}
       {open === 'link' && <LinkPop region={region} pages={pages} savedRange={savedRange} onClose={close}
         onApply={(fn) => { run(fn); setOpen(null); }} />}
@@ -215,7 +216,7 @@ export function RichToolbar({ region, variant = 'full', floating = false, onComm
   );
 
   const bar = (
-    <div ref={barRef} {...TB_ATTR} onMouseDown={keep} onBlurCapture={onBlurCapture} role="toolbar" aria-label="Text formatting"
+    <div ref={barRef} {...TB_ATTR} onMouseDown={keep} onBlurCapture={onBlurCapture} role="toolbar" aria-label={__("Text formatting")}
       style={floating ? { ...barStyle, position: 'fixed', top: pos ? pos.top : -9999, left: pos ? pos.left : -9999, zIndex: 100000, maxWidth: 'calc(100vw - 16px)' } : { ...barStyle, position: 'relative', borderRadius: '6px 6px 0 0' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px' }}>{items}</div>
       {popover}
@@ -231,7 +232,7 @@ export function RichToolbar({ region, variant = 'full', floating = false, onComm
   return floating ? createPortal(bar, document.body) : bar;
 }
 
-const POP_LABEL = { color: 'Text color', highlight: 'Highlight', link: 'Link', image: 'Image', table: 'Table', source: 'Edit HTML' };
+const POP_LABEL = { color: __("Text color"), highlight: __("Highlight"), link: __("Link"), image: __("Image"), table: __("Table"), source: __("Edit HTML") };
 
 function ColorPop({ brand, colors, label, highlight, onPick }) {
   const [custom, setCustom] = useState(highlight ? '#fef08a' : '#0f172a');
@@ -243,22 +244,22 @@ function ColorPop({ brand, colors, label, highlight, onPick }) {
     <div>
       <div style={popTitle}>{label}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxWidth: 236 }}>
-        <button type="button" title="Site color (follows the brand color)" aria-label="Site color" onClick={() => onPick(SITE_COLOR)}
-          style={{ ...swatch, background: brand, width: 'auto', padding: '0 8px', color: '#fff', fontSize: 11, fontWeight: 700 }}>Site</button>
+        <button type="button" title={__("Site color (follows the brand color)")} aria-label={__("Site color")} onClick={() => onPick(SITE_COLOR)}
+          style={{ ...swatch, background: brand, width: 'auto', padding: '0 8px', color: '#fff', fontSize: 11, fontWeight: 700 }}>{__("Site")}</button>
         {colors.map((c) => <button key={c} type="button" title={c} aria-label={c} onClick={() => onPick(c)} style={{ ...swatch, background: c }} />)}
       </div>
       {palette && palette.length > 0 && (
-        <div className="cc-rte-palette" role="group" aria-label="Global colours" style={{ marginTop: 8 }}>
-          <div style={{ ...popTitle, marginBottom: 4 }}>Global colours</div>
+        <div className="cc-rte-palette" role="group" aria-label={__("Global colours")} style={{ marginTop: 8 }}>
+          <div style={{ ...popTitle, marginBottom: 4 }}>{__("Global colours")}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxWidth: 236 }}>
-            {palette.map((c) => <button key={c.id} type="button" title={`${c.name} (follows Global Options)`} aria-label={`${c.name} (global colour)`} onClick={() => onPick(colorRef(c))} style={{ ...swatch, background: c.value }} />)}
+            {palette.map((c) => <button key={c.id} type="button" title={__("{0} (follows Global Options)", c.name)} aria-label={__("{0} (global colour)", c.name)} onClick={() => onPick(colorRef(c))} style={{ ...swatch, background: c.value }} />)}
           </div>
         </div>
       )}
       <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: 8 }}>
-        <input type="color" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="Custom color" style={{ width: 30, height: 26, padding: 0, border: 'none', background: 'none' }} />
-        <button type="button" onClick={() => onPick(custom)} style={popBtn}>Apply</button>
-        <button type="button" onClick={() => onPick('')} style={{ ...popBtn, background: '#fff', color: '#334155', border: '1px solid #cbd5e1' }}>{highlight ? 'None' : 'Default'}</button>
+        <input type="color" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label={__("Custom color")} style={{ width: 30, height: 26, padding: 0, border: 'none', background: 'none' }} />
+        <button type="button" onClick={() => onPick(custom)} style={popBtn}>{__("Apply")}</button>
+        <button type="button" onClick={() => onPick('')} style={{ ...popBtn, background: '#fff', color: '#334155', border: '1px solid #cbd5e1' }}>{highlight ? __("None") : __("Default")}</button>
       </div>
     </div>
   );
@@ -305,28 +306,28 @@ function LinkPop({ region, pages, savedRange, onApply, onClose }) {
   };
   return (
     <form onSubmit={(e) => { e.preventDefault(); apply(); }} style={{ width: 280 }}>
-      <div style={popTitle}>Link</div>
-      <label style={popLabel}>Address</label>
-      <input autoFocus value={href} onChange={(e) => setHref(e.target.value)} placeholder="https://… or choose a page" style={popInput} aria-label="Link address" />
+      <div style={popTitle}>{__("Link")}</div>
+      <label style={popLabel}>{__("Address")}</label>
+      <input autoFocus value={href} onChange={(e) => setHref(e.target.value)} placeholder={__("https://… or choose a page")} style={popInput} aria-label={__("Link address")} />
       {live.length > 0 && (
-        <select value="" onChange={(e) => { if (e.target.value) setHref(e.target.value); }} style={{ ...popInput, marginTop: 6 }} aria-label="Link to a page">
-          <option value="">Link to a page…</option>
+        <select value="" onChange={(e) => { if (e.target.value) setHref(e.target.value); }} style={{ ...popInput, marginTop: 6 }} aria-label={__("Link to a page")}>
+          <option value="">{__("Link to a page…")}</option>
           {live.map((p) => <option key={p.id} value={pageUrl(p, langs)}>{p.title || p.slug}{langs && langs.enabled && p.lang ? ` (${p.lang.toUpperCase()})` : ''}</option>)}
         </select>
       )}
       {!start.a && !start.text && (
         <>
-          <label style={popLabel}>Text</label>
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Shown text (default: the address)" style={popInput} aria-label="Link text" />
+          <label style={popLabel}>{__("Text")}</label>
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={__("Shown text (default: the address)")} style={popInput} aria-label={__("Link text")} />
         </>
       )}
-      <label style={popCheck}><input type="checkbox" checked={blank} onChange={(e) => setBlank(e.target.checked)} /> Open in a new tab</label>
-      <label style={popCheck}><input type="checkbox" checked={nofollow} onChange={(e) => setNofollow(e.target.checked)} /> Nofollow (search engines ignore it)</label>
+      <label style={popCheck}><input type="checkbox" checked={blank} onChange={(e) => setBlank(e.target.checked)} /> {__("Open in a new tab")}</label>
+      <label style={popCheck}><input type="checkbox" checked={nofollow} onChange={(e) => setNofollow(e.target.checked)} /> {__("Nofollow (search engines ignore it)")}</label>
       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-        <button type="submit" style={popBtn}><Check size={13} /> Apply</button>
+        <button type="submit" style={popBtn}><Check size={13} /> {__("Apply")}</button>
         {start.a && <button type="button" onClick={() => onApply(() => { const a = start.a; const sel = window.getSelection(); const r = document.createRange(); r.selectNodeContents(a); sel.removeAllRanges(); sel.addRange(r); exec('unlink'); })}
-          style={{ ...popBtn, background: '#fff', color: '#b91c1c', border: '1px solid #fecaca' }}><Unlink size={13} /> Remove</button>}
-        <button type="button" onClick={onClose} style={{ ...popBtn, background: 'transparent', color: '#64748b', marginLeft: 'auto' }}>Cancel</button>
+          style={{ ...popBtn, background: '#fff', color: '#b91c1c', border: '1px solid #fecaca' }}><Unlink size={13} /> {__("Remove")}</button>}
+        <button type="button" onClick={onClose} style={{ ...popBtn, background: 'transparent', color: '#64748b', marginLeft: 'auto' }}>{__("Cancel")}</button>
       </div>
     </form>
   );
@@ -337,15 +338,15 @@ function ImagePop({ onPickLibrary, onInsert, onClose }) {
   const [alt, setAlt] = useState('');
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (src.trim()) onInsert(src.trim(), alt); }} style={{ width: 280 }}>
-      <div style={popTitle}>Image</div>
-      <button type="button" onClick={onPickLibrary} style={{ ...popBtn, width: '100%', justifyContent: 'center', padding: '8px' }}><ImageIcon size={14} /> Choose from the media library</button>
-      <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', margin: '8px 0' }}>or use an address</div>
-      <input value={src} onChange={(e) => setSrc(e.target.value)} placeholder="https://…/photo.jpg" style={popInput} aria-label="Image address" />
-      <label style={popLabel}>Description (alt text)</label>
-      <input value={alt} onChange={(e) => setAlt(e.target.value)} placeholder="What the image shows" style={popInput} aria-label="Image description" />
+      <div style={popTitle}>{__("Image")}</div>
+      <button type="button" onClick={onPickLibrary} style={{ ...popBtn, width: '100%', justifyContent: 'center', padding: '8px' }}><ImageIcon size={14} /> {__("Choose from the media library")}</button>
+      <div style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', margin: '8px 0' }}>{__("or use an address")}</div>
+      <input value={src} onChange={(e) => setSrc(e.target.value)} placeholder={__("https://…/photo.jpg")} style={popInput} aria-label={__("Image address")} />
+      <label style={popLabel}>{__("Description (alt text)")}</label>
+      <input value={alt} onChange={(e) => setAlt(e.target.value)} placeholder={__("What the image shows")} style={popInput} aria-label={__("Image description")} />
       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-        <button type="submit" disabled={!src.trim()} style={popBtn}>Insert</button>
-        <button type="button" onClick={onClose} style={{ ...popBtn, background: 'transparent', color: '#64748b', marginLeft: 'auto' }}>Cancel</button>
+        <button type="submit" disabled={!src.trim()} style={popBtn}>{__("Insert")}</button>
+        <button type="button" onClick={onClose} style={{ ...popBtn, background: 'transparent', color: '#64748b', marginLeft: 'auto' }}>{__("Cancel")}</button>
       </div>
     </form>
   );
@@ -355,31 +356,31 @@ function TablePop({ inTable, onInsert, onOp, onClose }) {
   const [hover, setHover] = useState([3, 3]);
   const [header, setHeader] = useState(true);
   if (inTable) {
-    const ops = [['row-above', 'Row above'], ['row-below', 'Row below'], ['col-left', 'Column left'], ['col-right', 'Column right'],
-      ['header', 'Toggle header row'], ['del-row', 'Delete row'], ['del-col', 'Delete column']];
+    const ops = [['row-above', __("Row above")], ['row-below', __("Row below")], ['col-left', __("Column left")], ['col-right', __("Column right")],
+      ['header', __("Toggle header row")], ['del-row', __("Delete row")], ['del-col', __("Delete column")]];
     return (
       <div style={{ width: 230 }}>
-        <div style={popTitle}>Table</div>
+        <div style={popTitle}>{__("Table")}</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
           {ops.map(([op, l]) => <button key={op} type="button" onClick={() => onOp(op)} style={{ ...popBtn, background: op.startsWith('del') ? '#fff' : '#f1f5f9', color: op.startsWith('del') ? '#b91c1c' : '#0f172a', border: '1px solid ' + (op.startsWith('del') ? '#fecaca' : '#e2e8f0'), justifyContent: 'center' }}>{l}</button>)}
-          <button type="button" onClick={() => onOp('del-table')} style={{ ...popBtn, gridColumn: '1 / -1', justifyContent: 'center', background: '#b91c1c' }}><Trash2 size={13} /> Delete table</button>
+          <button type="button" onClick={() => onOp('del-table')} style={{ ...popBtn, gridColumn: '1 / -1', justifyContent: 'center', background: '#b91c1c' }}><Trash2 size={13} /> {__("Delete table")}</button>
         </div>
       </div>
     );
   }
   return (
     <div>
-      <div style={popTitle}>Insert table · {hover[0]} × {hover[1]}</div>
+      <div style={popTitle}>{__("Insert table ·")} {hover[0]} × {hover[1]}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 18px)', gap: 3 }} onMouseLeave={() => {}}>
         {Array.from({ length: 36 }, (_, i) => {
           const r = Math.floor(i / 6) + 1, c = (i % 6) + 1;
           const on = r <= hover[0] && c <= hover[1];
-          return <button key={i} type="button" aria-label={`${r} by ${c}`} onMouseEnter={() => setHover([r, c])} onFocus={() => setHover([r, c])} onClick={() => onInsert(r, c, header)}
+          return <button key={i} type="button" aria-label={__("{0} by {1}", r, c)} onMouseEnter={() => setHover([r, c])} onFocus={() => setHover([r, c])} onClick={() => onInsert(r, c, header)}
             style={{ width: 18, height: 18, padding: 0, border: '1px solid ' + (on ? '#2563eb' : '#cbd5e1'), background: on ? '#bfdbfe' : '#fff', borderRadius: 3, cursor: 'pointer' }} />;
         })}
       </div>
-      <label style={popCheck}><input type="checkbox" checked={header} onChange={(e) => setHeader(e.target.checked)} /> First row is a header</label>
-      <button type="button" onClick={onClose} style={{ ...popBtn, background: 'transparent', color: '#64748b' }}><X size={13} /> Cancel</button>
+      <label style={popCheck}><input type="checkbox" checked={header} onChange={(e) => setHeader(e.target.checked)} /> {__("First row is a header")}</label>
+      <button type="button" onClick={onClose} style={{ ...popBtn, background: 'transparent', color: '#64748b' }}><X size={13} /> {__("Cancel")}</button>
     </div>
   );
 }
@@ -388,12 +389,12 @@ function SourcePop({ html, onApply, onClose }) {
   const [code, setCode] = useState(html);
   return (
     <div style={{ width: 'min(560px, calc(100vw - 48px))' }}>
-      <div style={popTitle}>Edit HTML</div>
-      <textarea autoFocus value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} aria-label="HTML source"
+      <div style={popTitle}>{__("Edit HTML")}</div>
+      <textarea autoFocus value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false} aria-label={__("HTML source")}
         style={{ width: '100%', minHeight: 180, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12, padding: 8, border: '1px solid #cbd5e1', borderRadius: 6, boxSizing: 'border-box', color: '#0f172a', background: '#f8fafc' }} />
       <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-        <button type="button" onClick={() => onApply(code)} style={popBtn}><Check size={13} /> Apply</button>
-        <button type="button" onClick={onClose} style={{ ...popBtn, background: 'transparent', color: '#64748b', marginLeft: 'auto' }}>Cancel</button>
+        <button type="button" onClick={() => onApply(code)} style={popBtn}><Check size={13} /> {__("Apply")}</button>
+        <button type="button" onClick={onClose} style={{ ...popBtn, background: 'transparent', color: '#64748b', marginLeft: 'auto' }}>{__("Cancel")}</button>
       </div>
     </div>
   );

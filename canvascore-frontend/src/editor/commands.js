@@ -2,6 +2,7 @@
 import { useCallback, useRef } from 'react';
 import { cleanPastedHtml, textToHtml, TABLE_STYLE, CELL_STYLE } from './cleanHtml';
 import { safeHtml } from '../utils/safeHtml';
+import { __ } from '../i18n/index.js';
 
 // Toolbars: 'basic' for titles and short texts, 'full' for body text.
 export const TOOLSETS = {
@@ -11,17 +12,17 @@ export const TOOLSETS = {
 };
 
 export const BLOCK_FORMATS = {
-  basic: [['p', 'Paragraph'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'], ['h4', 'Heading 4']],
-  full: [['p', 'Paragraph'], ['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'], ['h4', 'Heading 4'], ['blockquote', 'Quote'], ['pre', 'Code block']],
+  basic: [['p', __("Paragraph")], ['h1', __("Heading 1")], ['h2', __("Heading 2")], ['h3', __("Heading 3")], ['h4', __("Heading 4")]],
+  full: [['p', __("Paragraph")], ['h1', __("Heading 1")], ['h2', __("Heading 2")], ['h3', __("Heading 3")], ['h4', __("Heading 4")], ['blockquote', __("Quote")], ['pre', __("Code block")]],
 };
 export const FONTS = [
-  ['', 'Theme font'],
+  ['', __("Theme font")],
   ['system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', 'Sans serif'],
   ['Georgia, "Times New Roman", serif', 'Serif'],
   ['ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', 'Monospace'],
 ];
 // Relative sizes: they scale with the theme instead of fixing pixels
-export const SIZES = [['', 'Normal'], ['0.875em', 'Small'], ['1.25em', 'Large'], ['1.5em', 'Extra large'], ['2em', 'Huge']];
+export const SIZES = [['', __("Normal")], ['0.875em', __("Small")], ['1.25em', __("Large")], ['1.5em', __("Extra large")], ['2em', __("Huge")]];
 export const TEXT_COLORS = ['#0f172a', '#334155', '#64748b', '#94a3b8', '#ffffff', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#db2777'];
 export const HIGHLIGHTS = ['#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fed7aa', '#e9d5ff', '#e2e8f0'];
 // The site color follows the brand color set in Global Settings, also if it changes later

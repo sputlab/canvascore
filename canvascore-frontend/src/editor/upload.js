@@ -1,3 +1,5 @@
+import { __ } from '../i18n/index.js';
+import { translatePayload } from '../i18n/apiMessages.js';
 // Uploads a file (one image to the media library, a backup to restore) and reports its progress (0..1).
 // XMLHttpRequest is used because fetch can't report upload progress; it sends the same CSRF token as the
 // fetch guard. If the server answers 401/403 (session expired or token to refresh) the upload is retried
@@ -30,7 +32,7 @@ export function postForm(action, form, { onProgress = () => {}, onSent = () => {
     xhr.onload = () => {
       if (xhr.status === 401 || xhr.status === 403) { viaFetch(action, form).then(resolve, reject); return; }
       onProgress(1);
-      try { resolve(JSON.parse(xhr.responseText)); } catch { resolve({ success: false, message: `Unexpected answer from the server (${xhr.status}).` }); }
+      try { resolve(translatePayload(JSON.parse(xhr.responseText))); } catch { resolve({ success: false, message: __("Unexpected answer from the server ({0}).", xhr.status) }); }
     };
     xhr.onerror = () => reject(new Error('network'));
     xhr.send(form);

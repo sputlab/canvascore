@@ -8,6 +8,7 @@ import { labelStyle, inputStyle } from './helpers';
 import { RichTextField } from '../../editor/RichText';
 import MediaPickerModal from '../MediaPickerModal';
 import { emptyFieldValue } from '../../editor/itemFields';
+import { __ } from '../../i18n/index.js';
 
 const wrap = { marginBottom: 14 };
 const hint = { margin: '4px 0 0', fontSize: 11, color: '#64748b' };
@@ -23,7 +24,7 @@ export default function ItemFieldsSection({ activePage, updateActivePage }) {
     let alive = true;
     targets.split(',').filter(Boolean).forEach((cid) => {
       fetch('api.php?action=get_items&collection=' + encodeURIComponent(cid)).then((r) => r.json()).then((d) => {
-        if (alive && Array.isArray(d)) setRefs((r) => ({ ...r, [cid]: d.map((it) => ({ id: it.id, title: it.title || 'Untitled' })) }));
+        if (alive && Array.isArray(d)) setRefs((r) => ({ ...r, [cid]: d.map((it) => ({ id: it.id, title: it.title || __("Untitled") })) }));
       }).catch(() => {});
     });
     return () => { alive = false; };
@@ -51,20 +52,20 @@ export default function ItemFieldsSection({ activePage, updateActivePage }) {
             {v.map((url, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}><ImgF label={null} value={url} onChange={(u) => set(d.id, v.map((x, k) => (k === i ? u : x)))} onPick={() => setPicker({ id: d.id, index: i })} /></div>
-                <button type="button" aria-label={`Remove image ${i + 1}`} title="Remove" onClick={() => set(d.id, v.filter((_, k) => k !== i))}
+                <button type="button" aria-label={__("Remove image {0}", i + 1)} title={__("Remove")} onClick={() => set(d.id, v.filter((_, k) => k !== i))}
                   style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '6px' }}><Trash2 size={14} /></button>
               </div>
             ))}
             <button type="button" onClick={() => setPicker({ id: d.id, index: -1 })} style={{ justifySelf: 'start', background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 12 }}>
-              <Plus size={12} style={{ verticalAlign: '-2px' }} /> Add image
+              <Plus size={12} style={{ verticalAlign: '-2px' }} /> {__("Add image")}
             </button>
           </div>
         );
       case 'link':
         return (
           <div style={{ display: 'grid', gap: 6 }}>
-            <input type="text" style={inputStyle} placeholder="Text" aria-label={`${d.label} text`} value={v.text} onChange={(e) => set(d.id, { ...v, text: e.target.value })} />
-            <input type="text" style={inputStyle} placeholder="https://… or a page of this site" aria-label={`${d.label} address`} value={v.url} onChange={(e) => set(d.id, { ...v, url: e.target.value })} />
+            <input type="text" style={inputStyle} placeholder={__("Text")} aria-label={__("{0} text", d.label)} value={v.text} onChange={(e) => set(d.id, { ...v, text: e.target.value })} />
+            <input type="text" style={inputStyle} placeholder={__("https://… or a page of this site")} aria-label={__("{0} address", d.label)} value={v.url} onChange={(e) => set(d.id, { ...v, url: e.target.value })} />
           </div>
         );
       case 'choice':
@@ -89,7 +90,7 @@ export default function ItemFieldsSection({ activePage, updateActivePage }) {
         const list = refs[d.target] || [];
         return (
           <select style={inputStyle} value={v} onChange={(e) => set(d.id, e.target.value)} aria-label={d.label}>
-            <option value="">{d.target ? '—' : 'No collection chosen for this field'}</option>
+            <option value="">{d.target ? '—' : __("No collection chosen for this field")}</option>
             {list.map((it) => <option key={it.id} value={it.id}>{it.title}</option>)}
           </select>
         );
@@ -110,14 +111,14 @@ export default function ItemFieldsSection({ activePage, updateActivePage }) {
   };
 
   return (
-    <PanelAccordion title="Item fields" icon={ListChecks} defaultOpen={defs.length > 0}>
+    <PanelAccordion title={__("Item fields")} icon={ListChecks} defaultOpen={defs.length > 0}>
       {defs.length === 0 ? (
-        <p style={hint}>This collection has no custom fields yet. An admin adds them in Collections › Fields.</p>
+        <p style={hint}>{__("This collection has no custom fields yet. An admin adds them in Collections › Fields.")}</p>
       ) : defs.map((d) => (
         <div key={d.id} style={wrap}>
           <label style={labelStyle}>{d.label}{d.required ? ' *' : ''}</label>
           {renderInput(d)}
-          {d.required && <p style={hint}>Required to publish.</p>}
+          {d.required && <p style={hint}>{__("Required to publish.")}</p>}
         </div>
       ))}
       {picker && <MediaPickerModal onClose={() => setPicker(null)} onSelect={onPicked} />}

@@ -21,6 +21,7 @@ import { confirmDialog, promptDialog } from '../ui/dialog';
 import ReviewBar from './ReviewBar';
 import { canPublishDirect, canReview, reviewOf } from '../session/permissions';
 import { livePageUrl } from '../editor/liveUrl';
+import { __ } from '../i18n/index.js';
 
 // Remembered per browser: which side panels are open
 const readPanels = () => { try { return JSON.parse(localStorage.getItem('cc_editor_panels') || '{}'); } catch { return {}; } };
@@ -81,12 +82,12 @@ export default function VisualEditor() {
       if (mod && !e.shiftKey && !e.altKey && k === 'd' && sel) { e.preventDefault(); st.duplicateBlock(sel); return; }
       if (mod && !e.shiftKey && !e.altKey && k === 'c' && sel && !textSelected()) {
         e.preventDefault();
-        if (st.copyBlock(sel)) notify('Block copied. Paste it here or on another page with Ctrl/Cmd+V.');
+        if (st.copyBlock(sel)) notify(__("Block copied. Paste it here or on another page with Ctrl/Cmd+V."));
         return;
       }
       if (mod && !e.shiftKey && !e.altKey && k === 'v' && readBlockClipboard()) { e.preventDefault(); st.pasteBlock(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !mod && sel) {
-        e.preventDefault(); st.removeBlock(sel); notify('Block deleted. Press Ctrl/Cmd+Z to bring it back.', 'info'); return;
+        e.preventDefault(); st.removeBlock(sel); notify(__("Block deleted. Press Ctrl/Cmd+Z to bring it back."), 'info'); return;
       }
       if (e.altKey && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && sel) { e.preventDefault(); st.moveBlockBy(sel, e.key === 'ArrowUp' ? -1 : 1); return; }
       if (e.key === 'Escape' && useStore.getState().selectedBlockId) setSelectedBlockId(null);
@@ -105,17 +106,17 @@ export default function VisualEditor() {
       try {
         const res = await fetch('api.php?action=save_part', { method: 'POST', body: JSON.stringify({ name: activePage.__part, blocks, ...(activePage.lang ? { lang: activePage.lang } : {}) }) });
         return await res.json();
-      } catch { notify('Error saving the part.', 'error'); return null; }
+      } catch { notify(__("Error saving the part."), 'error'); return null; }
     }
     // The design of a collection (its blocks are every item page's layout): saved, and shown by publishing the site
     if (activePage.__design) {
       try {
         const res = await fetch('api.php?action=save_collection_design', { method: 'POST', body: JSON.stringify({ collection_id: activePage.collection_id, blocks }) });
         const data = await res.json();
-        if (data.success) notify('Design saved. Publish the site to update the item pages.');
-        else notify(data.message || 'Could not save the design.', 'error');
+        if (data.success) notify(__("Design saved. Publish the site to update the item pages."));
+        else notify(data.message || __("Could not save the design."), 'error');
         return data;
-      } catch { notify('Error saving the design.', 'error'); return null; }
+      } catch { notify(__("Error saving the design."), 'error'); return null; }
     }
     // A popup: saved to its own table; "published" means it goes on the pages at the next publish of the site
     if (activePage.__popup) {
@@ -124,7 +125,7 @@ export default function VisualEditor() {
         const data = await res.json();
         if (data.success) updateActivePage({ id: data.id, status: data.status });
         return data;
-      } catch { notify('Error saving the popup.', 'error'); return null; }
+      } catch { notify(__("Error saving the popup."), 'error'); return null; }
     }
     // Collection item: saved to collection_items
     if (activePage.__item) {
@@ -144,7 +145,7 @@ export default function VisualEditor() {
         const data = await res.json();
         if (data.success && publish) updateActivePage({ status: 'published', review_state: '', review_note: '', review_by: '', review_at: '' });
         return data;
-      } catch { notify('Error saving the item.', 'error'); return null; }
+      } catch { notify(__("Error saving the item."), 'error'); return null; }
     }
     const payload = {
       id: activePage.id, title: activePage.title, slug: activePage.slug,
@@ -168,7 +169,7 @@ export default function VisualEditor() {
          updateActivePage({ id: data.new_id, is_draft_copy: 0, status: 'published', review_state: '', review_note: '', review_by: '', review_at: '' });
       }
       return data;
-    } catch { notify('Error saving the page.', 'error'); return null; }
+    } catch { notify(__("Error saving the page."), 'error'); return null; }
   };
 
   // After EVERY successful save the current state becomes the "saved" one: the local backup is no longer needed.
@@ -199,31 +200,31 @@ export default function VisualEditor() {
       if (!saved || !saved.success) {
         // a required field of a collection item is empty: say which one (the item stays a draft)
         if (saved && saved.code === 'required') { notify(saved.message, 'error'); setIsPublishing(false); return; }
-        notify('Not published: saving the page failed' + (saved && saved.message ? ' (' + saved.message + ')' : '') + '.\nYour changes are still here and backed up on this device.', 'error');
+        notify(__("Not published: saving the page failed{0}.\nYour changes are still here and backed up on this device.", saved && saved.message ? ' (' + saved.message + ')' : ''), 'error');
         setIsPublishing(false);
         return;
       }
       const res = await publishSiteAsync();
-      if (res && res.success) notify(`Published. ${res.message || ''}`.trim());
-      else notify(`Error: ${res?.message || 'Server unreachable'}`, 'error');
+      if (res && res.success) notify(`${__("Published.")} ${res.message || ''}`.trim());
+      else notify(__("Error: {0}", res?.message || __("Server unreachable")), 'error');
 
       // Update the global state to reflect the changes in the dashboard
       fetch('api.php?action=get_pages').then(r => r.json()).then(d => setPages(d));
     } catch {
-      notify('Error publishing.', 'error');
+      notify(__("Error publishing."), 'error');
     }
 
     setIsPublishing(false);
   };
 
   const discardChanges = async () => {
-    if (!(await confirmDialog({ title: 'Discard the draft?', message: 'All draft changes are thrown away and the page goes back to the version that is online.', confirmLabel: 'Discard draft', danger: true }))) return;
+    if (!(await confirmDialog({ title: __("Discard the draft?"), message: __("All draft changes are thrown away and the page goes back to the version that is online."), confirmLabel: __("Discard draft"), danger: true }))) return;
     try {
       await fetch('api.php?action=discard_draft', { method: 'POST', body: JSON.stringify({ id: activePage.parent_id }) });
       fetch('api.php?action=get_pages').then(r => r.json()).then(d => setPages(d));
       draft.discard();
       setView('manager');
-    } catch { notify('Error discarding the changes.', 'error'); }
+    } catch { notify(__("Error discarding the changes."), 'error'); }
   };
 
   const getValidParentId = () => {
@@ -250,8 +251,8 @@ export default function VisualEditor() {
 
   const saveDraft = () => savePage(false).then((res) => {
     if (!res) return;
-    if (res.success) notify(activePage?.__part ? 'Saved.' : 'Draft saved.');
-    else notify('Save FAILED: ' + (res.message || 'unexpected response') + '\nYour changes are still here and backed up on this device.', 'error');
+    if (res.success) notify(activePage?.__part ? __("Saved.") : __("Draft saved."));
+    else notify(__("Save FAILED: {0}\nYour changes are still here and backed up on this device.", res.message || 'unexpected response'), 'error');
   });
   useEffect(() => { saveDraftRef.current = isEditingMaster ? null : saveDraft; });
 
@@ -266,20 +267,20 @@ export default function VisualEditor() {
   const liveUnchanged = activePage?.__item ? activePage.status === 'published' : (activePage?.status === 'published' && Number(activePage?.is_draft_copy) !== 1);
   const showSubmit = real && userRole !== 'reviewer' && !directPublish && !pendingReview && !liveUnchanged;
   const submitForReview = async () => {
-    const note = await promptDialog({ title: 'Submit for review', message: 'A reviewer is told this is ready. You cannot change it while it waits (you can withdraw it).', label: 'A note for the reviewer (optional)', required: false, confirmLabel: 'Submit' });
+    const note = await promptDialog({ title: __("Submit for review"), message: __("A reviewer is told this is ready. You cannot change it while it waits (you can withdraw it)."), label: __("A note for the reviewer (optional)"), required: false, confirmLabel: __("Submit") });
     if (note === null) return;
     const saved = await savePage(false);
-    if (!saved || !saved.success) { notify('Not submitted: saving failed' + (saved && saved.message ? ' (' + saved.message + ')' : '') + '.', 'error'); return; }
+    if (!saved || !saved.success) { notify(__("Not submitted: saving failed{0}.", saved && saved.message ? ' (' + saved.message + ')' : ''), 'error'); return; }
     const cur = useStore.getState().activePage;
     try {
       const d = await (await fetch('api.php?action=review_submit', { method: 'POST', body: JSON.stringify({ kind: cur.__item ? 'item' : 'page', id: cur.id, note }) })).json();
-      if (d.success) { notify('Submitted for review.'); updateActivePage({ review_state: 'pending', review_note: note, review_by: username, review_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }); }
-      else notify(d.message || 'Not submitted.', 'error');
-    } catch { notify('Not submitted (connection problem).', 'error'); }
+      if (d.success) { notify(__("Submitted for review.")); updateActivePage({ review_state: 'pending', review_note: note, review_by: username, review_at: new Date().toISOString().slice(0, 19).replace('T', ' ') }); }
+      else notify(d.message || __("Not submitted."), 'error');
+    } catch { notify(__("Not submitted (connection problem)."), 'error'); }
   };
 
   const leave = async () => {
-    if (useStore.getState().editorDirty && !(await confirmDialog({ title: 'Leave with unsaved changes?', message: 'They stay backed up on this device and will be offered next time you open the page, but they are NOT saved to the site.', confirmLabel: 'Leave anyway', cancelLabel: 'Stay' }))) return;
+    if (useStore.getState().editorDirty && !(await confirmDialog({ title: __("Leave with unsaved changes?"), message: __("They stay backed up on this device and will be offered next time you open the page, but they are NOT saved to the site."), confirmLabel: __("Leave anyway"), cancelLabel: __("Stay") }))) return;
     setSelectedBlockId(null);
     setView(activePage?.__item || activePage?.__design ? 'collections' : activePage?.__part ? 'settings' : activePage?.__popup ? 'popups' : 'manager');
   };
@@ -302,51 +303,51 @@ export default function VisualEditor() {
   const siteLangs = useStore((s) => s.languages);
   const liveUrl = activePage?.__popup ? null : livePageUrl(activePage, pages, colSlug, siteLangs);
 
-  const kind = activePage?.__part ? (activePage.__part === 'header' ? 'Global header' : 'Global footer') : activePage?.__design ? 'Collection design' : activePage?.__item ? 'Collection item' : activePage?.__popup ? 'Popup' : null;
-  const backLabel = activePage?.__item || activePage?.__design ? 'Collections' : activePage?.__part ? 'Global Options' : activePage?.__popup ? 'Popups' : 'Pages';
+  const kind = activePage?.__part ? (activePage.__part === 'header' ? __("Global header") : __("Global footer")) : activePage?.__design ? __("Collection design") : activePage?.__item ? __("Collection item") : activePage?.__popup ? __("Popup") : null;
+  const backLabel = activePage?.__item || activePage?.__design ? __("Collections") : activePage?.__part ? __("Global Options") : activePage?.__popup ? __("Popups") : __("Pages");
 
   return (
     <div className="cc-editor">
       {isEditingMaster ? (
         <header className="cc-ed-top cc-ed-top--master">
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <Crown size={17} aria-hidden="true" /> <strong>Editing a global master</strong>
-            <span className="cc-ed-hide-sm">— changes apply everywhere it is used.</span>
+            <Crown size={17} aria-hidden="true" /> <strong>{__("Editing a global master")}</strong>
+            <span className="cc-ed-hide-sm">{__("— changes apply everywhere it is used.")}</span>
           </span>
           <span className="ui-row" style={{ flexWrap: 'nowrap' }}>
-            <button type="button" onClick={() => exitMasterEditMode(false)} className="cc-ed-master-btn">Cancel</button>
-            <button type="button" onClick={() => exitMasterEditMode(true)} className="cc-ed-master-btn cc-ed-master-btn--solid">Save Master &amp; Close</button>
+            <button type="button" onClick={() => exitMasterEditMode(false)} className="cc-ed-master-btn">{__("Cancel")}</button>
+            <button type="button" onClick={() => exitMasterEditMode(true)} className="cc-ed-master-btn cc-ed-master-btn--solid">{__("Save Master &amp; Close")}</button>
           </span>
         </header>
       ) : (
         <header className="cc-ed-top">
           <div className="cc-ed-top__group" style={{ minWidth: 0, flex: '1 1 0' }}>
-            <Button variant="ghost" size="sm" icon={ChevronLeft} onClick={leave} title={`Back to ${backLabel}`}>{backLabel}</Button>
+            <Button variant="ghost" size="sm" icon={ChevronLeft} onClick={leave} title={__("Back to {0}", backLabel)}>{backLabel}</Button>
             <span className="cc-ed-sep" />
-            <span className="cc-ed-title" title={activePage?.title}>{activePage?.title || 'Untitled page'}</span>
+            <span className="cc-ed-title" title={activePage?.title}>{activePage?.title || __("Untitled page")}</span>
             {kind ? <Badge tone="accent">{kind}</Badge> : <span className="cc-ed-hide-sm"><StatusBadgeFor page={activePage} /></span>}
             <span className="cc-ed-hide-md"><EditorDraftStatus /></span>
           </div>
           <div className="cc-ed-top__group" style={{ justifyContent: 'center' }}>
-            <Segmented label="Preview size" value={viewport} onChange={setViewport} options={[
-              ['desktop', null, Monitor, 'Desktop'], ['tablet', null, Tablet, 'Tablet'], ['mobile', null, Smartphone, 'Mobile'],
+            <Segmented label={__("Preview size")} value={viewport} onChange={setViewport} options={[
+              ['desktop', null, Monitor, __("Desktop")], ['tablet', null, Tablet, __("Tablet")], ['mobile', null, Smartphone, __("Mobile")],
             ]} />
-            <IconButton icon={Undo2} label="Undo (Ctrl+Z)" size="sm" onClick={undo} disabled={pastBlocks.length === 0} />
-            <IconButton icon={Redo2} label="Redo (Ctrl+Shift+Z)" size="sm" onClick={redo} disabled={futureBlocks.length === 0} />
+            <IconButton icon={Undo2} label={__("Undo (Ctrl+Z)")} size="sm" onClick={undo} disabled={pastBlocks.length === 0} />
+            <IconButton icon={Redo2} label={__("Redo (Ctrl+Shift+Z)")} size="sm" onClick={redo} disabled={futureBlocks.length === 0} />
           </div>
           <div className="cc-ed-top__group" style={{ justifyContent: 'flex-end', flex: '1 1 0' }}>
             <IconButton icon={ExternalLink} size="sm" disabled={!liveUrl}
-              label={liveUrl ? 'View the published page in a new tab (changes not yet published are not shown)' : 'Not published yet: publish it to view it online'}
+              label={liveUrl ? __("View the published page in a new tab (changes not yet published are not shown)") : __("Not published yet: publish it to view it online")}
               onClick={() => { if (liveUrl) window.open(liveUrl, '_blank', 'noopener,noreferrer'); }} />
             {!activePage?.__part && !activePage?.__popup && (
-              <IconButton icon={History} label="Version history" size="sm" onClick={() => setHistoryOpen(true)} />
+              <IconButton icon={History} label={__("Version history")} size="sm" onClick={() => setHistoryOpen(true)} />
             )}
             {activePage?.is_draft_copy == 1 && (
-              <Button variant="danger" size="sm" icon={AlertCircle} onClick={discardChanges} title="Throw away the draft and go back to the published version"><span className="cc-ed-hide-md">Discard draft</span></Button>
+              <Button variant="danger" size="sm" icon={AlertCircle} onClick={discardChanges} title={__("Throw away the draft and go back to the published version")}><span className="cc-ed-hide-md">{__("Discard draft")}</span></Button>
             )}
-            <Button size="sm" icon={Save} onClick={saveDraft} disabled={isSaving || isPublishing || locked} title={locked ? 'Waiting for review: withdraw the submission to change it' : 'Save draft (Ctrl+S)'}><span className="cc-ed-hide-sm">{activePage?.__part ? 'Save' : 'Save Draft'}</span></Button>
-            {showSubmit && <Button variant="primary" size="sm" icon={ClipboardCheck} onClick={submitForReview} disabled={isSaving || isPublishing}>{review.state === 'changes' ? 'Submit again' : 'Submit for review'}</Button>}
-            {showPublish && <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title={approving ? 'Approve: publish this page and update the whole site' : 'Publish this page, then update the whole site (menus and lists)'}>{isPublishing ? 'Publishing…' : approving ? 'Approve & publish' : 'Publish'}</Button>}
+            <Button size="sm" icon={Save} onClick={saveDraft} disabled={isSaving || isPublishing || locked} title={locked ? __("Waiting for review: withdraw the submission to change it") : __("Save draft (Ctrl+S)")}><span className="cc-ed-hide-sm">{activePage?.__part ? __("Save") : __("Save Draft")}</span></Button>
+            {showSubmit && <Button variant="primary" size="sm" icon={ClipboardCheck} onClick={submitForReview} disabled={isSaving || isPublishing}>{review.state === 'changes' ? __("Submit again") : __("Submit for review")}</Button>}
+            {showPublish && <Button variant="primary" size="sm" icon={Globe} onClick={publishSite} disabled={isPublishing || isSaving} title={approving ? __("Approve: publish this page and update the whole site") : __("Publish this page, then update the whole site (menus and lists)")}>{isPublishing ? __("Publishing…") : approving ? __("Approve & publish") : __("Publish")}</Button>}
           </div>
         </header>
       )}
@@ -354,29 +355,29 @@ export default function VisualEditor() {
       {real && <ReviewBar page={activePage} role={userRole} username={username} onChange={(patch) => updateActivePage(patch)} />}
 
       <div className="cc-ed-body">
-        <aside className="cc-ed-left" data-open={panels.left} aria-label="Add blocks and page structure">
-          <div className="ui-tabs" role="tablist" aria-label="Left panel">
-            <button type="button" role="tab" className="ui-tab" aria-selected={leftTab === 'add'} onClick={() => setLeftTab('add')}><PlusCircle size={14} aria-hidden="true" /> Add</button>
-            <button type="button" role="tab" className="ui-tab" aria-selected={leftTab === 'nav'} onClick={() => setLeftTab('nav')}><Layers size={14} aria-hidden="true" /> Layers</button>
+        <aside className="cc-ed-left" data-open={panels.left} aria-label={__("Add blocks and page structure")}>
+          <div className="ui-tabs" role="tablist" aria-label={__("Left panel")}>
+            <button type="button" role="tab" className="ui-tab" aria-selected={leftTab === 'add'} onClick={() => setLeftTab('add')}><PlusCircle size={14} aria-hidden="true" /> {__("Add")}</button>
+            <button type="button" role="tab" className="ui-tab" aria-selected={leftTab === 'nav'} onClick={() => setLeftTab('nav')}><Layers size={14} aria-hidden="true" /> {__("Layers")}</button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {leftTab === 'nav' ? <LayerNavigator /> : <AddBlocksPanel onAdd={handleAddBlock} targetType={targetType} parentId={parentId} />}
           </div>
         </aside>
         <button type="button" className="cc-ed-toggle cc-ed-toggle--left" onClick={() => togglePanel('left')}
-          aria-label={panels.left ? 'Hide the left panel' : 'Show the left panel'} title={panels.left ? 'Hide panel' : 'Show panel'}>
+          aria-label={panels.left ? __("Hide the left panel") : __("Show the left panel")} title={panels.left ? __("Hide panel") : __("Show panel")}>
           {panels.left ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
         </button>
 
-        <main className="cc-ed-canvas" aria-label="Page canvas">
+        <main className="cc-ed-canvas" aria-label={__("Page canvas")}>
           <Canvas />
         </main>
 
         <button type="button" className="cc-ed-toggle cc-ed-toggle--right" onClick={() => togglePanel('right')}
-          aria-label={panels.right ? 'Hide the settings panel' : 'Show the settings panel'} title={panels.right ? 'Hide panel' : 'Show panel'}>
+          aria-label={panels.right ? __("Hide the settings panel") : __("Show the settings panel")} title={panels.right ? __("Hide panel") : __("Show panel")}>
           {panels.right ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
         </button>
-        <aside className="cc-ed-right" data-open={panels.right} aria-label="Settings">
+        <aside className="cc-ed-right" data-open={panels.right} aria-label={__("Settings")}>
           <PropertyPanel />
           <BlockContextMenu />
         </aside>
@@ -387,20 +388,20 @@ export default function VisualEditor() {
       )}
       {editorDraftFound && !editorRestored && (
         <div role="status" className="cc-ed-restored">
-          <span><strong>Unsaved changes found</strong> for this page{editorDraftFound.savedAt ? ` (from ${new Date(editorDraftFound.savedAt).toLocaleString()})` : ''}. They were never saved to the site.</span>
-          <Button size="sm" variant="primary" onClick={() => draft.restoreFound()}>Restore</Button>
-          <Button size="sm" variant="ghost" onClick={() => draft.dismissFound()}>Discard</Button>
+          <span><strong>{__("Unsaved changes found")}</strong> {__("for this page")}{editorDraftFound.savedAt ? __(" (from {0})", new Date(editorDraftFound.savedAt).toLocaleString()) : ''}{__(". They were never saved to the site.")}</span>
+          <Button size="sm" variant="primary" onClick={() => draft.restoreFound()}>{__("Restore")}</Button>
+          <Button size="sm" variant="ghost" onClick={() => draft.dismissFound()}>{__("Discard")}</Button>
         </div>
       )}
       {editorRestored && (
         <div role="status" className="cc-ed-restored">
-          <span><strong>Restored unsaved changes</strong> from your previous session. They are <strong>not saved to the site yet</strong>: use Save Draft or Publish to keep them.</span>
+          <span><strong>{__("Restored unsaved changes")}</strong> {__("from your previous session. They are")} <strong>{__("not saved to the site yet")}</strong>{__(": use Save Draft or Publish to keep them.")}</span>
           <Button size="sm" variant="ghost" onClick={async () => {
-            if (!(await confirmDialog({ title: 'Discard the restored changes?', message: 'The page goes back to its last saved version.', confirmLabel: 'Discard changes', danger: true }))) return;
+            if (!(await confirmDialog({ title: __("Discard the restored changes?"), message: __("The page goes back to its last saved version."), confirmLabel: __("Discard changes"), danger: true }))) return;
             clearDraft(editorScope(useStore.getState()));
             draft.discard();
             setSelectedBlockId(null); setView('manager');
-          }}>Discard</Button>
+          }}>{__("Discard")}</Button>
         </div>
       )}
     </div>
@@ -409,7 +410,7 @@ export default function VisualEditor() {
 
 function StatusBadgeFor({ page }) {
   if (!page) return null;
-  if (Number(page.is_draft_copy)) return <Badge tone="modified">Modified · draft</Badge>;
-  if (page.status === 'published') return <Badge tone="published">Published</Badge>;
-  return <Badge tone="draft">Draft</Badge>;
+  if (Number(page.is_draft_copy)) return <Badge tone="modified">{__("Modified · draft")}</Badge>;
+  if (page.status === 'published') return <Badge tone="published">{__("Published")}</Badge>;
+  return <Badge tone="draft">{__("Draft")}</Badge>;
 }

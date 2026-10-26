@@ -5,6 +5,8 @@ import { ChevronRight, ChevronDown, Trash2, GripVertical, CopyPlus } from 'lucid
 import { blockInfo, CONTAINER_TYPES } from '../editor/blockCatalog';
 import { dropPosition, containsId, findBlock } from '../editor/layerDrop';
 import { confirmDialog } from '../ui/dialog';
+import { __ } from '../i18n/index.js';
+import { dndAccessibility } from '../i18n/dnd.js';
 
 // Drag state shared by every row: the dragged id and where it would land ({ id, pos }).
 const DragState = createContext({ activeId: null, drop: null });
@@ -45,7 +47,7 @@ const LayerNode = ({ block, depth = 0 }) => {
             <span style={{ position: 'absolute', left: -3, top: -2, width: 6, height: 6, borderRadius: '50%', background: '#38bdf8' }} />
           </span>
         )}
-        <span {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} title="Drag to move" aria-label={`Move ${info.label}`}
+        <span {...attributes} {...listeners} onClick={(e) => e.stopPropagation()} title={__("Drag to move")} aria-label={__("Move {0}", info.label)}
           style={{ cursor: activeId ? 'grabbing' : 'grab', color: '#475569', display: 'flex', marginRight: '2px', touchAction: 'none' }}>
           <GripVertical size={12} />
         </span>
@@ -62,14 +64,14 @@ const LayerNode = ({ block, depth = 0 }) => {
         </div>
 
         {isSelected && (
-          <button onClick={(e) => { e.stopPropagation(); duplicateBlock(block.id); }} title="Duplicate (Ctrl/Cmd+D)" aria-label="Duplicate block"
+          <button onClick={(e) => { e.stopPropagation(); duplicateBlock(block.id); }} title={__("Duplicate (Ctrl/Cmd+D)")} aria-label={__("Duplicate block")}
             style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, marginRight: 8 }}>
             <CopyPlus size={12} />
           </button>
         )}
         {isSelected && (
-          <button onClick={async (e) => { e.stopPropagation(); if (await confirmDialog({ title: `Delete this ${info.label} block?`, message: isContainer ? 'Everything inside it is deleted too. You can undo it with Ctrl+Z.' : 'You can undo it with Ctrl+Z.', confirmLabel: 'Delete block', danger: true })) removeBlock(block.id); }}
-            title="Delete block" aria-label="Delete block" style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
+          <button onClick={async (e) => { e.stopPropagation(); if (await confirmDialog({ title: __("Delete this {0} block?", info.label), message: isContainer ? __("Everything inside it is deleted too. You can undo it with Ctrl+Z.") : __("You can undo it with Ctrl+Z."), confirmLabel: __("Delete block"), danger: true })) removeBlock(block.id); }}
+            title={__("Delete block")} aria-label={__("Delete block")} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>
             <Trash2 size={12} />
           </button>
         )}
@@ -112,17 +114,17 @@ export default function LayerNavigator() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f172a' }}>
       <div style={{ padding: '11px 12px', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', letterSpacing: '1px' }}>PAGE STRUCTURE</span>
+        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', letterSpacing: '1px' }}>{__("PAGE STRUCTURE")}</span>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
         {blocks.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>The page is empty. Add a block from the Add tab.</div>
+          <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>{__("The page is empty. Add a block from the Add tab.")}</div>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={pointerWithin}
+          <DndContext accessibility={dndAccessibility} sensors={sensors} collisionDetection={pointerWithin}
             onDragStart={({ active }) => setActiveId(active.id)} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={reset}>
             <DragState.Provider value={{ activeId, drop }}>
-              <div role="tree" aria-label="Page structure">
+              <div role="tree" aria-label={__("Page structure")}>
               {blocks.map(block => <LayerNode key={block.id} block={block} depth={0} />)}
               </div>
             </DragState.Provider>
@@ -140,14 +142,14 @@ export default function LayerNavigator() {
 
       <div style={{ padding: '11px 12px', borderTop: '1px solid #1e293b', background: '#1e293b' }}>
         <p style={{ margin: '0 0 6px 0', fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>
-          {selectedContainer ? <>Add inside the selected <span style={{ color: '#38bdf8' }}>{blockInfo(selectedContainer.type).label}</span>:</> : 'Add at the end of the page:'}
+          {selectedContainer ? <>{__("Add inside the selected")} <span style={{ color: '#38bdf8' }}>{blockInfo(selectedContainer.type).label}</span>:</> : __("Add at the end of the page:")}
         </p>
-        <p style={{ margin: '0 0 10px 0', fontSize: '10px', color: '#64748b' }}>Tip: drag <GripVertical size={10} style={{ verticalAlign: 'middle' }} /> to move a block. Drop on the middle of a Section, Container, Flex Row or CSS Grid to put it inside.</p>
+        <p style={{ margin: '0 0 10px 0', fontSize: '10px', color: '#64748b' }}>{__("Tip: drag")} <GripVertical size={10} style={{ verticalAlign: 'middle' }} /> {__("to move a block. Drop on the middle of a Section, Container, Flex Row or CSS Grid to put it inside.")}</p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <button onClick={() => addBlock('SECTION', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>+ Section</button>
-          <button onClick={() => addBlock('CONTAINER', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#f472b6', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>+ Container</button>
-          <button onClick={() => addBlock('FLEX_ROW', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#a78bfa', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>+ Flex Row</button>
-          <button onClick={() => addBlock('TEXT', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer' }}>+ Text</button>
+          <button onClick={() => addBlock('SECTION', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#38bdf8', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>{__("+ Section")}</button>
+          <button onClick={() => addBlock('CONTAINER', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#f472b6', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>{__("+ Container")}</button>
+          <button onClick={() => addBlock('FLEX_ROW', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#a78bfa', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold' }}>{__("+ Flex Row")}</button>
+          <button onClick={() => addBlock('TEXT', selectedBlockId)} style={{ padding: '6px', background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155', borderRadius: '4px', fontSize: '10px', cursor: 'pointer' }}>{__("+ Text")}</button>
         </div>
       </div>
     </div>

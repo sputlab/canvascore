@@ -4,6 +4,7 @@
 import { useStore } from '../store/useStore';
 import { createSessionManager } from './sessionManager';
 import { createGuardedFetch } from './fetchGuard';
+import { withTranslatedMessages } from '../i18n/apiMessages.js';
 import { flushDrafts, setExpiredNotice, clearExpiredNotice } from './drafts';
 
 export function installSession(win = window) {
@@ -23,7 +24,7 @@ export function installSession(win = window) {
     reload: () => win.location.reload(),
   });
 
-  win.fetch = createGuardedFetch({ originalFetch, session, getToken, baseHref: win.location.href });
+  win.fetch = withTranslatedMessages(createGuardedFetch({ originalFetch, session, getToken, baseHref: win.location.href }));
   win.__CC_FETCH_WRAPPED = true;
   win.__CC_SESSION = session;
 

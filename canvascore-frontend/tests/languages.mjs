@@ -146,7 +146,7 @@ try {
   await waitFor(() => tableRows().length === 2);
   check('the languages of the site: code, name, address, which one is the default', tableRows().length === 2 && tableRows()[0].textContent.includes('en') && $('input[aria-label="Name of it"]').value === 'Italiano' && tableRows()[1].textContent.includes('/it/') && $('input[aria-label="English is the default language"]').checked);
   check('nothing to save until something changes', btn('Save languages').disabled);
-  choose($('select'), 'de'); await sleep(30);
+  choose($('.ui-content select'), 'de'); await sleep(30);
   click(btn('Add')); await sleep(40);
   check('adding a language from the list: it appears (with its own address) and the list no longer offers it', tableRows().length === 3 && tableRows()[2].textContent.includes('/de/') && $('input[aria-label="Name of de"]').value === 'Deutsch' && !$$('select option').some((o) => o.value === 'de'));
   typeIn($('input[aria-label="Name of de"]'), 'Deutsch (Schweiz)'); await sleep(20);

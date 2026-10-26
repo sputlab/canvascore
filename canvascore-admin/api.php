@@ -319,7 +319,10 @@ if ($action === 'upload_media' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['success' => false, 'message' => 'The file is not a valid image.']); exit;
             }
         }
-        $safe = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', $orig), '.-');
+        if ($ext === 'ico' && (string)@file_get_contents($_FILES['file']['tmp_name'], false, null, 0, 4) !== "\x00\x00\x01\x00") {   // an icon starts with its header
+            echo json_encode(['success' => false, 'message' => 'The file is not a valid image.']); exit;
+        }
+        $safe = cc_upload_safe_name($orig);
         if ($safe === '' || strtolower(pathinfo($safe, PATHINFO_EXTENSION)) !== $ext) $safe = ($kind === 'image' ? 'image.' : $kind . '.') . $ext;
         $fname = time() . '_' . $safe;
         if (file_exists($uploads_dir . '/' . $fname)) $fname = time() . '_' . bin2hex(random_bytes(3)) . '_' . $safe;   // never overwrite
@@ -495,7 +498,7 @@ if ($action === 'save_languages' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $cur = file_exists($sf) ? json_decode((string)file_get_contents($sf), true) : [];
     if (!is_array($cur)) $cur = [];
     $cur['languages'] = $new;
-    file_put_contents($sf, json_encode($cur, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    if (!cc_write_file($sf, json_encode($cur, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))) { echo json_encode(['success' => false, 'message' => 'The file could not be written: check that the data folder is writable and the disk is not full.']); exit; }
     // A folder of a language may not be an address of a page or a collection (the default language's)
     $clash = [];
     if (cc_lang_active($new)) {
@@ -554,10 +557,14 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($decoded['brandColor']) && !preg_match('/^#[0-9a-fA-F]{3,8}$/', (string)$decoded['brandColor'])) {
         echo json_encode(['success' => false, 'message' => 'The brand color must be a hex color such as #3b82f6.']); exit;
     }
+    if (isset($decoded['siteUrl'])) {   // one line, with a scheme: it goes into robots.txt, canonical links, feeds and the sitemap
+        $su = trim((string)$decoded['siteUrl']);
+        $decoded['siteUrl'] = preg_match('#^https?://[^\s"<>\\\\]+$#i', $su) ? $su : '';
+    }
     if (isset($decoded['sessionTimeoutMinutes'])) {
         $decoded['sessionTimeoutMinutes'] = max(5, min(720, (int)$decoded['sessionTimeoutMinutes']));
     }
-    file_put_contents($data_dir . '/settings.json', json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    if (!cc_write_file($data_dir . '/settings.json', json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))) { echo json_encode(['success' => false, 'message' => 'The file could not be written: check that the data folder is writable and the disk is not full.']); exit; }
     echo json_encode(['success' => true, 'message' => 'Settings saved!']); exit;
 }
 
@@ -631,7 +638,7 @@ function relink_slug_change($pdo, $data_dir, $old_slug, $new_slug, $prefix = '',
     $menu_file = $data_dir . '/menu.json';
     if (file_exists($menu_file)) {
         $menu = json_decode((string)file_get_contents($menu_file), true);
-        if (is_array($menu) && cc_relink_node($menu, ...$args)) file_put_contents($menu_file, json_encode($menu, JSON_UNESCAPED_UNICODE));
+        if (is_array($menu) && cc_relink_node($menu, ...$args)) cc_write_file($menu_file, json_encode($menu, JSON_UNESCAPED_UNICODE));
     }
 }
 
@@ -644,6 +651,7 @@ if ($action === 'get_revisions') {
         $row = $r->fetch(PDO::FETCH_ASSOC);
         if ($row && (int)$row['is_draft_copy'] === 1 && $row['parent_id']) $owner = $row['parent_id'];
     }
+    if (!cc_can_read_owner($pdo, $owner, $role, $username)) { echo json_encode([]); exit; }
     $st = $pdo->prepare("SELECT id, title, kind, author, created_at, length(content_json) AS size FROM page_revisions WHERE owner = ? ORDER BY id DESC");
     $st->execute([$owner]);
     echo json_encode($st->fetchAll(PDO::FETCH_ASSOC)); exit;
@@ -652,6 +660,7 @@ if ($action === 'get_revision') {
     $st = $pdo->prepare("SELECT id, owner, title, kind, author, created_at, content_json FROM page_revisions WHERE id = ?");
     $st->execute([(int)($_GET['id'] ?? 0)]);
     $row = $st->fetch(PDO::FETCH_ASSOC);
+    if ($row && !cc_can_read_owner($pdo, $row['owner'], $role, $username)) $row = false;
     if ($row && !$is_admin) $row['content_json'] = cc_redact_content_json($row['content_json']);
     echo json_encode($row ?: ['success' => false, 'message' => 'Version not found.']); exit;
 }
@@ -1022,7 +1031,7 @@ if ($action === 'save_menu' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $raw = file_get_contents('php://input');
     $decoded = json_decode($raw, true);
     if ($decoded === null) { echo json_encode(['success' => false, 'message' => 'Invalid menu payload.']); exit; }
-    file_put_contents($data_dir . '/menu.json', json_encode($decoded, JSON_UNESCAPED_UNICODE));
+    if (!cc_write_file($data_dir . '/menu.json', json_encode($decoded, JSON_UNESCAPED_UNICODE))) { echo json_encode(['success' => false, 'message' => 'The file could not be written: check that the data folder is writable and the disk is not full.']); exit; }
     echo json_encode(['success' => true, 'message' => 'Saved!']); exit;
 }
 
@@ -1046,13 +1055,13 @@ if ($action === 'export_submissions') {
     // A value starting with = + - @ would run as a formula in Excel/Sheets: prefix it with ' (column names too:
     // the field labels come from the site's visitors)
     $csvSafe = function ($v) { $v = (string)$v; return ($v !== '' && strpbrk($v[0], "=+-@\t\r") !== false) ? "'" . $v : $v; };
-    fputcsv($out, array_map($csvSafe, $cols));
+    fputcsv($out, array_map($csvSafe, $cols), ',', '"', '');
     foreach ($rows as $r) {
         $d = json_decode($r['data_json'], true) ?: [];
         $line = [$r['created_at'], $r['form_id'], $r['page']];
         foreach ($labels as $l) $line[] = is_array($d[$l] ?? '') ? implode(', ', $d[$l]) : (string)($d[$l] ?? '');
         $line = array_map($csvSafe, $line);
-        fputcsv($out, $line);
+        fputcsv($out, $line, ',', '"', '');
     }
     rewind($out); $csv = stream_get_contents($out); fclose($out);
     echo json_encode(['success' => true, 'csv' => $csv]); exit;
@@ -1143,6 +1152,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 // The design of a collection: the blocks every item page of the collection is built from (one design per collection)
 if ($action === 'get_collection_design') {
+    if (!cc_collection_allowed($pdo, $_GET['collection'] ?? '', $role, $username)) { echo json_encode(['blocks' => []]); exit; }
     $st = $pdo->prepare("SELECT design_json FROM collections WHERE id = ?");
     $st->execute([$_GET['collection'] ?? '']);
     $blocks = json_decode((string)($st->fetchColumn() ?: '[]'), true);
@@ -1168,6 +1178,9 @@ if ($action === 'set_schedule' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($pa === false || $ua === false) { echo json_encode(['success' => false, 'message' => 'Use a date and a time, such as 2026-11-03 09:30.']); exit; }
     if ($pa !== '' && $ua !== '' && $ua <= $pa) { echo json_encode(['success' => false, 'message' => 'The unpublish time must be after the publish time.']); exit; }
     if ($kind === 'item') {
+        $own = $pdo->prepare("SELECT collection_id FROM collection_items WHERE id = ?"); $own->execute([$id]);
+        $cidOfItem = $own->fetchColumn();
+        if ($cidOfItem !== false && !cc_collection_allowed($pdo, $cidOfItem, $role, $username)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You do not have access to this collection.']); exit; }
         $st = $pdo->prepare("UPDATE collection_items SET publish_at = ?, unpublish_at = ? WHERE id = ?");
     } else {
         // a page being edited may be its hidden draft copy: the schedule belongs to the live page
@@ -1987,8 +2000,8 @@ if ($action === 'import_site' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $pp = $pdo->prepare("INSERT INTO site_parts (name, content_json, content_schema) VALUES (?, ?, 1) ON CONFLICT(name) DO UPDATE SET content_json = excluded.content_json");
             foreach (['header', 'footer'] as $pn) { if (isset($bundle['parts'][$pn])) $pp->execute([$pn, json_encode($bundle['parts'][$pn])]); }
         }
-        if (isset($bundle['menu'])) file_put_contents($data_dir . '/menu.json', json_encode($bundle['menu'], JSON_UNESCAPED_UNICODE));
-        if (isset($bundle['settings'])) file_put_contents($data_dir . '/settings.json', json_encode($bundle['settings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        if (isset($bundle['menu'])) cc_write_file($data_dir . '/menu.json', json_encode($bundle['menu'], JSON_UNESCAPED_UNICODE));
+        if (isset($bundle['settings'])) cc_write_file($data_dir . '/settings.json', json_encode($bundle['settings'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         $pdo->commit();
         cc_migrate_content($pdo);
         cc_sanitize_all_content($pdo);

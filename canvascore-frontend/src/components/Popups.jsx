@@ -8,6 +8,7 @@ import { Button, IconButton, PageHeader, EmptyState, StatusBadge } from '../ui/k
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
 import { STARTERS, defaultSettings, triggerSummary, rulesSummary } from '../editor/popups';
+import { __, _n } from '../i18n/index.js';
 
 const post = (action, body) => fetch(`api.php?action=${action}`, { method: 'POST', body: JSON.stringify(body) }).then((r) => r.json());
 
@@ -19,7 +20,7 @@ export default function Popups() {
 
   const load = useCallback(() => fetch('api.php?action=get_popups').then((r) => r.json())
     .then((d) => setList(Array.isArray(d) ? d : []))
-    .catch(() => { setList([]); notify('Could not load the popups.', 'error'); }), []);
+    .catch(() => { setList([]); notify(__("Could not load the popups."), 'error'); }), []);
   useEffect(() => { load(); }, [load]);
 
   const openEditor = (p, blocks) => {
@@ -31,71 +32,71 @@ export default function Popups() {
   const edit = async (p) => {
     try {
       const d = await (await fetch('api.php?action=get_popup&id=' + encodeURIComponent(p.id))).json();
-      if (!d || !d.id) { notify('This popup no longer exists.', 'error'); load(); return; }
+      if (!d || !d.id) { notify(__("This popup no longer exists."), 'error'); load(); return; }
       let blocks = []; try { blocks = JSON.parse(d.content_json || '[]'); } catch { blocks = []; }
       openEditor({ id: d.id, name: d.name, status: d.status, settings: d.settings }, Array.isArray(blocks) ? blocks : []);
-    } catch { notify('Could not open the popup (connection problem).', 'error'); }
+    } catch { notify(__("Could not open the popup (connection problem)."), 'error'); }
   };
   const create = async (starter) => {
     setPicking(false); setBusy(true);
     try {
       const blocks = starter.blocks();
       const settings = defaultSettings();
-      const d = await post('save_popup', { name: starter.id === 'blank' ? 'New popup' : starter.name, status: 'draft', blocks, settings });
-      if (!d.success) { notify(d.message || 'The popup was not created.', 'error'); return; }
-      openEditor({ id: d.id, name: starter.id === 'blank' ? 'New popup' : starter.name, status: 'draft', settings }, blocks);
-    } catch { notify('The popup was not created (connection problem).', 'error'); } finally { setBusy(false); }
+      const d = await post('save_popup', { name: starter.id === 'blank' ? __("New popup") : starter.name, status: 'draft', blocks, settings });
+      if (!d.success) { notify(d.message || __("The popup was not created."), 'error'); return; }
+      openEditor({ id: d.id, name: starter.id === 'blank' ? __("New popup") : starter.name, status: 'draft', settings }, blocks);
+    } catch { notify(__("The popup was not created (connection problem)."), 'error'); } finally { setBusy(false); }
   };
   const copyOf = async (p) => {
     try {
       const full = await (await fetch('api.php?action=get_popup&id=' + encodeURIComponent(p.id))).json();
       let blocks = []; try { blocks = JSON.parse(full.content_json || '[]'); } catch { blocks = []; }
       const d = await post('save_popup', { name: `${p.name} (copy)`, status: 'draft', blocks, settings: full.settings });
-      notify(d.success ? 'Duplicated as a draft.' : (d.message || 'Not duplicated.'), d.success ? 'success' : 'error');
+      notify(d.success ? __("Duplicated as a draft.") : d.message || __("Not duplicated."), d.success ? 'success' : 'error');
       load();
-    } catch { notify('Not duplicated (connection problem).', 'error'); }
+    } catch { notify(__("Not duplicated (connection problem)."), 'error'); }
   };
   const setStatus = async (p, status) => {
     try {
       const full = await (await fetch('api.php?action=get_popup&id=' + encodeURIComponent(p.id))).json();
       let blocks = []; try { blocks = JSON.parse(full.content_json || '[]'); } catch { blocks = []; }
       const d = await post('save_popup', { id: p.id, name: p.name, status, blocks, settings: full.settings });
-      notify(d.message || (d.success ? 'Done.' : 'Not changed.'), d.success ? 'success' : 'error');
+      notify(d.message || d.success ? __("Done.") : __("Not changed."), d.success ? 'success' : 'error');
       load();
-    } catch { notify('Not changed (connection problem).', 'error'); }
+    } catch { notify(__("Not changed (connection problem)."), 'error'); }
   };
   const remove = async (p) => {
-    if (!(await confirmDialog({ title: `Delete the popup “${p.name}”?`, message: 'It disappears from the site at the next publish. This cannot be undone.', confirmLabel: 'Delete popup', danger: true }))) return;
+    if (!(await confirmDialog({ title: __("Delete the popup “{0}”?", p.name), message: __("It disappears from the site at the next publish. This cannot be undone."), confirmLabel: __("Delete popup"), danger: true }))) return;
     const d = await post('delete_popup', { id: p.id });
-    notify(d.success ? 'Popup deleted.' : (d.message || 'Not deleted.'), d.success ? 'success' : 'error');
+    notify(d.success ? __("Popup deleted.") : d.message || __("Not deleted."), d.success ? 'success' : 'error');
     load();
   };
 
   return (
     <>
-      <PageHeader icon={AppWindow} title="Popups" description="Windows that open over your pages: a newsletter box after a few seconds, an offer when the visitor is about to leave… Built from blocks like a page; you choose what makes them appear and where, for whom and how often."
-        actions={<Button variant="primary" icon={Plus} onClick={() => setPicking(true)} disabled={busy}>New popup</Button>} />
-      {list === null ? <p className="ui-hint">Loading…</p> : list.length === 0 ? (
-        <EmptyState icon={AppWindow} title="No popups yet" action={<Button variant="primary" icon={Plus} onClick={() => setPicking(true)}>Create the first popup</Button>}>
-          A popup is shown on the site only when it is published and the site is published.
+      <PageHeader icon={AppWindow} title={__("Popups")} description={__("Windows that open over your pages: a newsletter box after a few seconds, an offer when the visitor is about to leave… Built from blocks like a page; you choose what makes them appear and where, for whom and how often.")}
+        actions={<Button variant="primary" icon={Plus} onClick={() => setPicking(true)} disabled={busy}>{__("New popup")}</Button>} />
+      {list === null ? <p className="ui-hint">{__("Loading…")}</p> : list.length === 0 ? (
+        <EmptyState icon={AppWindow} title={__("No popups yet")} action={<Button variant="primary" icon={Plus} onClick={() => setPicking(true)}>{__("Create the first popup")}</Button>}>
+          {__("A popup is shown on the site only when it is published and the site is published.")}
         </EmptyState>
       ) : (
         <div className="ui-table-wrap">
-          <table className="ui-table" aria-label="Popups">
-            <thead><tr><th>Popup</th><th>Status</th><th>When it appears</th><th>Rules</th><th className="ui-cell-actions">Actions</th></tr></thead>
+          <table className="ui-table" aria-label={__("Popups")}>
+            <thead><tr><th>{__("Popup")}</th><th>{__("Status")}</th><th>{__("When it appears")}</th><th>{__("Rules")}</th><th className="ui-cell-actions">{__("Actions")}</th></tr></thead>
             <tbody>
               {list.map((p) => (
                 <tr key={p.id} data-popup={p.id} onDoubleClick={() => edit(p)}>
-                  <td style={{ maxWidth: 260 }}><div className="ui-cell-title" title={p.name}>{p.name}</div><div className="ui-cell-muted">{p.blocks} block{p.blocks === 1 ? '' : 's'}</div></td>
+                  <td style={{ maxWidth: 260 }}><div className="ui-cell-title" title={p.name}>{p.name}</div><div className="ui-cell-muted">{_n(p.blocks, "block", "blocks")}</div></td>
                   <td><StatusBadge status={p.status} /></td>
                   <td className="ui-cell-muted">{triggerSummary(p.settings)}</td>
                   <td className="ui-cell-muted">{rulesSummary(p.settings)}</td>
                   <td className="ui-cell-actions">
                     <span className="ui-row" style={{ justifyContent: 'flex-end', gap: 4, flexWrap: 'nowrap' }}>
-                      <Button variant="primary" size="sm" icon={Pencil} onClick={() => edit(p)}>Edit</Button>
-                      <IconButton icon={p.status === 'published' ? EyeOff : Eye} label={p.status === 'published' ? `Unpublish ${p.name}` : `Publish ${p.name}`} size="sm" onClick={() => setStatus(p, p.status === 'published' ? 'draft' : 'published')} />
-                      <IconButton icon={Copy} label={`Duplicate ${p.name}`} size="sm" onClick={() => copyOf(p)} />
-                      <IconButton icon={Trash2} label={`Delete ${p.name}`} size="sm" onClick={() => remove(p)} style={{ color: '#f87171' }} />
+                      <Button variant="primary" size="sm" icon={Pencil} onClick={() => edit(p)}>{__("Edit")}</Button>
+                      <IconButton icon={p.status === 'published' ? EyeOff : Eye} label={p.status === 'published' ? __("Unpublish {0}", p.name) : __("Publish {0}", p.name)} size="sm" onClick={() => setStatus(p, p.status === 'published' ? 'draft' : 'published')} />
+                      <IconButton icon={Copy} label={__("Duplicate {0}", p.name)} size="sm" onClick={() => copyOf(p)} />
+                      <IconButton icon={Trash2} label={__("Delete {0}", p.name)} size="sm" onClick={() => remove(p)} style={{ color: '#f87171' }} />
                     </span>
                   </td>
                 </tr>
@@ -108,8 +109,8 @@ export default function Popups() {
         <div className="ui-dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setPicking(false); }}>
           <div className="ui-dialog" role="dialog" aria-modal="true" aria-labelledby="cc-newpop-title" style={{ width: 'min(520px, 100%)' }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setPicking(false); } }}>
             <div className="ui-dialog__head" style={{ justifyContent: 'space-between' }}>
-              <h2 id="cc-newpop-title" className="ui-dialog__title">New popup: start from…</h2>
-              <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label="Close" onClick={() => setPicking(false)}><X size={16} /></button>
+              <h2 id="cc-newpop-title" className="ui-dialog__title">{__("New popup: start from…")}</h2>
+              <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label={__("Close")} onClick={() => setPicking(false)}><X size={16} /></button>
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
               {STARTERS.map((st) => (

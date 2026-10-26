@@ -5,6 +5,7 @@ import { useStore, readBlockClipboard } from '../store/useStore';
 import { Crown, Library, Trash2, ChevronDown, ClipboardPaste } from 'lucide-react';
 import { CATEGORIES, searchBlocks, blockLabel } from '../editor/blockCatalog';
 import { SearchInput } from '../ui/kit';
+import { __ } from '../i18n/index.js';
 
 function Group({ title, count, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -43,13 +44,13 @@ export default function AddBlocksPanel({ onAdd, targetType, parentId = null }) {
     <div style={{ padding: 10 }}>
       {clip && (
         <button type="button" className="ui-btn ui-btn--secondary ui-btn--sm" style={{ width: '100%', justifyContent: 'flex-start', marginBottom: 8 }} onClick={() => pasteBlock()}
-          title="Paste the copied block (Ctrl/Cmd+V)">
-          <ClipboardPaste size={14} aria-hidden="true" /> Paste copied {blockLabel(clip.block.type)}
+          title={__("Paste the copied block (Ctrl/Cmd+V)")}>
+          <ClipboardPaste size={14} aria-hidden="true" /> {__("Paste copied")} {blockLabel(clip.block.type)}
         </button>
       )}
-      <SearchInput value={query} onChange={setQuery} placeholder="Search blocks…" label="Search blocks" />
+      <SearchInput value={query} onChange={setQuery} placeholder={__("Search blocks…")} label={__("Search blocks")} />
       <p style={{ margin: '8px 2px 6px', fontSize: 11, color: '#64748b' }} aria-live="polite">
-        {targetType ? <>Adds inside the selected <strong style={{ color: '#38bdf8' }}>{blockLabel(targetType)}</strong></> : 'Adds at the end of the page'}
+        {targetType ? <>{__("Adds inside the selected")} <strong style={{ color: '#38bdf8' }}>{blockLabel(targetType)}</strong></> : __("Adds at the end of the page")}
       </p>
 
       {CATEGORIES.map((cat) => {
@@ -59,7 +60,7 @@ export default function AddBlocksPanel({ onAdd, targetType, parentId = null }) {
           <Group key={cat.id} title={cat.label} count={q ? items.length : undefined}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
               {items.map((b) => (
-                <button key={b.type} type="button" className="cc-add-tile" style={tile} onClick={() => onAdd(b.type)} title={`Add ${b.label}`}>
+                <button key={b.type} type="button" className="cc-add-tile" style={tile} onClick={() => onAdd(b.type)} title={__("Add {0}", b.label)}>
                   <b.icon size={18} color={b.color} aria-hidden="true" /> {b.label}
                 </button>
               ))}
@@ -68,19 +69,19 @@ export default function AddBlocksPanel({ onAdd, targetType, parentId = null }) {
         );
       })}
       {found.length === 0 && !myTemplates.length && !myMasters.length && (
-        <p style={{ fontSize: 12, color: '#64748b', textAlign: 'center', padding: '20px 0' }}>No blocks match “{query}”.</p>
+        <p style={{ fontSize: 12, color: '#64748b', textAlign: 'center', padding: '20px 0' }}>{__("No blocks match “")}{query}”.</p>
       )}
 
       {!isEditingMaster && (myTemplates.length > 0 || !q) && (
-        <Group title="My templates" count={myTemplates.length} defaultOpen={false}>
+        <Group title={__("My templates")} count={myTemplates.length} defaultOpen={false}>
           {myTemplates.length === 0 ? (
-            <p style={{ fontSize: 11, color: '#64748b', margin: '0 2px 8px' }}>Save a block as a template from its panel (the save icon) to reuse a copy of it.</p>
+            <p style={{ fontSize: 11, color: '#64748b', margin: '0 2px 8px' }}>{__("Save a block as a template from its panel (the save icon) to reuse a copy of it.")}</p>
           ) : myTemplates.map((t) => (
             <div key={t.id} style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-              <button type="button" onClick={() => addSavedBlock(t.content_json, parentId)} className="ui-btn ui-btn--secondary ui-btn--sm" style={{ flex: 1, justifyContent: 'flex-start', color: '#ddd6fe' }} title="Insert a copy">
+              <button type="button" onClick={() => addSavedBlock(t.content_json, parentId)} className="ui-btn ui-btn--secondary ui-btn--sm" style={{ flex: 1, justifyContent: 'flex-start', color: '#ddd6fe' }} title={__("Insert a copy")}>
                 <Library size={14} aria-hidden="true" /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span>
               </button>
-              <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label={`Delete template ${t.name}`} title="Delete template"
+              <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label={__("Delete template {0}", t.name)} title={__("Delete template")}
                 onClick={() => deleteTemplate(t.id)} style={{ color: '#f87171' }}><Trash2 size={13} /></button>
             </div>
           ))}
@@ -88,15 +89,15 @@ export default function AddBlocksPanel({ onAdd, targetType, parentId = null }) {
       )}
 
       {!isEditingMaster && (myMasters.length > 0 || !q) && (
-        <Group title="Global masters" count={myMasters.length} defaultOpen={false}>
+        <Group title={__("Global masters")} count={myMasters.length} defaultOpen={false}>
           {myMasters.length === 0 ? (
-            <p style={{ fontSize: 11, color: '#64748b', margin: '0 2px 8px' }}>A master is a block shared by many pages: edit it once, it changes everywhere. Create one from a block's panel (Master).</p>
+            <p style={{ fontSize: 11, color: '#64748b', margin: '0 2px 8px' }}>{__("A master is a block shared by many pages: edit it once, it changes everywhere. Create one from a block's panel (Master).")}</p>
           ) : myMasters.map((m) => (
             <div key={m.id} style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-              <button type="button" onClick={() => insertMaster(m.id, m.name, parentId)} className="ui-btn ui-btn--gold ui-btn--sm" style={{ flex: 1, justifyContent: 'flex-start' }} title="Insert this master">
+              <button type="button" onClick={() => insertMaster(m.id, m.name, parentId)} className="ui-btn ui-btn--gold ui-btn--sm" style={{ flex: 1, justifyContent: 'flex-start' }} title={__("Insert this master")}>
                 <Crown size={14} aria-hidden="true" /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
               </button>
-              <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label={`Delete master ${m.name}`} title="Delete master"
+              <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label={__("Delete master {0}", m.name)} title={__("Delete master")}
                 onClick={() => deleteMaster(m.id)} style={{ color: '#f87171' }}><Trash2 size={13} /></button>
             </div>
           ))}

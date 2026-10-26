@@ -21,6 +21,9 @@ if (!function_exists('mb_substr')) {
 if (!function_exists('mb_strlen')) {
     function mb_strlen($s) { return (int)preg_match_all('/./us', (string)$s); }
 }
+if (!function_exists('mb_strtolower')) {
+    function mb_strtolower($s) { return strtolower((string)$s); }   // ASCII only without the extension: sorting still works
+}
 
 // ---------------------------------------------------------------------------
 // Hardened session (HttpOnly cookie, SameSite=Lax, Secure over HTTPS)
@@ -53,7 +56,7 @@ $GLOBALS['CC_HT_DENY'] =
     "<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n";
 
 $GLOBALS['CC_HT_UPLOADS'] =
-    "<FilesMatch \"\\.(?i:php|phtml|phar|php3|php4|php5|php7|phps|pht|cgi|pl|py|sh)$\">\n" .
+    "<FilesMatch \"\\.(?i:php\\d?|phtml|phar|phps|pht|cgi|pl|py|sh)(\\.|$)\">\n" .
     "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
     "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n" .
     "</FilesMatch>\n" .
@@ -142,6 +145,34 @@ function cc_path_inside($path, $root) {
     return strpos($full, rtrim(str_replace('\\', '/', $root), '/') . '/') === 0;
 }
 
+// Writes a data file (settings, menu…) all at once: into a temporary file beside it, then renamed over it, so a full disk or a crash never leaves
+// it empty or half written, and a request reading it at the same moment sees the old or the new file, never a part. false when it could not be written.
+function cc_write_file($path, $data) {
+    $tmp = $path . '.tmp-' . bin2hex(random_bytes(4));
+    if (@file_put_contents($tmp, $data, LOCK_EX) === false || strlen((string)$data) !== (int)@filesize($tmp)) { @unlink($tmp); return false; }
+    if (@rename($tmp, $path)) return true;
+    @unlink($tmp);
+    return @file_put_contents($path, $data, LOCK_EX) !== false;
+}
+// Copies a folder with everything in it; false when any file could not be copied. $skip: names of sub-folders not copied.
+function cc_copy_tree($from, $to, array $skip = []) {
+    if (!is_dir($to) && !@mkdir($to, 0755, true)) return false;
+    $ok = true;
+    foreach (scandir($from) ?: [] as $n) {
+        if ($n === '.' || $n === '..' || in_array($n, $skip, true)) continue;
+        $a = $from . '/' . $n; $b = $to . '/' . $n;
+        if (is_link($a)) continue;
+        if (is_dir($a)) { if (!cc_copy_tree($a, $b)) $ok = false; }
+        elseif (!@copy($a, $b) || filesize($a) !== filesize($b)) $ok = false;
+    }
+    return $ok;
+}
+// Is the copy of a database whole? (same size, and SQLite itself says it is intact)
+function cc_sqlite_copy_ok($from, $to) {
+    if (!is_file($to)) return !is_file($from);
+    if (filesize($from) !== filesize($to)) return false;
+    try { $p = new PDO('sqlite:' . $to); return (string)$p->query('PRAGMA integrity_check')->fetchColumn() === 'ok'; } catch (Throwable $e) { return false; }
+}
 function cc_data_dir() {
     static $dir = null;
     if ($dir !== null) return $dir;
@@ -173,10 +204,9 @@ function cc_data_dir() {
             if (!$c || cc_path_inside($c, $docroot)) continue;
             if (!is_dir($c)) @mkdir($c, 0755, true);
             if (!cc_can_write($c)) continue;
-            foreach (['canvascore.sqlite', 'settings.json', 'menu.json', 'forms.json'] as $f) {
-                if (file_exists($legacy . '/' . $f)) @copy($legacy . '/' . $f, $c . '/' . $f);
-            }
-            if (file_exists($c . '/canvascore.sqlite')) { @unlink($legacy . '/canvascore.sqlite'); $dir = $c; }
+            // Everything moves (the database, the settings, the menu, the media data, the integrations and their keys, packages, library,
+            // backups, updates), and the old database is deleted only after the whole copy is checked: a copy cut short (a full disk) is not used.
+            if (cc_copy_tree($legacy, $c, ['sessions']) && cc_sqlite_copy_ok($legacy . '/canvascore.sqlite', $c . '/canvascore.sqlite')) { @unlink($legacy . '/canvascore.sqlite'); $dir = $c; }
             break;
         }
     }
@@ -217,10 +247,20 @@ function cc_block_defaults() {
 // ---------------------------------------------------------------------------
 // Slug
 // ---------------------------------------------------------------------------
+// The name an uploaded file is kept under: letters, digits, "-" and "_", and ONE dot before the extension. A name such as shell.php.png
+// would be run as PHP by a server that gives a handler to any extension of the name (Apache's AddHandler), so no inner dot survives.
+function cc_upload_safe_name($orig) {
+    $clean = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', (string)$orig), '.-');
+    $ext = strtolower(pathinfo($clean, PATHINFO_EXTENSION));
+    if ($ext === '') return '';
+    $base = str_replace('.', '-', pathinfo($clean, PATHINFO_FILENAME));
+    return ($base === '' ? 'file' : $base) . '.' . $ext;
+}
 function cc_safe_slug($raw) {
     $s = strtolower(trim((string)$raw));
     $s = preg_replace('/[^a-z0-9]+/', '-', $s);
     $s = trim($s, '-');
+    if (strlen($s) > 100) $s = trim(substr($s, 0, 100), '-');   // a folder name the file system accepts
     return $s === '' ? 'index' : $s;
 }
 if (!function_exists('sanitize_slug')) {

@@ -5,10 +5,12 @@
 // body, small and button elements are styled by the same rules. Mirrors cc_typography(), cc_type_css() and
 // cc_with_text_preset() in config.php and compiler.php.
 
+import { __ } from '../i18n/index.js';
+
 // [id, label, the element or class the preset styles on the site]
 export const TYPE_PRESETS = [
-  ['h1', 'Heading 1', 'h1'], ['h2', 'Heading 2', 'h2'], ['h3', 'Heading 3', 'h3'], ['h4', 'Heading 4', 'h4'],
-  ['h5', 'Heading 5', 'h5'], ['h6', 'Heading 6', 'h6'], ['body', 'Body', 'body'], ['small', 'Small', 'small'], ['button', 'Button', '.cc-btn'],
+  ['h1', __("Heading 1"), 'h1'], ['h2', __("Heading 2"), 'h2'], ['h3', __("Heading 3"), 'h3'], ['h4', __("Heading 4"), 'h4'],
+  ['h5', __("Heading 5"), 'h5'], ['h6', __("Heading 6"), 'h6'], ['body', __("Body"), 'body'], ['small', __("Small"), 'small'], ['button', __("Button"), '.cc-btn'],
 ];
 export const TYPE_IDS = TYPE_PRESETS.map(([id]) => id);
 // The fonts a preset can use: the Google Fonts the site loads (the same list as the site font)

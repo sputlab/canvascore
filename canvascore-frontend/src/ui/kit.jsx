@@ -2,6 +2,7 @@
 // tabs and headers look and behave the same everywhere (styles in kit.css, classes "ui-*").
 import React, { useState, useId } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
+import { __ } from '../i18n/index.js';
 
 const cx = (...c) => c.filter(Boolean).join(' ');
 
@@ -47,7 +48,7 @@ export function Select({ className, options, children, ...rest }) {
 export function Checkbox({ label, className, ...rest }) {
   return <label className={cx('ui-check', className)}><input type="checkbox" {...rest} /> {label}</label>;
 }
-export function SearchInput({ value, onChange, placeholder = 'Search…', label = 'Search', ...rest }) {
+export function SearchInput({ value, onChange, placeholder = __("Search…"), label = __("Search"), ...rest }) {
   return (
     <div className="ui-search">
       <Search size={15} aria-hidden="true" />
@@ -94,9 +95,9 @@ export function Badge({ tone = 'neutral', icon: Icon, children }) {
 
 // Page status → badge (pages and collection items)
 export function StatusBadge({ status, isDraftCopy }) {
-  if (Number(isDraftCopy) || status === 'modified') return <Badge tone="modified">Modified</Badge>;
-  if (status === 'published') return <Badge tone="published">Published</Badge>;
-  return <Badge tone="draft">Draft</Badge>;
+  if (Number(isDraftCopy) || status === 'modified') return <Badge tone="modified">{__("Modified")}</Badge>;
+  if (status === 'published') return <Badge tone="published">{__("Published")}</Badge>;
+  return <Badge tone="draft">{__("Draft")}</Badge>;
 }
 
 export function EmptyState({ icon: Icon, title, children, action }) {

@@ -266,7 +266,7 @@ function cc_wp_fetch($url, $maxBytes = CC_WP_MAX_IMAGE) {
         ]);
         curl_exec($ch);
         $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE); $err = curl_error($ch);
-        curl_close($ch); fclose($fh);
+        if (PHP_VERSION_ID < 80000) curl_close($ch); fclose($fh);
         if ($code >= 300 && $code < 400 && !empty($headers['location'])) {
             @unlink($tmp);
             $loc = $headers['location'];
@@ -299,7 +299,7 @@ function cc_wp_store_image($tmp, $sourceUrl, $uploadsDir, $baseDir) {
     }
     if (!is_dir($uploadsDir)) @mkdir($uploadsDir, 0755, true);
     if (isset($GLOBALS['CC_HT_UPLOADS'])) ensure_htaccess($uploadsDir, $GLOBALS['CC_HT_UPLOADS']);
-    $safe = ltrim(preg_replace('/[^a-zA-Z0-9._-]/', '', $orig), '.-');
+    $safe = cc_upload_safe_name($orig);
     if ($safe === '' || strtolower(pathinfo($safe, PATHINFO_EXTENSION)) !== $ext) $safe = 'image.' . $ext;
     $fname = time() . '_' . $safe;
     if (file_exists("$uploadsDir/$fname")) $fname = time() . '_' . bin2hex(random_bytes(3)) . '_' . $safe;

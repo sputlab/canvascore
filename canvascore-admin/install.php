@@ -100,27 +100,6 @@ function cc_install_requirements($data_dir, $site_dir) {
     return $r;
 }
 
-// Is the data folder reachable over HTTP? A random test file is written there and requested from this same server
-// (by its own address, never another host). 'exposed', 'protected' or 'unknown'.
-function cc_install_probe_data($data_dir, $docroot) {
-    $real = realpath($data_dir);
-    if (!$docroot || !$real || !cc_path_inside($real, $docroot) || !ini_get('allow_url_fopen')) return 'unknown';
-    $name = 'cc-probe-' . bin2hex(random_bytes(8)) . '.txt'; $secret = bin2hex(random_bytes(16));
-    if (@file_put_contents($real . '/' . $name, $secret) === false) return 'unknown';
-    $path = str_replace('%2F', '/', rawurlencode(str_replace('\\', '/', substr($real, strlen($docroot))))) . '/' . $name;
-    $https = cc_is_https();
-    $ip = (string)($_SERVER['SERVER_ADDR'] ?? '127.0.0.1'); if ($ip === '' || $ip === '0.0.0.0' || $ip === '::') $ip = '127.0.0.1';
-    $port = (int)($_SERVER['SERVER_PORT'] ?? ($https ? 443 : 80));
-    $host = preg_replace('/[^A-Za-z0-9.:\[\]-]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
-    $url = ($https ? 'https' : 'http') . '://' . (strpos($ip, ':') !== false ? '[' . $ip . ']' : $ip) . ':' . $port . $path;
-    $ctx = stream_context_create(['http' => ['method' => 'GET', 'header' => 'Host: ' . $host . "\r\n", 'timeout' => 4, 'follow_location' => 0, 'ignore_errors' => true],
-                                  'ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'peer_name' => preg_replace('/:\d+$/', '', $host)]]);
-    $body = @file_get_contents($url, false, $ctx, 0, 256);
-    @unlink($real . '/' . $name);
-    if ($body === false) return 'unknown';
-    return trim($body) === $secret ? 'exposed' : 'protected';
-}
-
 // The setup key (install-key.txt in the data folder), created on first use
 function cc_install_key($data_dir) {
     $f = $data_dir . '/install-key.txt';

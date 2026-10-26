@@ -86,7 +86,7 @@ function cc_item_save_check($pdo, $role, $username, $existing, $wantsPublished) 
         if ($state === 'pending') return ['code' => 'in_review', 'message' => 'This item is waiting for review. Withdraw the submission to change it.'];
         return true;
     }
-    if ($wantsPublished && ($existing['status'] ?? '') !== 'published' && $state !== 'pending') return ['code' => 'needs_review', 'message' => 'Reviewers approve items that were submitted for review. This item was not submitted.'];
+    if ($wantsPublished && $state !== 'pending') return ['code' => 'needs_review', 'message' => 'Reviewers approve items that were submitted for review. This item was not submitted.'];
     return true;
 }
 
@@ -108,6 +108,22 @@ function cc_collection_allowed($pdo, $cid, $role, $username) {
     if ($raw === false) return true;   // not a collection: other checks report that
     $a = cc_collection_access_clean(json_decode((string)$raw, true));
     return $a['mode'] !== 'selected' || in_array($username, $a['users'], true);
+}
+// May this account read the version history of a page (owner = the page id) or of a collection item (owner = "item:<id>")?
+// The same rule as reading the page or the item itself: authors only their own, nobody in a collection limited to other people.
+function cc_can_read_owner($pdo, $owner, $role, $username) {
+    if ($role === 'admin') return true;
+    $owner = (string)$owner;
+    if (strpos($owner, 'item:') === 0) {
+        $st = $pdo->prepare("SELECT collection_id, created_by FROM collection_items WHERE id = ?"); $st->execute([substr($owner, 5)]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row) return false;
+        return cc_collection_allowed($pdo, $row['collection_id'], $role, $username) && ($role !== 'author' || $row['created_by'] === $username);
+    }
+    $st = $pdo->prepare("SELECT * FROM pages WHERE id = ?"); $st->execute([$owner]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return false;
+    return $role !== 'author' || ($username !== '' && cc_owner_of_page($pdo, $row) === $username);
 }
 function cc_collections_denied_ids($pdo, $role, $username) {
     if ($role === 'admin') return [];

@@ -247,6 +247,17 @@ check('rich text already stored is cleaned', strpos((string)$mdb->query("SELECT 
 check('accounts get a session generation, and user names become unique', cc_col_exists($mdb, 'admin', 'session_gen') && (bool)$mdb->query("SELECT 1 FROM sqlite_master WHERE name = 'idx_admin_username'")->fetchColumn());
 $mdb = null; @unlink($mf);
 
+echo "\nDATA FILES, SLUGS AND COPIES\n";
+$wf = sys_get_temp_dir() . '/cc_wf_' . getmypid(); @mkdir($wf);
+check('a data file is written whole, and no temporary file is left', cc_write_file($wf . '/a.json', '{"a":1}') && file_get_contents($wf . '/a.json') === '{"a":1}' && cc_write_file($wf . '/a.json', '{"a":2}') && file_get_contents($wf . '/a.json') === '{"a":2}' && count(glob($wf . '/*')) === 1);
+check('…and a file that cannot be written says so', cc_write_file($wf . '/no/such/folder/a.json', 'x') === false);
+check('a slug is cut to a folder name the file system accepts', strlen(cc_safe_slug(str_repeat('abc ', 200))) <= 100 && substr(cc_safe_slug(str_repeat('abc ', 200)), -1) !== '-' && cc_safe_slug(str_repeat('x', 300)) === str_repeat('x', 100));
+@mkdir($wf . '/from/sub', 0755, true); file_put_contents($wf . '/from/a.txt', 'A'); file_put_contents($wf . '/from/sub/b.txt', 'B'); @mkdir($wf . '/from/sessions'); file_put_contents($wf . '/from/sessions/s', 'S');
+check('moving the data folder copies everything in it (not the sessions) and says when a copy failed', cc_copy_tree($wf . '/from', $wf . '/to', ['sessions']) && file_get_contents($wf . '/to/sub/b.txt') === 'B' && !file_exists($wf . '/to/sessions') && cc_copy_tree($wf . '/from', '/proc/nope/cc') === false);
+$sq = new PDO('sqlite:' . $wf . '/x.sqlite'); $sq->exec('CREATE TABLE t (a)'); $sq = null; copy($wf . '/x.sqlite', $wf . '/y.sqlite');
+check('a copy of the database counts only when it is whole', cc_sqlite_copy_ok($wf . '/x.sqlite', $wf . '/y.sqlite') && (file_put_contents($wf . '/z.sqlite', 'short') !== false) && !cc_sqlite_copy_ok($wf . '/x.sqlite', $wf . '/z.sqlite'));
+cc_backup_rrmdir($wf);
+
 echo "\nBLOCK OUTPUT\n";
 check('whole numbers like parseInt', cc_int('7px', 2, 1, 12) === 7 && cc_int('abc', 2, 1, 12) === 2 && cc_int(99, 2, 1, 12) === 12);
 $sl = render_block(['id' => 'sl', 'type' => 'SLIDER', 'styles' => [], 'content' => ['effect' => 'fade', 'autoplay' => false, 'images' => [['src' => 'a.jpg'], ['src' => 'b.jpg']]]]);

@@ -139,6 +139,27 @@ function cc_run_install($db_file, $data_dir, $in, $starters) {
     return $page_created;
 }
 
+// Is the data folder reachable over HTTP? A random test file is written there and requested from this same server
+// (by its own address, never another host). 'exposed', 'protected' or 'unknown'.
+function cc_install_probe_data($data_dir, $docroot) {
+    $real = realpath($data_dir);
+    if (!$docroot || !$real || !cc_path_inside($real, $docroot) || !ini_get('allow_url_fopen')) return 'unknown';
+    $name = 'cc-probe-' . bin2hex(random_bytes(8)) . '.txt'; $secret = bin2hex(random_bytes(16));
+    if (@file_put_contents($real . '/' . $name, $secret) === false) return 'unknown';
+    $path = str_replace('%2F', '/', rawurlencode(str_replace('\\', '/', substr($real, strlen($docroot))))) . '/' . $name;
+    $https = cc_is_https();
+    $ip = (string)($_SERVER['SERVER_ADDR'] ?? '127.0.0.1'); if ($ip === '' || $ip === '0.0.0.0' || $ip === '::') $ip = '127.0.0.1';
+    $port = (int)($_SERVER['SERVER_PORT'] ?? ($https ? 443 : 80));
+    $host = preg_replace('/[^A-Za-z0-9.:\[\]-]/', '', (string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    $url = ($https ? 'https' : 'http') . '://' . (strpos($ip, ':') !== false ? '[' . $ip . ']' : $ip) . ':' . $port . $path;
+    $ctx = stream_context_create(['http' => ['method' => 'GET', 'header' => 'Host: ' . $host . "\r\n", 'timeout' => 4, 'follow_location' => 0, 'ignore_errors' => true],
+                                  'ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'peer_name' => preg_replace('/:\d+$/', '', $host)]]);
+    $body = @file_get_contents($url, false, $ctx, 0, 256);
+    @unlink($real . '/' . $name);
+    if ($body === false) return 'unknown';
+    return trim($body) === $secret ? 'exposed' : 'protected';
+}
+
 // ---------------------------------------------------------------------------
 // Unattended installation (command line, hosting installers)
 // ---------------------------------------------------------------------------
@@ -168,6 +189,9 @@ function cc_install_unattended(array $raw) {
     if ($state === 'installed') return $fail('CanvasCore is already installed on this server.');
     if ($state === 'error') return $fail('A database exists in the data folder but it could not be opened.');
     if (!cc_can_write($data_dir)) return $fail('The data folder is not writable: ' . $data_dir);
+    // the same refusal as the wizard's server check: a data folder inside the web root that anyone can download would publish the database
+    $docroot = cc_doc_root();
+    if ($docroot && cc_path_inside($data_dir, $docroot) && cc_install_probe_data($data_dir, $docroot) === 'exposed') return $fail('The data folder is inside the web root and can be downloaded by anyone (' . $data_dir . '): the database and passwords would be public. Make canvascore-data next to the web root writable, or deny web access to the folder.');
     $starters = cc_load_starters();
     $errors = cc_install_validate_fields($in, $starters);
     if ($errors) return $fail('The answers are not valid: ' . implode(' ', $errors), $errors);

@@ -7,6 +7,8 @@ import SortableBlock from './SortableBlock';
 import { packageCss } from '../editor/blockPackages';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { __ } from '../i18n/index.js';
+import { dndAccessibility } from '../i18n/dnd.js';
 
 // The site's effects CSS. In the editor, entrance animations and looping motion stay still
 // (blocks visible, text easy to edit) and play only on "Preview" (previewEffects.js); hovers stay live.
@@ -93,11 +95,11 @@ export default function Canvas() {
 
   // What the canvas shows here: the design of a collection, or an item built from it (read-only layout)
   const banner = pageMode && pageMode.__design
-    ? 'The design of this collection: every item page is built from these blocks. Type {{field:key}} to show a field of each item, or {{item:title}} for its title. Publish the site to update the items.'
+    ? __("The design of this collection: every item page is built from these blocks. Type {{field:key}} to show a field of each item, or {{item:title}} for its title. Publish the site to update the items.")
     : pageMode && pageMode.__popup
-      ? 'You are editing a popup: these blocks appear in a window over your pages when its trigger fires. Use “Preview the popup” in the panel to see it as visitors will, and set when it appears there too.'
+      ? __("You are editing a popup: these blocks appear in a window over your pages when its trigger fires. Use “Preview the popup” in the panel to see it as visitors will, and set when it appears there too.")
     : pageMode && pageMode.__locked
-      ? 'This item is built from its collection\'s design, so its layout is read-only here. Change the layout in Collections › Design; the fields and settings of the item are edited in the panel.'
+      ? __("This item is built from its collection's design, so its layout is read-only here. Change the layout in Collections › Design; the fields and settings of the item are edited in the panel.")
       : null;
   return (
     <div style={{ padding: viewport !== 'desktop' ? '40px 0' : '0', minHeight: '100%', display: 'flex', justifyContent: 'center', flexDirection: 'column' }} onClick={() => setSelectedBlockId(null)}>
@@ -110,7 +112,7 @@ export default function Canvas() {
         // Clicking the empty area of the page clears the selection
         if(e.target === e.currentTarget) setSelectedBlockId(null);
       }}>
-        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext accessibility={dndAccessibility} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={blocks.map(b => b.id)} strategy={verticalListSortingStrategy}>
             {blocks.map(block => (
               <SortableBlock key={block.id} block={block} />

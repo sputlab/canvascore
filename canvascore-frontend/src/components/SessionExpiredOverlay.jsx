@@ -3,6 +3,7 @@ import { Lock, LogIn, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { getSession } from '../session/runtime';
 import { listDrafts, describeDraft, storageAvailable } from '../session/drafts';
+import { __ } from '../i18n/index.js';
 
 // Login screen shown ON TOP of the app when the session has expired.
 // The app underneath stays mounted (and inert): after login you resume exactly where you were.
@@ -29,12 +30,12 @@ export default function SessionExpiredOverlay() {
     setBusy(true); setError('');
     try {
       const res = await useStore.getState().reauth(username.trim(), password);
-      if (!res.success) { setError(res.message || 'Authentication error'); }
+      if (!res.success) { setError(res.message || __("Authentication error")); }
       else {
         const same = getSession().completeReauth({ username: res.username, csrf: res.differentUser ? undefined : res.csrf });
-        if (!same) { setError('Signed in as a different user: reloading…'); return; }   // stays blocked until the reload
+        if (!same) { setError(__("Signed in as a different user: reloading…")); return; }   // stays blocked until the reload
       }
-    } catch { setError('Server connection error'); }
+    } catch { setError(__("Server connection error")); }
     setBusy(false);
   };
 
@@ -47,24 +48,23 @@ export default function SessionExpiredOverlay() {
       <form onSubmit={submit} style={{ width: '100%', maxWidth: '420px', background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '28px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', color: '#f8fafc' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
           <div style={{ width: 38, height: 38, borderRadius: 10, background: '#78350f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Lock size={19} color="#fcd34d" /></div>
-          <h2 id="cc-expired-title" style={{ margin: 0, fontSize: '19px' }}>Session expired</h2>
+          <h2 id="cc-expired-title" style={{ margin: 0, fontSize: '19px' }}>{__("Session expired")}</h2>
         </div>
         <p style={{ margin: '10px 0 14px', fontSize: '13.5px', color: '#cbd5e1', lineHeight: 1.55 }}>
-          You were signed out{minutes ? <> after <strong>{minutes} minutes</strong> of inactivity</> : ' because your session ended'}.
-          Sign in again to continue <strong>exactly where you left off</strong>.
+          {__("You were signed out")}{minutes ? <> {__("after")} <strong>{minutes} {__("minutes")}</strong> {__("of inactivity")}</> : ' because your session ended'}{__(". Sign in again to continue")} <strong>{__("exactly where you left off")}</strong>.
         </p>
 
         {draftBackupFailed || !storageAvailable() ? (
           <div style={{ display: 'flex', gap: '10px', background: '#451a03', border: '1px solid #92400e', borderRadius: '10px', padding: '10px 12px', marginBottom: '14px', fontSize: '12.5px', color: '#fde68a', lineHeight: 1.5 }}>
             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-            <span>A local backup could not be stored on this device. Your changes are still in this window: sign in to keep working and <strong>do not close or reload this tab</strong>.</span>
+            <span>{__("A local backup could not be stored on this device. Your changes are still in this window: sign in to keep working and")} <strong>{__("do not close or reload this tab")}</strong>.</span>
           </div>
         ) : (
           <div style={{ display: 'flex', gap: '10px', background: '#052e1c', border: '1px solid #065f46', borderRadius: '10px', padding: '10px 12px', marginBottom: '14px', fontSize: '12.5px', color: '#a7f3d0', lineHeight: 1.5 }}>
             <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: 2 }} />
             <span>
-              <strong>Your work is safe.</strong> Nothing was lost.
-              {backups.length > 0 ? ' Unsaved changes are backed up on this device:' : ' There were no unsaved changes.'}
+              <strong>{__("Your work is safe.")}</strong> {__("Nothing was lost.")}
+              {backups.length > 0 ? __(" Unsaved changes are backed up on this device:") : __(" There were no unsaved changes.")}
               {backups.length > 0 && (
                 <ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: '#d1fae5' }}>
                   {backups.map((b) => { const d = describeDraft(b); return <li key={b.scope}>{d.kind}: <strong>{d.title}</strong></li>; })}
@@ -74,19 +74,19 @@ export default function SessionExpiredOverlay() {
           </div>
         )}
 
-        <label htmlFor="cc-exp-user" style={labelStyle}>USERNAME</label>
+        <label htmlFor="cc-exp-user" style={labelStyle}>{__("USERNAME")}</label>
         <input id="cc-exp-user" ref={userRef} type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} style={{ ...inputStyle, marginBottom: '12px' }} />
-        <label htmlFor="cc-exp-pw" style={labelStyle}>PASSWORD</label>
+        <label htmlFor="cc-exp-pw" style={labelStyle}>{__("PASSWORD")}</label>
         <input id="cc-exp-pw" ref={pwRef} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} />
 
         {error && <div role="alert" style={{ color: '#fca5a5', fontSize: '13px', marginTop: '10px' }}>{error}</div>}
 
         <button type="submit" disabled={busy || !username || !password}
           style={{ width: '100%', marginTop: '16px', padding: '12px', background: (busy || !username || !password) ? '#1e40af' : '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '14px', cursor: busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-          <LogIn size={16} /> {busy ? 'Signing in…' : 'Sign in and continue'}
+          <LogIn size={16} /> {busy ? __("Signing in…") : __("Sign in and continue")}
         </button>
         <p style={{ margin: '12px 0 0', fontSize: '11.5px', color: '#64748b', lineHeight: 1.5 }}>
-          Anything you were saving when the session ended is completed automatically after you sign in.
+          {__("Anything you were saving when the session ended is completed automatically after you sign in.")}
         </p>
       </form>
     </div>

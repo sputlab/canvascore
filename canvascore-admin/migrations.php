@@ -314,17 +314,32 @@ function cc_migrate_content($pdo) {
     $migs = cc_content_migrations();
     if (empty($migs)) return; // no content migrations: immediate no-op
     ksort($migs);
+    $latest = (int)max(array_keys($migs));
 
-    $rows = $pdo->query("SELECT id, content_json, content_schema FROM pages")->fetchAll(PDO::FETCH_ASSOC);
-    $upd = $pdo->prepare("UPDATE pages SET content_json = ?, content_schema = ? WHERE id = ?");
-    foreach ($rows as $r) {
-        $v = (int)($r['content_schema'] ?? 1); if ($v < 1) $v = 1;
-        $blocks = json_decode($r['content_json'] ?? '[]', true);
-        if (!is_array($blocks)) continue;
-        $changed = false;
-        foreach ($migs as $to => $fn) {
-            if ($to > $v) { $blocks = $fn($blocks); $v = $to; $changed = true; }
+    // Every table that keeps blocks AND says which format they are in (content_schema). Templates, masters and old versions have no such column:
+    // a content migration that changes the block format must also be written as a database migration for them (see the Developer Guide).
+    $tables = ['pages' => 'id', 'collection_items' => 'id', 'popups' => 'id', 'site_parts' => 'name'];
+    $pdo->beginTransaction();
+    try {
+        foreach ($tables as $t => $key) {
+            $has = $pdo->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = " . $pdo->quote($t))->fetchColumn();
+            if (!$has) continue;
+            $rows = $pdo->query("SELECT $key AS k, content_json, content_schema FROM $t WHERE content_schema IS NULL OR content_schema < $latest")->fetchAll(PDO::FETCH_ASSOC);
+            $upd = $pdo->prepare("UPDATE $t SET content_json = ?, content_schema = ? WHERE $key = ?");
+            foreach ($rows as $r) {
+                $v = (int)($r['content_schema'] ?? 1); if ($v < 1) $v = 1;
+                $blocks = json_decode($r['content_json'] ?? '[]', true);
+                if (!is_array($blocks)) continue;
+                $changed = false;
+                foreach ($migs as $to => $fn) {
+                    if ($to > $v) { $blocks = $fn($blocks); $v = $to; $changed = true; }
+                }
+                if ($changed) $upd->execute([json_encode($blocks), $v, $r['k']]);
+            }
         }
-        if ($changed) $upd->execute([json_encode($blocks), $v, $r['id']]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
     }
 }

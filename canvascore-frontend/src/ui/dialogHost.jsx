@@ -4,6 +4,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, HelpCircle } from 'lucide-react';
 import { setDialogHost } from './dialog';
+import { __ } from '../i18n/index.js';
 
 export function DialogHost() {
   const [queue, setQueue] = useState([]);
@@ -60,7 +61,7 @@ function Dialog({ req, onClose }) {
         aria-labelledby={titleId} aria-describedby={req.message ? msgId : undefined} onKeyDown={onKeyDown}>
         <div className="ui-dialog__head">
           <span className="ui-dialog__icon" aria-hidden="true"><Icon size={18} /></span>
-          <h2 id={titleId} className="ui-dialog__title">{req.title || (isPrompt ? 'Enter a value' : 'Are you sure?')}</h2>
+          <h2 id={titleId} className="ui-dialog__title">{req.title || (isPrompt ? __("Enter a value") : __("Are you sure?"))}</h2>
         </div>
         {req.message && <p id={msgId} className="ui-dialog__msg">{req.message}</p>}
         {isPrompt && (
@@ -71,7 +72,7 @@ function Dialog({ req, onClose }) {
           </label>
         )}
         <div className="ui-dialog__actions">
-          {!req.hideCancel && <button ref={cancelRef} type="button" className="ui-btn ui-btn--secondary" onClick={cancel}>{req.cancelLabel || 'Cancel'}</button>}
+          {!req.hideCancel && <button ref={cancelRef} type="button" className="ui-btn ui-btn--secondary" onClick={cancel}>{req.cancelLabel || __("Cancel")}</button>}
           <button ref={confirmRef} type="button" className={`ui-btn ${req.danger ? 'ui-btn--danger-solid' : 'ui-btn--primary'}`} onClick={confirm} disabled={invalid}>
             {req.confirmLabel || 'OK'}
           </button>

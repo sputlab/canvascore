@@ -1,0 +1,35 @@
+<softinstall xmlns="https://www.softaculous.com">
+	<settings>
+		<group>
+			<heading>{{site_set}}</heading>
+			<input type="text" name="site_name" size="30" value="My Site">
+				<head>{{site_name}}</head>
+				<exp>{{site_name_exp}}</exp>
+			</input>
+			<input type="select">
+				<select name="starter">
+%STARTER_OPTIONS%
+				</select>
+				<head>{{starter}}</head>
+				<exp>{{starter_exp}}</exp>
+			</input>
+		</group>
+		<group>
+			<heading>{{ad_act}}</heading>
+			<input type="text" name="admin_username" size="30" value="">
+				<head>{{ad_name}}</head>
+				<exp>{{ad_name_exp}}</exp>
+			</input>
+			<input type="text" name="admin_pass" size="30" value="pass">
+				<head>{{ad_pass}}</head>
+				<exp>{{ad_pass_exp}}</exp>
+				<handle>__ad_pass</handle>
+			</input>
+			<input type="text" name="admin_email" size="30" value="admin" softmail="true">
+				<head>{{ad_email}}</head>
+				<exp>{{ad_email_exp}}</exp>
+				<handle>__email_address</handle>
+			</input>
+		</group>
+	</settings>
+</softinstall>

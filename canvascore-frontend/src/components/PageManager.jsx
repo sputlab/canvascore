@@ -7,6 +7,7 @@ import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
 import { canCreate, canManageSite, reviewOf, REVIEW_LABEL } from '../session/permissions';
 import { isMultilingual, langOf, langName, langPrefix, pagePath, translationsOf, missingLanguages } from '../editor/languages';
+import { __ } from '../i18n/index.js';
 
 export default function PageManager() {
   const { setView, setActivePage, setBlocks, pages, setPages, setSelectedBlockId, userRole } = useStore();
@@ -39,9 +40,9 @@ export default function PageManager() {
   const createPage = async () => {
     const id = 'page-' + Date.now();
     const lang = multi ? (langFilter || langs.default) : '';
-    const slug = uniqueSlug('New Page', { pages, lang, cfg: langs });
+    const slug = uniqueSlug(__("New Page"), { pages, lang, cfg: langs });
     const newPage = {
-      id, title: 'New Page', slug, clean_slug: slug, lang,
+      id, title: __("New Page"), slug, clean_slug: slug, lang,
       layout: 'boxed', boxed_width: '1200px', bg_color: '#ffffff',
       seo_title: '', seo_description: '', content_json: '[]',
       status: 'draft', is_draft_copy: 0, parent_id: null, is_home: 0
@@ -50,8 +51,8 @@ export default function PageManager() {
     // behaves exactly as when it is reopened from the dashboard.
     try {
       const data = await (await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, ...(multi ? {} : { lang: undefined }), blocks: [], publish: false }) })).json();
-      if (!data || data.success === false) { notify('Could not create the page: ' + ((data && data.message) || 'unexpected answer'), 'error'); return; }
-    } catch { notify('Could not create the page (connection problem).', 'error'); return; }
+      if (!data || data.success === false) { notify(__("Could not create the page: {0}", (data && data.message) || 'unexpected answer'), 'error'); return; }
+    } catch { notify(__("Could not create the page (connection problem)."), 'error'); return; }
     setPages([newPage, ...pages]);
     setActivePage(newPage);
     setBlocks([]);
@@ -80,13 +81,13 @@ export default function PageManager() {
 
   const deletePage = async (id) => {
     const pg = pages.find((p) => p.id === id);
-    if (!(await confirmDialog({ title: `Delete the page "${pg ? pg.title : 'this page'}"?`, message: 'If it is online, it is removed from the site too. This cannot be undone.', confirmLabel: 'Delete page', danger: true }))) return;
+    if (!(await confirmDialog({ title: __("Delete the page \"{0}\"?", pg ? pg.title : 'this page'), message: __("If it is online, it is removed from the site too. This cannot be undone."), confirmLabel: __("Delete page"), danger: true }))) return;
     try {
       const data = await (await fetch('api.php?action=delete_page', { method: 'POST', body: JSON.stringify({ id }) })).json();
-      if (!data || data.success === false) { notify('Could not delete the page: ' + ((data && data.message) || 'unexpected answer'), 'error'); return; }
+      if (!data || data.success === false) { notify(__("Could not delete the page: {0}", (data && data.message) || 'unexpected answer'), 'error'); return; }
       setPages(pages.filter(p => p.id !== id));
-      notify('Page deleted.');
-    } catch { notify('Error deleting page.', 'error'); }
+      notify(__("Page deleted."));
+    } catch { notify(__("Error deleting page."), 'error'); }
   };
 
   // Copy of a page as a new draft (the live version's content, a free slug)
@@ -104,10 +105,10 @@ export default function PageManager() {
     try {
       const res = await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...copy, blocks, publish: false }) });
       const data = await res.json();
-      if (data && data.success === false) { notify(data.message || 'Could not duplicate the page.', 'error'); return; }
+      if (data && data.success === false) { notify(data.message || __("Could not duplicate the page."), 'error'); return; }
       setPages([copy, ...pages]);
-      notify(`"${title}" created as a draft.`);
-    } catch { notify('Could not duplicate the page.', 'error'); }
+      notify(__("\"{0}\" created as a draft.", title));
+    } catch { notify(__("Could not duplicate the page."), 'error'); }
   };
 
   // A translation: a draft copy in another language, opened in the editor
@@ -115,16 +116,16 @@ export default function PageManager() {
     setTranslating(page.id + code);
     try {
       const d = await (await fetch('api.php?action=translate_page', { method: 'POST', body: JSON.stringify({ id: page.id, lang: code }) })).json();
-      if (!d || !d.success) { notify((d && d.message) || 'Could not create the translation.', 'error'); return; }
-      notify(d.message || 'Translation created.');
+      if (!d || !d.success) { notify(d && d.message || __("Could not create the translation."), 'error'); return; }
+      notify(d.message || __("Translation created."));
       await useStore.getState().refreshPages();
       editPage(d.page);
-    } catch { notify('Could not create the translation (connection problem).', 'error'); } finally { setTranslating(''); }
+    } catch { notify(__("Could not create the translation (connection problem)."), 'error'); } finally { setTranslating(''); }
   };
   const openTranslation = (id) => { const p = pages.find((x) => x.id === id); if (p) editPage(p); };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return 'Not saved yet';
+    if (!dateStr) return __("Not saved yet");
     const d = new Date(dateStr);
     return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -143,50 +144,50 @@ export default function PageManager() {
 
   return (
     <>
-      <PageHeader icon={FileText} title="Pages" description="Every page of the site. Drafts stay private until you publish them."
+      <PageHeader icon={FileText} title={__("Pages")} description={__("Every page of the site. Drafts stay private until you publish them.")}
         actions={<>
-          {mayCreate && <Button icon={LayoutTemplate} onClick={() => setView('templates')}>From a template</Button>}
-          {mayCreate && <Button variant="primary" icon={Plus} onClick={createPage}>New Page</Button>}
+          {mayCreate && <Button icon={LayoutTemplate} onClick={() => setView('templates')}>{__("From a template")}</Button>}
+          {mayCreate && <Button variant="primary" icon={Plus} onClick={createPage}>{__("New Page")}</Button>}
         </>} />
 
       {loading ? (
-        <p className="ui-hint" style={{ padding: 40, textAlign: 'center' }}>Loading…</p>
+        <p className="ui-hint" style={{ padding: 40, textAlign: 'center' }}>{__("Loading…")}</p>
       ) : pages.length === 0 ? (
-        <EmptyState icon={FileText} title="No pages yet" action={mayCreate ? <div className="ui-row" style={{ justifyContent: 'center' }}>
-          <Button variant="primary" icon={Plus} onClick={createPage}>Create a blank page</Button>
-          <Button icon={LayoutTemplate} onClick={() => setView('templates')}>Start from a template</Button>
-        </div> : null}>{mayCreate ? 'Create your first page, blank or from a ready-made template.' : 'There are no pages to review yet.'}</EmptyState>
+        <EmptyState icon={FileText} title={__("No pages yet")} action={mayCreate ? <div className="ui-row" style={{ justifyContent: 'center' }}>
+          <Button variant="primary" icon={Plus} onClick={createPage}>{__("Create a blank page")}</Button>
+          <Button icon={LayoutTemplate} onClick={() => setView('templates')}>{__("Start from a template")}</Button>
+        </div> : null}>{mayCreate ? __("Create your first page, blank or from a ready-made template.") : __("There are no pages to review yet.")}</EmptyState>
       ) : (
         <>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-            <div style={{ flex: '1 1 240px', maxWidth: 340 }}><SearchInput value={query} onChange={setQuery} placeholder="Search by title or URL…" label="Search pages" /></div>
-            <Segmented label="Filter by status" value={filter} onChange={setFilter} options={[
-              ['all', `All ${pages.length}`], ['published', `Published ${counts.published}`], ['modified', `Modified ${counts.modified}`], ['draft', `Drafts ${counts.draft}`],
+            <div style={{ flex: '1 1 240px', maxWidth: 340 }}><SearchInput value={query} onChange={setQuery} placeholder={__("Search by title or URL…")} label={__("Search pages")} /></div>
+            <Segmented label={__("Filter by status")} value={filter} onChange={setFilter} options={[
+              ['all', __("All {0}", pages.length)], ['published', __("Published {0}", counts.published)], ['modified', __("Modified {0}", counts.modified)], ['draft', __("Drafts {0}", counts.draft)],
             ]} />
             {multi && (
               <div style={{ width: 170 }}>
-                <Select aria-label="Filter by language" value={langFilter} onChange={(e) => setLangFilter(e.target.value)} options={[['', 'All languages'], ...langs.list.map((l) => [l.code, l.name])]} />
+                <Select aria-label={__("Filter by language")} value={langFilter} onChange={(e) => setLangFilter(e.target.value)} options={[['', __("All languages")], ...langs.list.map((l) => [l.code, l.name])]} />
               </div>
             )}
             <div style={{ marginLeft: 'auto', width: 170 }}>
-              <Select aria-label="Sort pages" value={sort} onChange={(e) => setSort(e.target.value)} options={[['updated', 'Recently updated'], ['title', 'Title (A–Z)']]} />
+              <Select aria-label={__("Sort pages")} value={sort} onChange={(e) => setSort(e.target.value)} options={[['updated', __("Recently updated")], ['title', __("Title (A–Z)")]]} />
             </div>
           </div>
 
           {shown.length === 0 ? (
-            <EmptyState icon={FileText} title="No pages match" action={<Button onClick={() => { setQuery(''); setFilter('all'); }}>Clear filters</Button>} />
+            <EmptyState icon={FileText} title={__("No pages match")} action={<Button onClick={() => { setQuery(''); setFilter('all'); }}>{__("Clear filters")}</Button>} />
           ) : (
             <div className="ui-table-wrap">
               <table className="ui-table">
-                <thead><tr><th>Page</th>{multi && <th>Languages</th>}<th>Status</th><th>Last update</th><th>Author</th><th className="ui-cell-actions">Actions</th></tr></thead>
+                <thead><tr><th>{__("Page")}</th>{multi && <th>{__("Languages")}</th>}<th>{__("Status")}</th><th>{__("Last update")}</th><th>{__("Author")}</th><th className="ui-cell-actions">{__("Actions")}</th></tr></thead>
                 <tbody>
                   {shown.map((page) => (
                     <tr key={page.id} onDoubleClick={() => editPage(page)}>
                       <td style={{ maxWidth: 360 }}>
-                        <button type="button" onClick={() => editPage(page)} className="ui-cell-title" title="Edit page"
+                        <button type="button" onClick={() => editPage(page)} className="ui-cell-title" title={__("Edit page")}
                           style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontWeight: 700, color: '#f8fafc', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{page.title}</span>
-                          {Number(page.is_home) ? <Badge tone="accent" icon={Home}>Home</Badge> : null}
+                          {Number(page.is_home) ? <Badge tone="accent" icon={Home}>{__("Home")}</Badge> : null}
                         </button>
                         <div className="ui-cell-muted" style={{ color: '#38bdf8' }}>{pagePath(page, langs)}</div>
                       </td>
@@ -195,10 +196,10 @@ export default function PageManager() {
                           <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                             <Badge tone="accent" icon={LanguagesIcon}>{langOf(page, langs).toUpperCase()}</Badge>
                             {translationsOf(pages, page).map((t) => (
-                              <button key={t.id} type="button" className="ui-btn ui-btn--ghost ui-btn--sm" title={`Edit the ${langName(langOf(t, langs), langs)} translation: ${t.title}`} onClick={() => openTranslation(t.id)}>{langOf(t, langs).toUpperCase()}</button>
+                              <button key={t.id} type="button" className="ui-btn ui-btn--ghost ui-btn--sm" title={__("Edit the {0} translation: {1}", langName(langOf(t, langs), langs), t.title)} onClick={() => openTranslation(t.id)}>{langOf(t, langs).toUpperCase()}</button>
                             ))}
                             {mayCreate && missingLanguages(pages, page, langs).map((l) => (
-                              <button key={l.code} type="button" className="ui-btn ui-btn--ghost ui-btn--sm" style={{ opacity: 0.8 }} disabled={translating !== ''} title={`Translate into ${l.name}`} aria-label={`Translate ${page.title} into ${l.name}`} onClick={() => translate(page, l.code)}>+ {l.code.toUpperCase()}</button>
+                              <button key={l.code} type="button" className="ui-btn ui-btn--ghost ui-btn--sm" style={{ opacity: 0.8 }} disabled={translating !== ''} title={__("Translate into {0}", l.name)} aria-label={__("Translate {0} into {1}", page.title, l.name)} onClick={() => translate(page, l.code)}>+ {l.code.toUpperCase()}</button>
                             ))}
                           </span>
                         </td>
@@ -212,11 +213,11 @@ export default function PageManager() {
                       <td className="ui-cell-actions">
                         <span className="ui-row" style={{ justifyContent: 'flex-end', gap: 4, flexWrap: 'nowrap' }}>
                           {page.status !== 'draft' && page.status !== 'draft_new' && (
-                            <a href={pageUrl(page)} target="_blank" rel="noopener noreferrer" className="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" title="View the published page" aria-label={`View ${page.title} online`}><ExternalLink size={14} /></a>
+                            <a href={pageUrl(page)} target="_blank" rel="noopener noreferrer" className="ui-btn ui-btn--ghost ui-btn--icon ui-btn--sm" title={__("View the published page")} aria-label={__("View {0} online", page.title)}><ExternalLink size={14} /></a>
                           )}
-                          {mayCreate && <IconButton icon={Copy} label={`Duplicate ${page.title}`} size="sm" onClick={() => duplicatePage(page)} />}
-                          <Button variant="primary" size="sm" icon={Edit3} onClick={() => editPage(page)}>Edit</Button>
-                          {mayDelete(page) && <IconButton icon={Trash2} label={`Delete ${page.title}`} size="sm" onClick={() => deletePage(page.id)} style={{ color: '#f87171' }} />}
+                          {mayCreate && <IconButton icon={Copy} label={__("Duplicate {0}", page.title)} size="sm" onClick={() => duplicatePage(page)} />}
+                          <Button variant="primary" size="sm" icon={Edit3} onClick={() => editPage(page)}>{__("Edit")}</Button>
+                          {mayDelete(page) && <IconButton icon={Trash2} label={__("Delete {0}", page.title)} size="sm" onClick={() => deletePage(page.id)} style={{ color: '#f87171' }} />}
                         </span>
                       </td>
                     </tr>

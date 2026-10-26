@@ -850,6 +850,25 @@ check('a member of the collection still works in it (an author, as before)', !em
 check('an editor cannot change who has access', empty($ed2->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => ['mode' => 'all']])['json']['success']));
 $own->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => ['mode' => 'all']]);
 check('"everyone" opens it again', in_array('Roles blog', $names($ed2), true));
+
+// version history, schedules and the design follow the same access as the page or item itself
+$own->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => ['mode' => 'selected', 'users' => ['rolauth1', 'rolrev']]]);
+$au1->api('save_item', $item('hist-1', 'ALICE SECRET', 'draft'));
+$hist = $own->api('get_revisions&owner=item:hist-1')['json'] ?? [];
+$revId = $hist[0]['id'] ?? 0;
+check('(setup) the item has a version in its history', count($hist) >= 1 && $revId > 0);
+check('the history of an item is read by those who can read the item: its author and admins', count($au1->api('get_revisions&owner=item:hist-1')['json'] ?? []) >= 1 && !empty($own->api('get_revision&id=' . $revId)['json']['content_json']));
+check('…not by an editor or an author kept out of the collection', ($ed2->api('get_revisions&owner=item:hist-1')['json'] ?? 'x') === [] && ($au2->api('get_revisions&owner=item:hist-1')['json'] ?? 'x') === []);
+check('…nor can its versions be read one by one (ids are sequential)', empty($ed2->api('get_revision&id=' . $revId)['json']['content_json'] ?? '') && empty($au2->api('get_revision&id=' . $revId)['json']['content_json'] ?? '') && strpos($ed2->api('get_revision&id=' . $revId)['body'], 'ALICE SECRET') === false);
+check('the history of a page is the author\'s own: another author gets nothing', count($au1->api('get_revisions&owner=role-a1')['json'] ?? []) >= 1 && ($au2->api('get_revisions&owner=role-a1')['json'] ?? 'x') === []);
+$pr = $own->api('get_revisions&owner=role-a1')['json'][0]['id'] ?? 0;
+check('…nor its versions by number', $pr > 0 && strpos($au2->api('get_revision&id=' . $pr)['body'], 'Author one') === false && !empty($ed2->api('get_revision&id=' . $pr)['json']['title'] ?? ''));
+$r = $ed2->api('set_schedule', ['kind' => 'item', 'id' => 'hist-1', 'publish_at' => '2020-01-01 00:00']);
+check('an editor kept out of a collection cannot schedule its items', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'forbidden' && (string)db()->query("SELECT status FROM collection_items WHERE id = 'hist-1'")->fetchColumn() === 'draft' && (string)db()->query("SELECT publish_at FROM collection_items WHERE id = 'hist-1'")->fetchColumn() === '', $r['body']);
+check('the design of a collection is not given to people kept out of it', ($ed2->api('get_collection_design&collection=' . $cid)['json']['blocks'] ?? 'x') === []);
+$own->api('save_collection', ['id' => $cid, 'name' => 'Roles blog', 'access' => ['mode' => 'all']]);
+$r = $rv->api('save_item', $item('role-i1', 'Author item', 'published', ['title' => 'Rewritten by the reviewer']));
+check('a reviewer cannot rewrite a live item without a review (as with pages)', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'needs_review' && (string)db()->query("SELECT title FROM collection_items WHERE id = 'role-i1'")->fetchColumn() !== 'Rewritten by the reviewer', $r['body']);
 check('a role never gives access to the admin-only areas', empty($au1->api('get_users')['json']['success'] ?? null) && strpos((string)($au1->api('get_users')['json']['message'] ?? ''), 'Only admins') !== false && empty($rv->api('backup_info')['json']['success']) && empty($au1->api('pkg_info')['json']['success']) && empty($au1->api('wp_info')['json']['success']));
 
 echo "\nTEMPLATE LIBRARY (over HTTP)\n";
@@ -1223,6 +1242,53 @@ unset($cur['announcement'], $cur['cookieBanner']); $cur['siteUrl'] = '';
 $own->api('save_settings', $cur);
 $own->api('save_languages', ['enabled' => false, 'list' => []]);
 clearstatcache(); check('the language library file answers 404 when opened directly', $own->req('GET', '/canvascore-admin/languages.php', null, [], false)['code'] === 404);
+
+echo "\nUPLOAD NAMES, SITE ADDRESS AND EDITORS' TEXT IN THE PAGE TEMPLATE\n";
+$upn = function ($name, $file, $mime = 'image/png') use ($own) { $r = $own->req('POST', '/canvascore-admin/api.php?action=upload_media', ['file' => new CURLFile($file, $mime, $name)], [], false); return $r['json'] ?? []; };
+$u1 = $upn('shell.php.png', $pngf2);
+check('an uploaded file keeps one dot, the one before its extension (a server may run any "php" extension of a name)', !empty($u1['success']) && preg_match('/^\d+_shell-php\.png$/', (string)($u1['filename'] ?? '')) === 1, json_encode($u1));
+$u2 = $upn('a.b.c.d.png', $pngf2);
+check('…however many dots the name had', !empty($u2['success']) && substr_count((string)$u2['filename'], '.') === 1);
+$fakeIco = $T . '/fake.ico'; file_put_contents($fakeIco, '<html><script>alert(1)</script>');
+$u3 = $upn('page.ico', $fakeIco, 'image/x-icon');
+check('an .ico file must be an icon, not any bytes', empty($u3['success']) && strpos((string)($u3['message'] ?? ''), 'not a valid image') !== false, json_encode($u3));
+$realIco = $T . '/real.ico'; file_put_contents($realIco, "\x00\x00\x01\x00\x01\x00" . str_repeat("\x00", 30));
+check('…and a real icon is accepted', !empty($upn('real.ico', $realIco, 'image/x-icon')['success']));
+$stNow = $own->api('get_settings')['json'] ?? [];
+$own->api('save_settings', array_merge($stNow, ['siteUrl' => "https://example.com\nUser-agent: *\nDisallow: /", 'cookieBanner' => ['enabled' => true, 'text' => 'We use cookies $0 \\0 end']]));
+$own->api('save_page', ['id' => 'tpl-inj', 'title' => 'x{{PAGE_CONTENT}}', 'slug' => 'tpl-inj', 'publish' => true, 'seo_title' => 'x{{PAGE_CONTENT}}', 'seo_description' => '{{MAIN_MENU}} {{FONT_FAMILY}}', 'blocks' => [['id' => 'b1', 'type' => 'TEXT', 'content' => ['text' => '<p>BODY-MARK</p>']]]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$robots = (string)@file_get_contents($web . '/robots.txt');
+check('a site address with line breaks is not used (it would add lines to robots.txt)', substr_count($robots, "User-agent:") <= 1 && strpos($robots, 'Disallow: /' . "\n") === false || strpos($robots, "example.com\nUser-agent") === false, $robots);
+$tpl = (string)@file_get_contents($web . '/tpl-inj/index.html');
+check('what an editor types as a page title or description is never expanded as a placeholder of the page template', preg_match('#<title>[^<]*BODY-MARK#', $tpl) === 0 && strpos($tpl, '<meta name="description" content="<nav') === false && substr_count($tpl, 'BODY-MARK') === 1, substr($tpl, 0, 400));
+check('the cookie banner text is inserted as written ($0 and \\0 are just text)', strpos($tpl, 'We use cookies $0') !== false && strpos($tpl, 'We use cookies </body>') === false);
+$own->api('save_settings', array_merge($stNow, ['siteUrl' => ($stNow['siteUrl'] ?? ''), 'cookieBanner' => ['enabled' => false]]));
+$own->api('delete_page', ['id' => 'tpl-inj']);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+
+echo "\nPUBLISH FAILURES NEVER TAKE PAGES OFFLINE\n";
+$own->api('save_collection', ['id' => 'col_safe', 'name' => 'Safe', 'slug' => 'safe-col', 'fields' => []]);
+foreach (['one', 'two', 'three'] as $n) $own->api('save_item', ['id' => 'safe-' . $n, 'collection_id' => 'col_safe', 'title' => 'Safe ' . $n, 'slug' => 'safe-' . $n, 'status' => 'published', 'blocks' => [['id' => 'i1', 'type' => 'TEXT', 'content' => ['text' => '<p>x</p>']]]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$live = function () use ($web) { return array_map('is_file', [$web . '/safe-col/safe-one/index.html', $web . '/safe-col/safe-two/index.html', $web . '/safe-col/safe-three/index.html']); };
+check('(setup) three items are published', $live() === [true, true, true]);
+// an item whose stored blocks make the renderer throw (a FORM whose email is a list): it can arrive through a backup restore or a kit
+$good = (string)db()->query("SELECT content_json FROM collection_items WHERE id = 'safe-two'")->fetchColumn();
+db()->prepare("UPDATE collection_items SET content_json = ? WHERE id = 'safe-two'")->execute([json_encode([['id' => 'f', 'type' => 'FORM', 'content' => ['email' => ['a@b.c', 'd@e.f'], 'fields' => 'oops']]])]);
+$r = $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('a section that fails does not remove the pages it did not write', $live() === [true, true, true], $r['body']);
+check('…and the answer says nothing was removed', strpos((string)($r['json']['message'] ?? ''), 'Nothing was removed') !== false || ($r['json']['success'] ?? null) === false, $r['body']);
+db()->prepare("UPDATE collection_items SET content_json = ? WHERE id = 'safe-two'")->execute([$good]);
+$r = $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('once the problem is fixed the next publish is whole again', !empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'could not be published') === false && strpos((string)($r['json']['message'] ?? ''), 'Nothing was removed') === false && $live() === [true, true, true], $r['body']);
+$fp = fopen($data . '/publish.lock', 'c'); flock($fp, LOCK_EX);
+$r = $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('two publishes never run at once', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'Another publish') !== false, $r['body']);
+flock($fp, LOCK_UN); fclose($fp);
+check('…and publishing works again when the other has finished', !empty($own->req('POST', '/canvascore-admin/rebuild_all.php', '')['json']['success']));
+$own->api('delete_collection', ['id' => 'col_safe']);
+check('no half-written files are left beside the pages', !glob($web . '/safe-col/*/*.cc-tmp-*') && !glob($web . '/*.cc-tmp-*'));
 
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)

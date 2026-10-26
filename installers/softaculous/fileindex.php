@@ -1,0 +1,2 @@
+canvascore-admin
+uploads

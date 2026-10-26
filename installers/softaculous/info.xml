@@ -1,0 +1,48 @@
+<soft xmlns="http://www.softaculous.com">
+	<overview>
+		{{overview}}
+	</overview>
+	<features>
+		{{features}}
+	</features>
+	<demo>
+		https://github.com/sputlab/canvascore
+	</demo>
+	<ratings>
+		https://github.com/sputlab/canvascore
+	</ratings>
+	<space>
+		%SPACE%
+	</space>
+	<support>
+		https://github.com/sputlab/canvascore/issues
+	</support>
+	<version>
+		%VERSION%
+	</version>
+	<admin>canvascore-admin/</admin>
+	<softversion>
+		4.5.4
+	</softversion>
+	<languages>
+		<english-overview>CanvasCore is a block-based website builder that publishes plain static pages. Build pages visually, publish them as fast HTML files, and keep editing from your browser. No MySQL database is needed.</english-overview>
+		<english-features>Visual block editor, collections and blog, forms, menus, popups, multilingual sites, roles and review, template library, signed one-click updates, whole-site backups.</english-features>
+		<english-site_set>Site</english-site_set>
+		<english-site_name>Site name</english-site_name>
+		<english-site_name_exp>Shown in the browser tab and in search results. You can change it later in Global Options.</english-site_name_exp>
+		<english-starter>Homepage</english-starter>
+		<english-starter_exp>A ready-made homepage, created as a draft for you to edit and publish.</english-starter_exp>
+		<english-ad_act>Administrator account</english-ad_act>
+		<english-ad_name>Username</english-ad_name>
+		<english-ad_name_exp>3 to 32 characters. Choose one that is hard to guess (not admin).</english-ad_name_exp>
+		<english-ad_pass>Password</english-ad_pass>
+		<english-ad_pass_exp>At least 8 characters.</english-ad_pass_exp>
+		<english-ad_email>Email</english-ad_email>
+		<english-ad_email_exp>Where contact form messages are sent.</english-ad_email_exp>
+		<english-err_pass>The password must have at least 8 characters, and not be admin or the username.</english-err_pass>
+		<english-err_user>The username must have 3 to 32 characters: letters, numbers, dot, dash, underscore or @.</english-err_user>
+		<english-err_name>Enter the site name.</english-err_name>
+		<english-err_php>CanvasCore needs PHP 8.0 or newer, with the pdo_sqlite, dom, json and session extensions.</english-err_php>
+		<english-err_install>CanvasCore was copied but its setup did not finish:</english-err_install>
+	</languages>
+</soft>

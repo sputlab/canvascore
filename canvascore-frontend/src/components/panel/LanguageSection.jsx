@@ -8,6 +8,7 @@ import { labelStyle, inputStyle } from './helpers';
 import { confirmDialog } from '../../ui/dialog';
 import { notify } from '../../ui/notify';
 import { isMultilingual, langOf, langName, translationsOf, missingLanguages } from '../../editor/languages';
+import { __ } from '../../i18n/index.js';
 
 const post = (action, body) => fetch(`api.php?action=${action}`, { method: 'POST', body: JSON.stringify(body) }).then((r) => r.json());
 const link = { background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', padding: 0, font: 'inherit', fontSize: 12, textDecoration: 'underline' };
@@ -40,7 +41,7 @@ export default function LanguageSection({ activePage, updateActivePage, pages })
   const grouped = !!activePage.trans_group && mine.length > 0;
 
   const openPage = async (p) => {
-    if (dirty && !(await confirmDialog({ title: 'Leave with unsaved changes?', message: 'They stay backed up on this device, but they are NOT saved to the site.', confirmLabel: 'Leave anyway', cancelLabel: 'Stay' }))) return;
+    if (dirty && !(await confirmDialog({ title: __("Leave with unsaved changes?"), message: __("They stay backed up on this device, but they are NOT saved to the site."), confirmLabel: __("Leave anyway"), cancelLabel: __("Stay") }))) return;
     const target = p.status === 'modified' && p.draft_copy ? p.draft_copy : p;
     let blocks = []; try { blocks = JSON.parse(target.content_json || '[]'); } catch { blocks = []; }
     setActivePage(target); setBlocks(Array.isArray(blocks) ? blocks : []); setSelectedBlockId(null);
@@ -49,31 +50,31 @@ export default function LanguageSection({ activePage, updateActivePage, pages })
     setBusy(true);
     try {
       const d = await post(isItem ? 'translate_item' : 'translate_page', { id: liveId, lang });
-      if (!d || !d.success) { notify((d && d.message) || 'Could not create the translation.', 'error'); return; }
-      notify(d.message || 'Translation created.');
+      if (!d || !d.success) { notify(d && d.message || __("Could not create the translation."), 'error'); return; }
+      notify(d.message || __("Translation created."));
       if (isItem) { updateActivePage({ trans_group: d.item.trans_group }); setItemRows((r) => [...r.filter((x) => x.id !== d.item.id), d.item]); } else {
         await refreshPages();
         updateActivePage({ trans_group: d.page.trans_group });
         const fresh = useStore.getState().pages.find((p) => p.id === d.page.id) || d.page;
         await openPage(fresh);
       }
-    } catch { notify('Could not create the translation (connection problem).', 'error'); } finally { setBusy(false); }
+    } catch { notify(__("Could not create the translation (connection problem)."), 'error'); } finally { setBusy(false); }
   };
   const unlink = async () => {
-    if (!(await confirmDialog({ title: 'Unlink from its translations?', message: 'The pages stay as they are, but are no longer offered as each other\'s translation (language switcher, hreflang).', confirmLabel: 'Unlink' }))) return;
+    if (!(await confirmDialog({ title: __("Unlink from its translations?"), message: __("The pages stay as they are, but are no longer offered as each other's translation (language switcher, hreflang)."), confirmLabel: __("Unlink") }))) return;
     const d = await post('unlink_translation', { kind: isItem ? 'item' : 'page', id: liveId });
-    if (d && d.success) { updateActivePage({ trans_group: '' }); refreshPages(); setItemRows((r) => r.map((x) => (x.trans_group === activePage.trans_group ? { ...x, trans_group: '' } : x))); notify(d.message || 'Unlinked.'); } else notify((d && d.message) || 'Not unlinked.', 'error');
+    if (d && d.success) { updateActivePage({ trans_group: '' }); refreshPages(); setItemRows((r) => r.map((x) => (x.trans_group === activePage.trans_group ? { ...x, trans_group: '' } : x))); notify(d.message || __("Unlinked.")); } else notify(d && d.message || __("Not unlinked."), 'error');
   };
 
   return (
-    <PanelAccordion title="Language" icon={Languages} defaultOpen={true}>
-      <label style={labelStyle} htmlFor="cc-page-lang">This {isItem ? 'item' : 'page'} is written in</label>
+    <PanelAccordion title={__("Language")} icon={Languages} defaultOpen={true}>
+      <label style={labelStyle} htmlFor="cc-page-lang">{__("This")} {isItem ? 'item' : 'page'} {__("is written in")}</label>
       <select id="cc-page-lang" style={inputStyle} value={code} disabled={grouped} onChange={(e) => updateActivePage({ lang: e.target.value })}>
         {langs.list.map((l) => <option key={l.code} value={l.code}>{l.name}{l.code === langs.default ? ' (default)' : ''}</option>)}
       </select>
-      {grouped && <p style={{ fontSize: 11, color: '#64748b', margin: '6px 0 0' }}>Its language is fixed while it is linked to translations.</p>}
-      <label style={labelStyle}>Translations</label>
-      {mine.length === 0 && <p style={{ fontSize: 11.5, color: '#94a3b8', margin: '0 0 6px' }}>No translations yet.</p>}
+      {grouped && <p style={{ fontSize: 11, color: '#64748b', margin: '6px 0 0' }}>{__("Its language is fixed while it is linked to translations.")}</p>}
+      <label style={labelStyle}>{__("Translations")}</label>
+      {mine.length === 0 && <p style={{ fontSize: 11.5, color: '#94a3b8', margin: '0 0 6px' }}>{__("No translations yet.")}</p>}
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 5 }}>
         {mine.map((t) => (
           <li key={t.id} style={{ fontSize: 12, color: '#cbd5e1' }} data-translation={t.id}>
@@ -87,13 +88,13 @@ export default function LanguageSection({ activePage, updateActivePage, pages })
           {missing.map((l) => (
             <button key={l.code} type="button" disabled={busy || dirty || !activePage.id} onClick={() => translate(l.code)}
               style={{ display: 'block', width: '100%', marginBottom: 6, padding: '7px 10px', background: 'transparent', color: '#38bdf8', border: '1px dashed #334155', borderRadius: 6, cursor: busy || dirty ? 'default' : 'pointer', fontSize: 12, opacity: busy || dirty ? 0.5 : 1 }}>
-              + Translate into {l.name}
+              {__("+ Translate into")} {l.name}
             </button>
           ))}
-          <p style={{ fontSize: 11, color: '#64748b', margin: '2px 0 0' }}>{dirty ? 'Save first: a translation starts from the saved version.' : 'A draft copy to write over: same blocks and settings, an address of its own.'}</p>
+          <p style={{ fontSize: 11, color: '#64748b', margin: '2px 0 0' }}>{dirty ? __("Save first: a translation starts from the saved version.") : __("A draft copy to write over: same blocks and settings, an address of its own.")}</p>
         </div>
       )}
-      {grouped && <button type="button" style={{ ...link, marginTop: 8, color: '#94a3b8' }} onClick={unlink}>Unlink from its translations</button>}
+      {grouped && <button type="button" style={{ ...link, marginTop: 8, color: '#94a3b8' }} onClick={unlink}>{__("Unlink from its translations")}</button>}
     </PanelAccordion>
   );
 }
