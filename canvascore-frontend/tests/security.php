@@ -1100,6 +1100,130 @@ check('a deleted popup and an unpublished one leave the pages at the next publis
 check('the popup code answers 404 when opened directly', $own->req('GET', '/canvascore-admin/popups.php', null, [], false)['code'] === 404);
 foreach ([$pid1, $pid3, $pid4, $pidE, $pidH] as $x) $own->api('delete_popup', ['id' => $x]);
 
+echo "\nLANGUAGES (over HTTP)\n";
+$gl = $own->api('get_languages')['json'] ?? [];
+clearstatcache(); check('a site starts with one language: not multilingual', empty($gl['active']) && ($gl['languages']['list'] ?? null) === [] && ($gl['max'] ?? 0) === 12);
+clearstatcache(); check('nobody signed out reads the languages; only an admin changes them', (new Client())->api('get_languages')['code'] === 401 && (new Client())->api('save_languages', ['enabled' => true])['code'] === 401
+    && ($ed->api('save_languages', ['enabled' => true, 'list' => [['code' => 'en', 'name' => 'English'], ['code' => 'it', 'name' => 'Italiano']]])['json']['message'] ?? '') === 'Only admins can change the languages.' && ($au1->api('save_languages', ['enabled' => true])['json']['code'] ?? '') === 'forbidden');
+$r = $own->api('save_languages', ['enabled' => true, 'list' => [['code' => 'en', 'name' => 'English']]]);
+clearstatcache(); check('two languages at least: one is not a multilingual site', empty($r['json']['success']), $r['body']);
+$r = $own->api('save_languages', ['enabled' => true, 'default' => 'xx', 'list' => [['code' => 'EN', 'name' => '  English  <b>'], ['code' => 'it', 'name' => 'Italiano'], ['code' => 'it', 'name' => 'dup'], ['code' => '../x', 'name' => 'bad'], ['code' => 'de', 'name' => 'Deutsch'], ['code' => 'pt-br', 'name' => 'Português'], ['code' => 'a', 'name' => 'short'], ['code' => 'english', 'name' => 'long']],
+    'strings' => ['it' => ['announcement' => ['text' => 'Sconti su tutto', 'linkText' => 'Scopri', 'junk' => 'x'], 'cookie' => ['text' => 'Usiamo i cookie', 'acceptLabel' => 'Accetta', 'declineLabel' => 'Rifiuta']], 'en' => ['cookie' => ['text' => 'default has none']], 'fr' => ['cookie' => ['text' => 'no such language']]]]);
+$L = $r['json']['languages'] ?? [];
+clearstatcache(); check('the list is cleaned: codes lowercase and valid, no duplicates, names as text, an unknown default becomes the first; texts only for the other languages', !empty($r['json']['success']) && array_column($L['list'], 'code') === ['en', 'it', 'de', 'pt-br'] && $L['default'] === 'en' && $L['list'][0]['name'] === 'English <b>' && array_keys($L['strings']) === ['it'] && !isset($L['strings']['it']['announcement']['junk']) && ($L['strings']['it']['cookie']['acceptLabel'] ?? '') === 'Accetta', $r['body']);
+$cur = $own->api('get_settings')['json'] ?? [];
+$own->api('save_settings', array_merge($cur, ['siteUrl' => 'https://example.test', 'languages' => ['enabled' => false, 'list' => []]]));
+clearstatcache(); check('a save of the other options cannot change the languages', count($own->api('get_languages')['json']['languages']['list'] ?? []) === 4 && !empty($own->api('get_languages')['json']['active']));
+clearstatcache(); check('an editor reads the languages but not their texts', !isset($ed->api('get_languages')['json']['languages']['strings']) && isset($own->api('get_languages')['json']['languages']['strings']['it']));
+// the pages: an English home and an About page, and the translations
+$sw = ['id' => 'sw1', 'type' => 'LANGUAGE_SWITCHER', 'styles' => ['width' => '100%'], 'content' => ['style' => 'list', 'labels' => 'name', 'showCurrent' => true]];
+$own->api('save_part', ['name' => 'header', 'blocks' => [['id' => 'hd', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>HEADER EN</p>']], $sw]]);
+$own->api('save_part', ['name' => 'footer', 'blocks' => [['id' => 'ft', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>FOOTER EN</p>']]]]);
+$own->api('save_part', ['name' => 'header', 'lang' => 'it', 'blocks' => [['id' => 'hdi', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>HEADER IT</p>']], $sw]]);
+$own->api('save_part', ['name' => 'header', 'lang' => 'xx', 'blocks' => [['id' => 'hdx', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>HEADER XX</p>']]]]);
+$parts = $own->api('get_parts')['json'] ?? [];
+clearstatcache(); check('a language has its own header and footer when it has been given one; an unknown language is refused (and never overwrites the default header)', isset($parts['header:it']) && isset($parts['header']) && !isset($parts['header:xx']) && !isset($parts['header:en']) && strpos(json_encode($parts['header']), 'HEADER EN') !== false && strpos(json_encode($parts['header']), 'HEADER XX') === false);
+$own->api('save_menu', ['items' => [['id' => 'm1', 'title' => 'About', 'url' => 'ml-about/index.html', 'children' => []]], 'settings' => new stdClass(), 'langs' => ['it' => ['items' => [['id' => 'm1', 'title' => 'Chi siamo', 'url' => 'it/ml-chi-siamo/index.html', 'children' => []]]]]]);
+$own->api('save_page', ['id' => 'ml-home', 'title' => 'Home', 'slug' => 'home', 'is_home' => true, 'lang' => 'en', 'publish' => true, 'blocks' => [['id' => 'hb', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>Welcome</p>']]]]);
+$own->api('save_page', ['id' => 'ml-about', 'title' => 'About us', 'slug' => 'ml-about', 'seo_description' => 'About the company', 'lang' => 'en', 'publish' => true, 'blocks' => [
+    ['id' => 'ab1', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>We make bread</p>']], ['id' => 'ab2', 'type' => 'BUTTON', 'styles' => [], 'content' => ['text' => 'Home', 'url' => 'index.html']]]]);
+$r = $own->api('translate_page', ['id' => 'ml-about', 'lang' => 'it']);
+$itp = $r['json']['page'] ?? [];
+clearstatcache(); check('translate: a draft copy in the other language (same blocks and settings, a free address), linked to the page by a shared id', !empty($r['json']['success']) && ($itp['lang'] ?? '') === 'it' && ($itp['status'] ?? '') === 'draft' && ($itp['slug'] ?? '') === 'ml-about' && ($itp['title'] ?? '') === 'About us' && !empty($itp['trans_group']) && $itp['trans_group'] === ($own->api('get_pages')['json'][array_search('ml-about', array_column($own->api('get_pages')['json'], 'id'))]['trans_group'] ?? '') && strpos((string)$itp['content_json'], 'We make bread') !== false, $r['body']);
+$r = $own->api('translate_page', ['id' => 'ml-about', 'lang' => 'it']);
+clearstatcache(); check('…a language that already has a translation is refused, and so are the page\'s own language, an unknown language and a site that is not multilingual', empty($r['json']['success']) && empty($own->api('translate_page', ['id' => 'ml-about', 'lang' => 'en'])['json']['success']) && empty($own->api('translate_page', ['id' => 'ml-about', 'lang' => 'xx'])['json']['success']), $r['body']);
+clearstatcache(); check('…a reviewer cannot translate; an author only their own pages', ($rv->api('translate_page', ['id' => 'ml-about', 'lang' => 'de'])['json']['code'] ?? '') === 'forbidden' && ($au1->api('translate_page', ['id' => 'ml-about', 'lang' => 'de'])['json']['code'] ?? '') === 'forbidden');
+$own->api('save_page', ['id' => $itp['id'], 'title' => 'Chi siamo', 'slug' => 'ml-chi-siamo', 'seo_description' => 'Sull\'azienda', 'lang' => 'it', 'publish' => true, 'blocks' => [
+    ['id' => 'ab1', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>Facciamo il pane</p>']], ['id' => 'ab2', 'type' => 'BUTTON', 'styles' => [], 'content' => ['text' => 'Home', 'url' => 'index.html']], ['id' => 'ab3', 'type' => 'LANGUAGE_SWITCHER', 'styles' => [], 'content' => ['style' => 'dropdown', 'labels' => 'code', 'showCurrent' => false]]]]);
+$r = $own->api('save_page', ['id' => 'ml-about', 'title' => 'About us', 'slug' => 'ml-about', 'lang' => 'it', 'publish' => false, 'blocks' => []]);
+clearstatcache(); check('a page linked to translations cannot change its language', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'translation') !== false, $r['body']);
+$r = $own->api('translate_page', ['id' => 'ml-home', 'lang' => 'it']); $ithome = $r['json']['page'] ?? [];
+clearstatcache(); check('the translation of the home page is the home page of the other language', (int)($ithome['is_home'] ?? 0) === 1 && ($ithome['lang'] ?? '') === 'it' && (int)($own->api('get_pages')['json'][array_search('ml-home', array_column($own->api('get_pages')['json'], 'id'))]['is_home'] ?? 0) === 1);
+$own->api('save_page', ['id' => $ithome['id'], 'title' => 'Benvenuti', 'slug' => 'home', 'lang' => 'it', 'publish' => true, 'blocks' => [['id' => 'hb', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>Benvenuti</p>']]]]);
+// the same address in two languages, and the folders of the languages
+$r = $own->api('save_page', ['id' => 'ml-clash', 'title' => 'Clash', 'slug' => 'it', 'lang' => 'en', 'publish' => true, 'blocks' => []]);
+clearstatcache(); check('no page of the default language may take the folder of a language (/it/)', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'slug_taken' && strpos($r['json']['message'], 'language') !== false, $r['body']);
+$r = $own->api('save_page', ['id' => 'ml-clash2', 'title' => 'About Italian', 'slug' => 'ml-about', 'lang' => 'it', 'publish' => true, 'blocks' => []]);
+clearstatcache(); check('…while an address may be used once in each language (an English /ml-about/ and an Italian /it/ml-about/ are two pages)', !empty($r['json']['success']), $r['body']);
+$r = $own->api('save_page', ['id' => 'ml-clash3', 'title' => 'About Italian 2', 'slug' => 'ml-about', 'lang' => 'it', 'publish' => true, 'blocks' => []]);
+clearstatcache(); check('…but not twice in the same language', empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'slug_taken', $r['body']);
+$own->api('delete_page', ['id' => 'ml-clash2']);
+// a collection with an English and an Italian item
+$own->api('save_collection', ['id' => 'col_ml', 'name' => 'ML News', 'slug' => 'ml-news']); $mcid = 'col_ml';
+clearstatcache(); check('a collection may not take the folder of a language', empty($own->api('save_collection', ['id' => 'col_it', 'name' => 'Italian', 'slug' => 'it'])['json']['success']));
+$own->api('save_item', ['id' => 'mln1', 'collection_id' => $mcid, 'title' => 'Hello world', 'slug' => 'hello', 'date' => '2026-03-01', 'excerpt' => 'First post', 'status' => 'published', 'lang' => 'en', 'blocks' => [
+    ['id' => 'x1', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>Item in English</p>']], ['id' => 'x2', 'type' => 'LANGUAGE_SWITCHER', 'styles' => [], 'content' => ['style' => 'list']]]]);
+$r = $own->api('translate_item', ['id' => 'mln1', 'lang' => 'it']); $itm = $r['json']['item'] ?? [];
+clearstatcache(); check('translate an item: a draft in the other language, same address, in the same collection, linked to the first', !empty($r['json']['success']) && ($itm['lang'] ?? '') === 'it' && ($itm['slug'] ?? '') === 'hello' && ($itm['status'] ?? '') === 'draft' && ($itm['collection_id'] ?? '') === $mcid && !empty($itm['trans_group']), $r['body']);
+$own->api('save_item', ['id' => $itm['id'], 'collection_id' => $mcid, 'title' => 'Ciao mondo', 'slug' => 'ciao', 'date' => '2026-03-01', 'excerpt' => 'Primo articolo', 'status' => 'published', 'lang' => 'it', 'blocks' => [
+    ['id' => 'x1', 'type' => 'TEXT', 'styles' => [], 'content' => ['text' => '<p>Articolo in italiano</p>']], ['id' => 'x2', 'type' => 'LANGUAGE_SWITCHER', 'styles' => [], 'content' => ['style' => 'list']]]]);
+$own->api('save_item', ['id' => 'mln2', 'collection_id' => $mcid, 'title' => 'Second', 'slug' => 'hello', 'status' => 'published', 'lang' => 'it', 'blocks' => []]);
+$r = $own->api('save_item', ['id' => 'mln3', 'collection_id' => $mcid, 'title' => 'Dup', 'slug' => 'hello', 'status' => 'published', 'lang' => 'it', 'blocks' => []]);
+clearstatcache(); check('an item address is unique per language in its collection: the Italian /ml-news/hello/ is free next to the English one, not twice', !empty($own->api('get_items&collection=' . $mcid)['json']) && empty($r['json']['success']) && ($r['json']['code'] ?? '') === 'slug_taken', $r['body']);
+$own->api('delete_item', ['id' => 'mln2']);
+$r = $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$en = (string)@file_get_contents($web . '/ml-about/index.html'); $it = (string)@file_get_contents($web . '/it/ml-chi-siamo/index.html');
+$enHome = (string)@file_get_contents($web . '/index.html'); $itHome = (string)@file_get_contents($web . '/it/index.html');
+clearstatcache(); check('after a publish: the default language is where it was, the other language is in its own folder, and each language has a home page', $en !== '' && $it !== '' && strpos($enHome, 'Welcome') !== false && strpos($itHome, 'Benvenuti') !== false && !is_file($web . '/ml-chi-siamo/index.html') && !is_file($web . '/it/ml-about/index.html'), substr($r['body'], 0, 300));
+clearstatcache(); check('<html lang> says the language of the page (and og:locale)', strpos($en, '<html lang="en"') !== false && strpos($it, '<html lang="it"') !== false && strpos($itHome, '<html lang="it"') !== false && strpos($it, 'og:locale" content="it"') !== false && strpos($en, 'og:locale" content="en"') !== false);
+clearstatcache(); check('hreflang: every language the page exists in, itself included, and x-default for the default language; absolute addresses', strpos($en, '<link rel="alternate" hreflang="en" href="https://example.test/ml-about/">') !== false && strpos($en, '<link rel="alternate" hreflang="it" href="https://example.test/it/ml-chi-siamo/">') !== false && strpos($en, 'hreflang="x-default" href="https://example.test/ml-about/"') !== false && substr_count($en, 'rel="alternate" hreflang=') === 3 && substr_count($it, 'rel="alternate" hreflang=') === 3);
+clearstatcache(); check('…the canonical address of a translation is its own, not the original\'s', strpos($it, '<link rel="canonical" href="https://example.test/it/ml-chi-siamo/">') !== false && strpos($en, '<link rel="canonical" href="https://example.test/ml-about/">') !== false);
+clearstatcache(); check('each page is built from its own blocks, header and menu: the Italian page has the Italian header and menu, the English page the English ones', strpos($en, 'HEADER EN') !== false && strpos($en, 'FOOTER EN') !== false && strpos($en, 'About') !== false && strpos($it, 'HEADER IT') !== false && strpos($it, 'FOOTER EN') !== false && strpos($it, 'HEADER EN') === false && strpos($it, 'Chi siamo') !== false && strpos($it, 'Facciamo il pane') !== false && strpos($it, 'We make bread') === false);
+clearstatcache(); check('a link to the home page goes to the home of the language of the page', strpos($en, 'href="/"') !== false && strpos($it, 'href="/it/"') !== false);
+clearstatcache(); check('the Language Switcher links to the translation of the page (the header one, and the one in the page: a drop-down of codes without the current language)', strpos($en, 'href="/it/ml-chi-siamo/" hreflang="it"') !== false && strpos($en, 'aria-current="true"') !== false && strpos($it, 'href="/ml-about/" hreflang="en"') !== false && strpos($it, '<select aria-label="Language"') !== false && strpos($it, '<option value="/ml-about/" lang="en">EN</option>') !== false && strpos($it, '>IT</option>') === false);
+clearstatcache(); check('…a language without a translation sends to its home page when it has one; one without is not offered', strpos($en, 'hreflang="de"') === false && strpos($en, 'pt-BR') === false);
+$sm = (string)@file_get_contents($web . '/sitemap.xml');
+clearstatcache(); check('the sitemap lists each page of each language, and the alternates of the pages that have translations', strpos($sm, '<loc>https://example.test/it/ml-chi-siamo/</loc>') !== false && strpos($sm, 'xmlns:xhtml="http://www.w3.org/1999/xhtml"') !== false && strpos($sm, '<xhtml:link rel="alternate" hreflang="it" href="https://example.test/it/ml-chi-siamo/"/>') !== false && strpos($sm, 'hreflang="x-default" href="https://example.test/ml-about/"') !== false && strpos($sm, '<loc>https://example.test/it/</loc>') !== false);
+$eni = (string)@file_get_contents($web . '/ml-news/hello/index.html'); $iti = (string)@file_get_contents($web . '/it/ml-news/ciao/index.html');
+clearstatcache(); check('items too: the Italian one is at /it/ml-news/ciao/, hreflang links the two, the switcher on the item links to the other', $eni !== '' && $iti !== '' && strpos($iti, '<html lang="it"') !== false && strpos($eni, 'hreflang="it" href="https://example.test/it/ml-news/ciao/"') !== false && strpos($iti, 'hreflang="en" href="https://example.test/ml-news/hello/"') !== false && strpos($eni, 'href="/it/ml-news/ciao/" hreflang="it"') !== false && strpos($iti, 'href="/ml-news/hello/" hreflang="en"') !== false);
+$enl = (string)@file_get_contents($web . '/ml-news/index.html'); $itl = (string)@file_get_contents($web . '/it/ml-news/index.html');
+clearstatcache(); check('the listing pages are made for each language, from its own items: the English one lists Hello, the Italian one lists Ciao, neither lists the other', strpos($enl, 'Hello world') !== false && strpos($enl, 'Ciao mondo') === false && strpos($itl, 'Ciao mondo') !== false && strpos($itl, 'Hello world') === false && strpos($itl, 'href="/it/ml-news/ciao/"') !== false && strpos($enl, 'href="/ml-news/hello/"') !== false);
+$si = json_decode((string)@file_get_contents($web . '/search-index.json'), true) ?: []; $sit = json_decode((string)@file_get_contents($web . '/search-index-it.json'), true) ?: [];
+clearstatcache(); check('the site search has one index per language, and a page of a language searches its own', in_array('/it/ml-chi-siamo/', array_column($sit, 'u'), true) && !in_array('/it/ml-chi-siamo/', array_column($si, 'u'), true) && in_array('/ml-about/', array_column($si, 'u'), true) && !in_array('/ml-about/', array_column($sit, 'u'), true));
+$own->api('save_page', ['id' => 'ml-search', 'title' => 'Search', 'slug' => 'ml-search', 'lang' => 'it', 'publish' => true, 'blocks' => [['id' => 'ss', 'type' => 'SEARCH', 'styles' => [], 'content' => []]]]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+clearstatcache(); check('…the Search block of an Italian page reads the Italian index', strpos((string)@file_get_contents($web . '/it/ml-search/index.html'), 'search-index-it.json"') !== false);
+clearstatcache(); check('RSS feeds are per language: /ml-news/feed.xml and /it/ml-news/feed.xml, each with its own items', strpos((string)@file_get_contents($web . '/it/ml-news/feed.xml'), 'Ciao mondo') !== false && strpos((string)@file_get_contents($web . '/it/ml-news/feed.xml'), 'https://example.test/it/ml-news/ciao/') !== false && strpos((string)@file_get_contents($web . '/ml-news/feed.xml'), 'Ciao') === false && strpos($it, 'https://example.test/it/ml-news/feed.xml') !== false && strpos($en, 'it/ml-news/feed.xml') === false && strpos($iti, 'href="https://example.test/it/ml-news/feed.xml"') !== false && strpos($eni, 'href="https://example.test/ml-news/feed.xml"') !== false);
+// the texts of a language: announcement and cookie banner
+$cur = $own->api('get_settings')['json'] ?? [];
+$own->api('save_settings', array_merge($cur, ['announcement' => ['enabled' => true, 'text' => 'Sale on everything', 'linkText' => 'See', 'linkUrl' => 'ml-about/index.html'], 'cookieBanner' => ['enabled' => true, 'text' => 'We use cookies', 'acceptLabel' => 'Accept', 'declineLabel' => 'Decline']]));
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+$en = (string)@file_get_contents($web . '/ml-about/index.html'); $it = (string)@file_get_contents($web . '/it/ml-chi-siamo/index.html');
+clearstatcache(); check('the announcement bar and the cookie banner speak the language of the page where it has texts (the rest is the site\'s own)', strpos($en, 'Sale on everything') !== false && strpos($en, 'We use cookies') !== false && strpos($it, 'Sconti su tutto') !== false && strpos($it, 'Usiamo i cookie') !== false && strpos($it, 'Accetta') !== false && strpos($it, 'Sale on everything') === false && strpos($it, 'We use cookies') === false && strpos($it, 'Scopri') !== false);
+$pp = $own->api('save_popup', ['name' => 'Solo italiano', 'status' => 'published', 'settings' => ['rules' => ['language' => 'it']], 'blocks' => [['id' => 'pb', 'type' => 'TEXT', 'content' => ['text' => '<p>Offerta</p>']]]]); $popL = $pp['json']['id'] ?? '';
+$own->req('POST', '/canvascore-admin/rebuild_all.php', ''); clearstatcache();
+check('a popup written for one language is on the pages of that language only', $popL !== '' && strpos((string)@file_get_contents($web . '/it/ml-chi-siamo/index.html'), 'id="cc-popup-' . $popL . '"') !== false && strpos((string)@file_get_contents($web . '/ml-about/index.html'), 'cc-popup-' . $popL) === false && strpos((string)@file_get_contents($web . '/it/ml-news/ciao/index.html'), 'cc-popup-' . $popL) !== false && strpos((string)@file_get_contents($web . '/ml-news/hello/index.html'), 'cc-popup-' . $popL) === false);
+$own->api('delete_popup', ['id' => $popL]);
+// unlinking, deleting, removing a language
+clearstatcache(); check('only an editor or an admin unlinks a translation; the group disappears when a single page is left', ($au1->api('unlink_translation', ['kind' => 'page', 'id' => $itp['id']])['json']['code'] ?? '') === 'forbidden' && !empty($own->api('unlink_translation', ['kind' => 'page', 'id' => $itp['id']])['json']['success']));
+$pg = array_column($own->api('get_pages')['json'], null, 'id');
+clearstatcache(); check('…neither page keeps a group and the Italian page can have another language now', ($pg['ml-about']['trans_group'] ?? 'x') === '' && ($pg[$itp['id']]['trans_group'] ?? 'x') === '');
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+clearstatcache(); check('…the English page no longer lists an alternate; the Italian one is unchanged', strpos((string)@file_get_contents($web . '/ml-about/index.html'), 'rel="alternate" hreflang=') === false && is_file($web . '/it/ml-chi-siamo/index.html'));
+$own->api('delete_page', ['id' => $itp['id']]); clearstatcache(); check('deleting a translation takes its page offline (and only its own: the English one stays)', !is_file($web . '/it/ml-chi-siamo/index.html') && is_file($web . '/ml-about/index.html'));
+$own->api('delete_item', ['id' => $itm['id']]);
+clearstatcache(); check('deleting a translated item too, in its language folder', !is_file($web . '/it/ml-news/ciao/index.html') && is_file($web . '/ml-news/hello/index.html'));
+// a language taken away: its pages are not published (they would land on top of the default language's)
+$own->api('save_page', ['id' => 'ml-de', 'title' => 'Über uns', 'slug' => 'ml-ueber', 'lang' => 'de', 'publish' => true, 'blocks' => []]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+clearstatcache(); check('a page in a language is published in its folder', is_file($web . '/de/ml-ueber/index.html'));
+$own->api('save_languages', ['enabled' => true, 'default' => 'en', 'list' => [['code' => 'en', 'name' => 'English'], ['code' => 'it', 'name' => 'Italiano']]]);
+$r = $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+clearstatcache(); check('when the language is taken away the pages in it are not published any more, with a warning', !is_file($web . '/de/ml-ueber/index.html') && strpos((string)($r['json']['message'] ?? ''), 'language the site does not use') !== false, $r['body']);
+$own->api('save_languages', ['enabled' => false, 'default' => 'en', 'list' => [['code' => 'en', 'name' => 'English'], ['code' => 'it', 'name' => 'Italiano']]]);
+$own->api('save_page', ['id' => 'ml-it2', 'title' => 'Solo italiano', 'slug' => 'ml-about', 'lang' => 'it', 'publish' => false, 'blocks' => []]);
+$own->req('POST', '/canvascore-admin/rebuild_all.php', '');
+clearstatcache(); check('switched off: the site is published as one language (the default one), nothing in a folder, no language marks', is_file($web . '/ml-about/index.html') && !is_file($web . '/it/index.html') && !is_file($web . '/it/ml-news/index.html') && strpos((string)@file_get_contents($web . '/ml-about/index.html'), 'rel="alternate" hreflang=') === false && strpos((string)@file_get_contents($web . '/ml-about/index.html'), '<html lang="en"') !== false);
+foreach (['ml-home', 'ml-about', 'ml-de', 'ml-it2', 'ml-search', $ithome['id'] ?? 'x', 'ml-clash3'] as $x) $own->api('delete_page', ['id' => $x]);
+$own->api('delete_item', ['id' => 'mln1']); if ($mcid) $own->api('delete_collection', ['id' => $mcid]);
+$own->api('save_menu', ['items' => [], 'settings' => new stdClass()]);
+$own->api('delete_part', ['name' => 'header']); $own->api('delete_part', ['name' => 'footer']); $own->api('delete_part', ['name' => 'header:it']);
+$cur = $own->api('get_settings')['json'] ?? [];
+unset($cur['announcement'], $cur['cookieBanner']); $cur['siteUrl'] = '';
+$own->api('save_settings', $cur);
+$own->api('save_languages', ['enabled' => false, 'list' => []]);
+clearstatcache(); check('the language library file answers 404 when opened directly', $own->req('GET', '/canvascore-admin/languages.php', null, [], false)['code'] === 404);
+
 echo "\nONE-CLICK UPDATES\n";
 // A release feed served by the test server; the temporary install trusts a test key (its own update-keys.php)
 $kp = sodium_crypto_sign_keypair(); $tsk = sodium_crypto_sign_secretkey($kp);

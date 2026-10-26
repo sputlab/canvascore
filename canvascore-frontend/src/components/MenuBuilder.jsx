@@ -13,6 +13,7 @@ import { Button, PageHeader } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { DEFAULT_SETTINGS, BURGER_ICONS, EFFECT_GROUPS, THEMES, applyTheme, matchingTheme, normalizeSettings, toggleEffect, cleanEffects } from '../menu/menuThemes';
 import { confirmDialog } from '../ui/dialog';
+import { isMultilingual, langOf, langName, pageFile } from '../editor/languages';
 
 // ---- tree utilities (immutable) ----
 const clone = (t) => JSON.parse(JSON.stringify(t));
@@ -40,13 +41,21 @@ function flatToTree(list) {
 
 export default function MenuBuilder() {
   const { pages, publishSiteAsync } = useStore();
-  const [items, setItems] = useState([]);
+  // Languages: the default language's menu, and the menus of the languages that have one of their own (code => tree; the others use the default's)
+  const langs = useStore((st) => st.languages);
+  const multi = isMultilingual(langs);
+  const [defaultItems, setDefaultItems] = useState([]);
+  const [langMenus, setLangMenus] = useState({});
+  const [menuLang, setMenuLang] = useState('');
+  const lang = multi && menuLang && langs.list.some((l) => l.code === menuLang) ? menuLang : '';
+  const items = lang ? (langMenus[lang] || []) : defaultItems;      // the menu being edited
+  const setItems = (v) => { if (lang) setLangMenus((m) => ({ ...m, [lang]: v })); else setDefaultItems(v); };
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
   // Saving before the data arrives (or after it failed) would overwrite the site's data with defaults
   const [loadState, setLoadState] = useState('loading');
   // Local backup of unsaved work (see src/session/)
-  const draftValue = useMemo(() => ({ items, settings }), [items, settings]);
+  const draftValue = useMemo(() => ({ items: defaultItems, langs: langMenus, settings }), [defaultItems, langMenus, settings]);
   const draft = useDraftSync('menu', draftValue);
   const [restoredAt, setRestoredAt] = useState(null);
   const [tab, setTab] = useState('structure');
@@ -59,6 +68,8 @@ export default function MenuBuilder() {
   const logoInputRef = useRef(null);
 
   // Up/down arrows to adjust the numeric radius
+  // The pages a link of this menu can point to: the pages of its language
+  const menuPages = pages.filter((p) => !Number(p.is_draft_copy) && (!multi || langOf(p, langs) === (lang || langs.default)));
   const radiusKey = (e) => {
     const m = String(settings.borderRadius || '').match(/^(\d+)(px|rem|em|%)?$/);
     if (!m) return;
@@ -98,11 +109,13 @@ export default function MenuBuilder() {
         let loaded = []; let loadedSettings = DEFAULT_SETTINGS;
         if (data && !Array.isArray(data)) { loaded = data.items || []; loadedSettings = normalizeSettings(data.settings); }
         else if (Array.isArray(data)) loaded = data;
-        const server = { items: flatToTree(loaded), settings: loadedSettings };
+        const loadedLangs = {};
+        if (data && data.langs && typeof data.langs === 'object') for (const [c, m] of Object.entries(data.langs)) if (m && Array.isArray(m.items) && m.items.length) loadedLangs[c] = flatToTree(m.items);
+        const server = { items: flatToTree(loaded), langs: loadedLangs, settings: loadedSettings };
         // If an unsaved local draft exists (expired session, refresh...) it is re-applied
         const pending = draft.loaded(server);
         const v = pending ? pending.value : server;
-        setSettings(normalizeSettings(v.settings)); setItems(v.items);
+        setSettings(normalizeSettings(v.settings)); setDefaultItems(v.items); setLangMenus(v.langs || {});
         if (pending) setRestoredAt(pending.savedAt);
         setLoadState('ready');
       })
@@ -113,14 +126,17 @@ export default function MenuBuilder() {
     if (loadState !== 'ready') return;
     setIsSaving(true);
     try {
-      const r = await fetch('api.php?action=save_menu', { method: 'POST', body: JSON.stringify({ items, settings }) });
+      // (a language's own menu is saved only when it has items: an empty one means "use the default menu")
+      const langsOut = {};
+      for (const [c, tree] of Object.entries(langMenus)) if (tree && tree.length) langsOut[c] = { items: tree };
+      const r = await fetch('api.php?action=save_menu', { method: 'POST', body: JSON.stringify({ items: defaultItems, settings, ...(multi ? { langs: langsOut } : {}) }) });
       const saved = await r.json();
       if (!saved || !saved.success) {
         notify('Menu NOT saved: ' + ((saved && saved.message) || 'unexpected response') + '\nYour changes are still here and backed up on this device.', 'error');
         setIsSaving(false);
         return;
       }
-      draft.saved({ items, settings });
+      draft.saved({ items: defaultItems, langs: langMenus, settings });
       setRestoredAt(null);
       const res = await publishSiteAsync();
       if (res && res.success) notify('Menu saved and site updated.');
@@ -185,7 +201,7 @@ export default function MenuBuilder() {
           <span><strong>Restored unsaved changes</strong> from {new Date(restoredAt).toLocaleString()}. They are <strong>not saved to the site yet</strong>: click Save &amp; Publish to keep them.</span>
           <button onClick={async () => {
             if (!(await confirmDialog({ title: 'Discard the restored changes?', message: 'The menu goes back to its last saved version.', confirmLabel: 'Discard changes', danger: true }))) return;
-            const srv = draft.discard(); setItems(srv.items); setSettings(normalizeSettings(srv.settings)); setRestoredAt(null);
+            const srv = draft.discard(); setDefaultItems(srv.items); setLangMenus(srv.langs || {}); setSettings(normalizeSettings(srv.settings)); setRestoredAt(null);
           }} style={{ background: 'transparent', color: '#bae6fd', border: '1px solid #0369a1', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px' }}>Discard</button>
         </div>
       )}
@@ -210,7 +226,19 @@ export default function MenuBuilder() {
               Leave the URL empty for a parent that only opens its submenu (no link).
             </PanelIntro>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <MenuLevel items={items} depth={0} pages={pages}
+              {multi && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '0 0 14px', padding: 10, border: '1px solid #334155', borderRadius: 8 }} data-testid="menu-language">
+                  <label htmlFor="menu-lang" style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>Menu for</label>
+                  <select id="menu-lang" style={{ ...input, width: 'auto', cursor: 'pointer' }} value={lang} onChange={(e) => setMenuLang(e.target.value)}>
+                    <option value="">{langName(langs.default, langs)} (default)</option>
+                    {langs.list.filter((l) => l.code !== langs.default).map((l) => <option key={l.code} value={l.code}>{l.name}{langMenus[l.code] && langMenus[l.code].length ? '' : ' (uses the default menu)'}</option>)}
+                  </select>
+                  {lang && !(langMenus[lang] && langMenus[lang].length) && <Button size="sm" onClick={() => setLangMenus((m) => ({ ...m, [lang]: clone(defaultItems) }))}>Start from the default menu</Button>}
+                  {lang && langMenus[lang] && langMenus[lang].length > 0 && <Button size="sm" variant="ghost" onClick={() => setLangMenus((m) => { const n = { ...m }; delete n[lang]; return n; })}>Use the default menu</Button>}
+                  <span style={{ fontSize: 11.5, color: '#64748b', flexBasis: '100%' }}>The look of the menu (Style, Mobile, Effects) is shared by all languages. Without a menu of its own a language shows the default language&apos;s links.</span>
+                </div>
+              )}
+              <MenuLevel items={items} depth={0} pages={menuPages} langs={langs}
                 onUpdate={updateItem} onRemove={removeItem} onAddChild={addChild}
                 onMove={moveUpDown} onIndent={indent} onOutdent={outdent} />
             </DndContext>
@@ -349,7 +377,7 @@ export default function MenuBuilder() {
               <Field label="LOGO / BUTTONS GAP"><input style={input} value={settings.logoGap} onChange={e => set({ logoGap: e.target.value })} placeholder="24px" /></Field>
               <Field label="LOGO LINK"><select style={input} value={settings.logoLink} onChange={e => set({ logoLink: e.target.value })}>
                 <option value="index.html">Homepage</option><option value="">No link</option>
-                {pages.map(p => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>{p.title}</option>)}</select></Field>
+                {pages.filter((p) => !Number(p.is_draft_copy)).map(p => <option key={p.id} value={pageFile(p, langs)}>{p.title}{multi ? ` (${langOf(p, langs).toUpperCase()})` : ''}</option>)}</select></Field>
             </Grid>
           </>
         )}
@@ -428,18 +456,18 @@ const TABS = [
   { id: 'mobile', label: 'Mobile', icon: Smartphone },
 ];
 
-function MenuLevel({ items, depth, pages, onUpdate, onRemove, onAddChild, onMove, onIndent, onOutdent }) {
+function MenuLevel({ items, depth, pages, langs, onUpdate, onRemove, onAddChild, onMove, onIndent, onOutdent }) {
   return (
     <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
       {items.map((item, idx) => (
-        <MenuRow key={item.id} item={item} index={idx} total={items.length} depth={depth} pages={pages}
+        <MenuRow key={item.id} item={item} index={idx} total={items.length} depth={depth} pages={pages} langs={langs}
           onUpdate={onUpdate} onRemove={onRemove} onAddChild={onAddChild} onMove={onMove} onIndent={onIndent} onOutdent={onOutdent} />
       ))}
     </SortableContext>
   );
 }
 
-function MenuRow({ item, index, total, depth, pages, onUpdate, onRemove, onAddChild, onMove, onIndent, onOutdent }) {
+function MenuRow({ item, index, total, depth, pages, langs, onUpdate, onRemove, onAddChild, onMove, onIndent, onOutdent }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const noLink = !item.url || item.url === '#';
@@ -456,17 +484,17 @@ function MenuRow({ item, index, total, depth, pages, onUpdate, onRemove, onAddCh
           <button onClick={() => onOutdent(item.id)} disabled={depth === 0} style={{ ...miniBtn, background: '#1e3a5f' }} title="Un-nest"><IndentDecrease size={12} /></button>
         </div>
         <input style={{ ...input, flex: 1 }} value={item.title} onChange={e => onUpdate(item.id, 'title', e.target.value)} placeholder="Label" />
-        <select style={{ ...input, flex: 1, cursor: 'pointer' }} value={pages.some(p => (p.clean_slug ? p.clean_slug + '/index.html' : 'index.html') === item.url) ? item.url : (noLink ? '' : '__custom__')} onChange={e => { if (e.target.value !== '__custom__') onUpdate(item.id, 'url', e.target.value); }}>
+        <select style={{ ...input, flex: 1, cursor: 'pointer' }} value={pages.some(p => pageFile(p, langs) === item.url) ? item.url : (noLink ? '' : '__custom__')} onChange={e => { if (e.target.value !== '__custom__') onUpdate(item.id, 'url', e.target.value); }}>
           <option value="">— No link (opens submenu) —</option>
           <option value="__custom__">Custom URL…</option>
-          {pages.map(p => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>{p.title}</option>)}
+          {pages.map(p => <option key={p.id} value={pageFile(p, langs)}>{p.title}</option>)}
         </select>
         <input style={{ ...input, flex: 1 }} value={item.url} onChange={e => onUpdate(item.id, 'url', e.target.value)} placeholder="empty = no link" />
         <button onClick={() => onAddChild(item.id)} style={{ ...miniBtn, background: '#065f46', padding: '8px' }} title="Add submenu item"><Plus size={14} /></button>
         <button onClick={() => onRemove(item.id)} style={{ padding: '8px', background: '#450a0a', color: '#fca5a5', border: '1px solid #7f1d1d', borderRadius: '6px', cursor: 'pointer' }}><Trash2 size={14} /></button>
       </div>
       {item.children && item.children.length > 0 && (
-        <MenuLevel items={item.children} depth={depth + 1} pages={pages}
+        <MenuLevel items={item.children} depth={depth + 1} pages={pages} langs={langs}
           onUpdate={onUpdate} onRemove={onRemove} onAddChild={onAddChild} onMove={onMove} onIndent={onIndent} onOutdent={onOutdent} />
       )}
     </div>

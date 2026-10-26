@@ -80,6 +80,7 @@ This manual covers each block's Content tab. For the editor in general, and for 
 | | [Item Field](#item-field) | One field of the collection item, shown on its page |
 | | [Categories & Tags](#categories--tags) | The terms of the item, as links to their listing pages |
 | | [Site Search](#site-search) | A search box that finds your pages and items |
+| | [Language Switcher](#language-switcher) | Links to the translations of the page, for a multilingual site |
 | | [Table of Contents](#table-of-contents) | A list of the page's headings, which follows you down the page |
 | | [Share Bar](#share-bar) | Buttons to share the page on social networks, by email or by copying the link |
 | | [Payment Button](#payment-button) | A button that takes the visitor to a Stripe payment page, with an optional title, description and price |
@@ -992,6 +993,20 @@ A search box. Visitors type a word and see a list of matching pages and collecti
 **Tips**
 - Put this block on a page called "Search" (address `/search/`), then link to that page from your menu.
 - The box takes up to 720px and is centered. Change it in **Style**.
+
+### Language Switcher
+
+Links that let visitors move between the languages of a multilingual site (Administration › Languages).
+
+**Settings** (panel: **Language switcher**)
+- **Look**: a row of links, or a drop-down list.
+- **Show**: the name of each language as it writes it (Italiano), or its code (IT).
+- **Show the current language too**: on by default; the current language is marked.
+
+**How it works**
+- Each link goes to the translation of the page being viewed. A language the page has no translation in goes to that language's home page, and is left out when it has no published home page.
+- It is built when the site is published, so publish after adding a translation. Nothing is shown until at least two languages are added; the canvas shows a preview.
+- Put it in the **global header** (Global Options) to have it on every page, or on any page.
 
 ---
 

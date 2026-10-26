@@ -8,16 +8,20 @@ import ItemFieldsSection from './ItemFieldsSection';
 import ItemTermsSection from './ItemTermsSection';
 import ScheduleSection from './ScheduleSection';
 import PopupSettings from './PopupSettings';
+import LanguageSection from './LanguageSection';
+import { useStore } from '../../store/useStore';
 
 // Page settings, shown when no block is selected: page info, URL, structure, SEO (and item fields for collection items).
 export default function PageSettings({ ctx }) {
   const { activePage, updateActivePage, pages, collections, coverInputRef } = ctx;
   const [sharePicker, setSharePicker] = useState(false);
+  const langs = useStore((s) => s.languages);
   if (activePage?.__popup) return <PopupSettings ctx={ctx} />;   // a popup has its own settings (look, triggers, display rules)
   // Hide the draft suffix from the user in the UI to avoid confusion
   const displaySlug = activePage?.slug || '';
   // Pages and collections share the top-level URLs (collection items are checked by the server)
-  const slugCtx = { pages, collections, pageId: activePage?.id, parentId: activePage?.parent_id };
+  // (an address belongs to one language: the same slug can be used once in each)
+  const slugCtx = { pages, collections, pageId: activePage?.id, parentId: activePage?.parent_id, lang: activePage?.lang || '', cfg: langs };
   const slugTakenBy = activePage?.__item ? null : slugOwner(slugify(displaySlug), slugCtx);
 
   return (
@@ -59,6 +63,7 @@ export default function PageSettings({ ctx }) {
           </PanelAccordion>
         )}
 
+        {!activePage?.__part && !activePage?.__design && <LanguageSection activePage={activePage} updateActivePage={updateActivePage} pages={pages} />}
         {!activePage?.__part && !activePage?.__design && <ScheduleSection activePage={activePage} updateActivePage={updateActivePage} />}
         {activePage?.__item && <ItemFieldsSection activePage={activePage} updateActivePage={updateActivePage} />}
         {activePage?.__item && <ItemTermsSection activePage={activePage} updateActivePage={updateActivePage} />}

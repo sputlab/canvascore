@@ -99,11 +99,11 @@ export default function VisualEditor() {
   const savePageRaw = async (publish = false) => {
     if (isEditingMaster) return null;
     // Always the LATEST content (not this render's copy): edits made just before the click are included
-    const { activePage, blocks } = useStore.getState();
+    const { activePage, blocks, languages: langs } = useStore.getState();
     // Global header/footer: saved to site_parts
     if (activePage.__part) {
       try {
-        const res = await fetch('api.php?action=save_part', { method: 'POST', body: JSON.stringify({ name: activePage.__part, blocks }) });
+        const res = await fetch('api.php?action=save_part', { method: 'POST', body: JSON.stringify({ name: activePage.__part, blocks, ...(activePage.lang ? { lang: activePage.lang } : {}) }) });
         return await res.json();
       } catch { notify('Error saving the part.', 'error'); return null; }
     }
@@ -138,7 +138,8 @@ export default function VisualEditor() {
           // an item built from the design keeps its own blocks as they are (null: not sent)
           blocks: activePage.__locked ? null : blocks,
           field_values: activePage.field_values || {},
-          terms: activePage.terms || {}
+          terms: activePage.terms || {},
+          ...(langs && langs.enabled ? { lang: activePage.lang || '' } : {})
         }) });
         const data = await res.json();
         if (data.success && publish) updateActivePage({ status: 'published', review_state: '', review_note: '', review_by: '', review_at: '' });
@@ -151,6 +152,7 @@ export default function VisualEditor() {
       layout: activePage.layout, boxed_width: activePage.boxed_width, bg_color: activePage.bg_color, blocks: blocks,
       is_home: Number(activePage.is_home) ? 1 : 0,
       noindex: Number(activePage.noindex) ? 1 : 0,
+      ...(langs && langs.enabled ? { lang: activePage.lang || '' } : {}),
       publish: publish
     };
     try {
@@ -297,7 +299,8 @@ export default function VisualEditor() {
     }).catch(() => {});
     return () => { alive = false; };
   }, [activePage?.__item, activePage?.collection_id]);
-  const liveUrl = activePage?.__popup ? null : livePageUrl(activePage, pages, colSlug);
+  const siteLangs = useStore((s) => s.languages);
+  const liveUrl = activePage?.__popup ? null : livePageUrl(activePage, pages, colSlug, siteLangs);
 
   const kind = activePage?.__part ? (activePage.__part === 'header' ? 'Global header' : 'Global footer') : activePage?.__design ? 'Collection design' : activePage?.__item ? 'Collection item' : activePage?.__popup ? 'Popup' : null;
   const backLabel = activePage?.__item || activePage?.__design ? 'Collections' : activePage?.__part ? 'Global Options' : activePage?.__popup ? 'Popups' : 'Pages';

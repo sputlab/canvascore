@@ -251,6 +251,16 @@ function cc_db_migrations() {
                 content_schema INTEGER DEFAULT 1, created_by TEXT DEFAULT '', created_at TEXT DEFAULT '', updated_at TEXT DEFAULT ''
             )");
         },
+
+        // v17 — multilingual sites: the language a page or an item is written in ('' = the site's default language) and the id it
+        // shares with its translations ('' = it has none)
+        17 => function ($pdo) {
+            foreach (['pages', 'collection_items'] as $t) {
+                cc_add_col($pdo, $t, 'lang', "TEXT DEFAULT ''");
+                cc_add_col($pdo, $t, 'trans_group', "TEXT DEFAULT ''");
+                $pdo->exec("CREATE INDEX IF NOT EXISTS idx_{$t}_trans_group ON $t(trans_group)");
+            }
+        },
     ];
 }
 

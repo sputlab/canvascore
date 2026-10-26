@@ -286,7 +286,7 @@ export const useStore = create((set, get) => ({
       isAuthenticated: false, userRole: 'editor', username: null, mustChangePw: false,
       // no work state may survive the logout (the next user must not inherit it)
       currentView: 'manager', activePage: null, blocks: [], pastBlocks: [], futureBlocks: [], selectedBlockId: null,
-      isEditingMaster: false, editingMaster: null, pages: [],
+      isEditingMaster: false, editingMaster: null, pages: [], languages: null,
       sessionExpired: false, expiredUser: null, expiredAt: null, expiredReason: null, sessionExpiresAt: null, sessionWarning: false,
       editorDirty: false, editorRestored: false, editorDraftFound: null, draftBackupFailed: false,
     });
@@ -313,6 +313,12 @@ export const useStore = create((set, get) => ({
   currentView: 'manager', setView: (view) => set({ currentView: view }),
   viewport: 'desktop', setViewport: (vp) => set({ viewport: vp }),
 
+  // The site's languages (Administration › Languages): { enabled, default, list: [{ code, name }] }; null until loaded
+  languages: null,
+  setLanguages: (languages) => set({ languages: languages && typeof languages === 'object' ? languages : null }),
+  fetchLanguages: async () => {
+    try { const d = await (await fetch('api.php?action=get_languages')).json(); if (d && d.languages) set({ languages: d.languages }); } catch { /* the site stays one language until it loads */ }
+  },
   pages: [],
   setPages: (pages) => set({ pages: Array.isArray(pages) ? pages : [] }),
   // Reloads the page list (dashboard statuses change after publishing)

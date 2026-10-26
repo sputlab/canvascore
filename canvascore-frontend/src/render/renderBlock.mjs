@@ -537,6 +537,7 @@ function renderBlockBody(block, opts = {}) {
     case 'ITEM_FIELD':
     case 'RELATED':
     case 'ITEM_TERMS':
+    case 'LANGUAGE_SWITCHER':   // links to the translations of the page: made when the site is published (the editor canvas shows a preview)
       return '';
 
     default:

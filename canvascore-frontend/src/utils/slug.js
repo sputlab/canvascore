@@ -1,3 +1,5 @@
+import { langOf, isMultilingual, codesOf } from '../editor/languages';
+
 // Slug helpers shared by page creation, templates and the Page Info panel.
 // A slug is a top-level URL: it belongs to one page or collection site-wide
 // (the server enforces this on publish, see cc_slug_owner() in api.php).
@@ -18,11 +20,15 @@ const isLive = (p) => ['published', 'modified'].includes(p.status);
 // Who already uses `slug`, ignoring the page being edited (and its draft copy / parent).
 // Returns { label: 'page “About”', live } or null when the slug is free. `live` owners block
 // publishing on the server; a draft owner only means the two pages can't both be published.
-export function slugOwner(slug, { pages = [], collections = [], pageId = null, parentId = null } = {}) {
+// With languages (`cfg`: the site's languages, `lang`: the language of the page asking) an address belongs to one language: the same slug can be used once
+// in each (/about/ and /it/about/); the default language's addresses are also those of the language folders, which they may not take.
+export function slugOwner(slug, { pages = [], collections = [], pageId = null, parentId = null, lang = '', cfg = null } = {}) {
   if (!slug) return null;
   if (RESERVED_SLUGS.includes(slug)) return { label: 'a system folder', live: true };
+  const L = langOf({ lang }, cfg);
+  if (isMultilingual(cfg) && L === cfg.default && codesOf(cfg).some((c) => c !== cfg.default && c === slug)) return { label: 'the folder of a language', live: true };
   const others = pages.filter((p) => !Number(p.is_draft_copy) && p.id !== pageId && p.id !== parentId
-    && (p.clean_slug || p.slug) === slug);
+    && (p.clean_slug || p.slug) === slug && langOf(p, cfg) === L);
   const page = others.find(isLive) || others[0];
   if (page) return { label: `page “${page.title || page.id}”`, live: isLive(page) };
   const col = collections.find((c) => c.slug === slug);

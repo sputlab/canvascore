@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AppWindow, Eye, Palette, MousePointerClick, ListFilter, Copy } from 'lucide-react';
 import { PanelAccordion, ColorF } from './fields';
 import { labelStyle, inputStyle } from './helpers';
+import { useStore } from '../../store/useStore';
+import { isMultilingual } from '../../editor/languages';
 import { withDefaults, POSITIONS, ANIMATIONS, FREQUENCIES, triggerSummary, rulesSummary } from '../../editor/popups';
 import PopupPreview from '../PopupPreview';
 import { notify } from '../../ui/notify';
@@ -50,6 +52,8 @@ function Ticks({ label, items, chosen, onChange, empty }) {
 export default function PopupSettings({ ctx }) {
   const { activePage, updateActivePage, pages } = ctx;
   const s = useMemo(() => withDefaults(activePage.settings), [activePage.settings]);
+  const langs = useStore((st) => st.languages);
+  const multi = isMultilingual(langs);
   const [collections, setCollections] = useState([]);
   const [preview, setPreview] = useState(false);
   useEffect(() => {
@@ -133,6 +137,7 @@ export default function PopupSettings({ ctx }) {
           <Check label="Computers" checked={s.rules.devices.desktop} onChange={(v) => set('rules.devices.desktop', v)} />
           <Check label="Tablets (768–1024 px wide)" checked={s.rules.devices.tablet} onChange={(v) => set('rules.devices.tablet', v)} />
           <Check label="Phones (up to 767 px wide)" checked={s.rules.devices.mobile} onChange={(v) => set('rules.devices.mobile', v)} />
+          {multi && <Pick label="Language" value={s.rules.language || ''} onChange={(v) => set('rules.language', v)} options={[['', 'Every language'], ...langs.list.map((l) => [l.code, `Only ${l.name} pages`])]} />}
           <Pick label="Visitors" value={s.rules.visitor} onChange={(v) => set('rules.visitor', v)} options={[['all', 'Everyone'], ['new', 'New visitors (first visit)'], ['returning', 'Returning visitors']]} />
           <Pick label="How often" value={s.rules.frequency.mode} onChange={(v) => set('rules.frequency.mode', v)} options={FREQUENCIES} />
           {s.rules.frequency.mode === 'days' && <Num label="Days before it can come back" value={s.rules.frequency.days} min={1} max={365} onChange={(v) => set('rules.frequency.days', v)} />}

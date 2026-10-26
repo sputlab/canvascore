@@ -29,7 +29,7 @@ function cc_popup_defaults() {
                    'radius' => 16, 'padding' => 28, 'closeButton' => true, 'closeOverlay' => true, 'closeEsc' => true],
         'triggers' => ['time' => ['on' => true, 'seconds' => 5], 'scroll' => ['on' => false, 'percent' => 50], 'exit' => ['on' => false], 'click' => true],
         'rules' => ['where' => ['mode' => 'all', 'pages' => [], 'collections' => []], 'devices' => ['desktop' => true, 'tablet' => true, 'mobile' => true], 'visitor' => 'all',
-                    'frequency' => ['mode' => 'days', 'days' => 7], 'schedule' => ['from' => '', 'to' => ''], 'priority' => 10],
+                    'frequency' => ['mode' => 'days', 'days' => 7], 'schedule' => ['from' => '', 'to' => ''], 'language' => '', 'priority' => 10],
     ];
 }
 // What a save keeps of the settings: every value is checked, anything else is dropped
@@ -65,6 +65,8 @@ function cc_popup_settings_clean($in) {
         'visitor' => in_array($r['visitor'] ?? '', ['all', 'new', 'returning'], true) ? $r['visitor'] : 'all',
         'frequency' => ['mode' => in_array($fq['mode'] ?? '', CC_POP_FREQ, true) ? $fq['mode'] : 'days', 'days' => cc_popup_int($fq['days'] ?? null, 1, 365, 7)],
         'schedule' => ['from' => cc_popup_date($sd['from'] ?? ''), 'to' => cc_popup_date($sd['to'] ?? '')],
+        // the language of the pages it appears on ('' = every language; see languages.php)
+        'language' => function_exists('cc_lang_code') ? cc_lang_code($r['language'] ?? '') : '',
         'priority' => cc_popup_int($r['priority'] ?? null, 1, 99, 10),
     ];
     if ($rules['schedule']['from'] !== '' && $rules['schedule']['to'] !== '' && $rules['schedule']['to'] < $rules['schedule']['from']) $rules['schedule']['to'] = $rules['schedule']['from'];
@@ -76,6 +78,9 @@ function cc_popup_row_settings($row) { return cc_popup_settings_clean(json_decod
 function cc_popup_applies($settings, array $ctx) {
     $kind = $ctx['kind'] ?? '';
     if (!in_array($kind, ['page', 'item', 'archive'], true)) return false;      // not on the "not found" page
+    // A popup written for one language appears on the pages of that language only (a site that is not multilingual has no language: no limit)
+    $pl = (string)($settings['rules']['language'] ?? '');
+    if ($pl !== '' && (string)($ctx['lang'] ?? '') !== '' && $ctx['lang'] !== $pl) return false;
     $w = $settings['rules']['where'];
     if ($w['mode'] === 'all') return true;
     $hit = ($kind === 'page' && in_array((string)($ctx['id'] ?? ''), $w['pages'], true))

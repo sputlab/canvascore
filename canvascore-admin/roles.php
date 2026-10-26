@@ -19,7 +19,7 @@ require_once __DIR__ . '/config.php';
 const CC_CONTRIBUTOR_DENIED = [
     'save_settings', 'save_menu', 'save_part', 'delete_part', 'save_template', 'delete_template', 'save_master', 'delete_master',
     'delete_media', 'media_folder_create', 'media_folder_rename', 'media_folder_delete', 'media_move', 'optimize_media', 'media_crop', 'media_replace',
-    'bulk_items', 'set_schedule', 'save_redirect', 'delete_redirect', 'save_popup', 'delete_popup',
+    'bulk_items', 'set_schedule', 'save_redirect', 'delete_redirect', 'save_popup', 'delete_popup', 'save_languages',
 ];
 
 function cc_is_contributor($role) { return $role === 'author' || $role === 'reviewer'; }

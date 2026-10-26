@@ -1,7 +1,7 @@
 {
   "name": "canvascore-frontend",
   "private": true,
-  "version": "0.25.0",
+  "version": "0.26.0",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
     "prebuild": "node scripts/bump.mjs",
     "test:parity": "node tests/parity.mjs",
     "test:blocks": "node tests/blocks.mjs",
-    "test": "npm run test:parity && npm run test:blocks && npm run test:content && npm run test:session && npm run test:session-ui && npm run test:panels && npm run test:starters && npm run test:menu && npm run test:rich-text && npm run test:popups && npm run test:ui && npm run test:server && npm run test:security",
+    "test": "npm run test:parity && npm run test:blocks && npm run test:content && npm run test:session && npm run test:session-ui && npm run test:panels && npm run test:starters && npm run test:menu && npm run test:rich-text && npm run test:popups && npm run test:languages && npm run test:ui && npm run test:server && npm run test:security && npm run test:installers",
     "test:session": "node tests/session.mjs",
     "test:session-ui": "node tests/session-ui.mjs",
     "test:content": "node tests/blocks-content.mjs",
@@ -21,9 +21,11 @@
     "test:menu": "node tests/menu.mjs",
     "test:rich-text": "node tests/rich-text.mjs",
     "test:popups": "node tests/popups.mjs",
+    "test:languages": "node tests/languages.mjs",
     "test:ui": "node tests/ui-shell.mjs",
     "test:server": "php tests/server.php",
-    "test:security": "php tests/security.php"
+    "test:security": "php tests/security.php",
+    "test:installers": "php tests/installers.php"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -15,6 +15,7 @@ import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
 import { renderBlock } from '../render/renderBlock.mjs';
 import { safeHtml } from '../utils/safeHtml';
+import { isMultilingual, langName, pageFile } from '../editor/languages';
 
 const DEFAULT_SETTINGS = { brandColor: '#3b82f6', fontFamily: 'Inter', adminEmail: '', emailFrom: '', emailSubject: '', siteSuffix: ' | My Site' };
 
@@ -67,22 +68,30 @@ export default function GlobalSettings() {
     setIsSaving(false);
   };
 
+  // Languages: a language may have a header and a footer of its own (without one it uses the default language's)
+  const langs = useStore((s) => s.languages);
+  const multi = isMultilingual(langs);
+  const [partLang, setPartLang] = useState('');
+  const pl = multi && partLang && partLang !== langs.default && langs.list.some((l) => l.code === partLang) ? partLang : '';
+  const plName = pl ? langName(pl, langs) : '';
   const editPart = async (name) => {
     try {
       const res = await fetch('api.php?action=get_parts');
       const parts = await res.json();
-      setActivePage({ id: `part_${name}`, __part: name, title: name === 'header' ? 'Site Header (global)' : 'Site Footer (global)', layout: 'full', bg_color: '#ffffff', boxed_width: '1200px', seo_title: '', seo_description: '', status: 'part' });
-      setBlocks(Array.isArray(parts[name]) ? parts[name] : []);
+      setActivePage({ id: `part_${name}${pl ? ':' + pl : ''}`, __part: name, lang: pl, title: (name === 'header' ? 'Site Header (global)' : 'Site Footer (global)') + (pl ? ` · ${plName}` : ''), layout: 'full', bg_color: '#ffffff', boxed_width: '1200px', seo_title: '', seo_description: '', status: 'part' });
+      // a language that has none yet starts from the default language's blocks (to write over)
+      const own = parts[pl ? `${name}:${pl}` : name];
+      setBlocks(Array.isArray(own) ? own : (Array.isArray(parts[name]) ? parts[name] : []));
       setSelectedBlockId(null);
       setView('editor');
     } catch { notify('Could not open the ' + name + '.', 'error'); }
   };
   const deletePart = async (name) => {
-    if (!(await confirmDialog({ title: `Delete the global ${name}?`, message: 'All its blocks are removed from every page. This cannot be undone.', confirmLabel: `Delete ${name}`, danger: true }))) return;
+    if (!(await confirmDialog({ title: `Delete the ${pl ? plName + ' ' : 'global '}${name}?`, message: pl ? `${plName} goes back to the default language's ${name}. This cannot be undone.` : 'All its blocks are removed from every page. This cannot be undone.', confirmLabel: `Delete ${name}`, danger: true }))) return;
     try {
-      await fetch('api.php?action=delete_part', { method: 'POST', body: JSON.stringify({ name }) });
+      await fetch('api.php?action=delete_part', { method: 'POST', body: JSON.stringify({ name: pl ? `${name}:${pl}` : name }) });
       await publishSiteAsync();
-      notify(`${name.charAt(0).toUpperCase() + name.slice(1)} deleted.`);
+      notify(`${name.charAt(0).toUpperCase() + name.slice(1)}${pl ? ` in ${plName}` : ''} deleted.`);
     } catch { notify('Delete failed.', 'error'); }
   };
 
@@ -143,14 +152,19 @@ export default function GlobalSettings() {
       </Card>
 
       <Card title="Global header & footer" icon={PanelTop} description="Blocks shown at the top and bottom of every page, under or above the menu.">
+        {multi && (
+          <Field label="Language" hint={pl ? `${plName} uses its own header and footer once you save them; until then it shows the default language's.` : 'The default language. Choose another one to give it a header and a footer of its own.'}>
+            <Select aria-label="Language of the header and footer" value={pl} onChange={(e) => setPartLang(e.target.value)} options={[['', `${langName(langs.default, langs)} (default)`], ...langs.list.filter((l) => l.code !== langs.default).map((l) => [l.code, l.name])]} />
+          </Field>
+        )}
         <div className="ui-grid">
           {[['header', PanelTop], ['footer', PanelBottom]].map(([name, Icon]) => (
             <div key={name} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 10, padding: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontWeight: 700, textTransform: 'capitalize' }}><Icon size={16} color="#38bdf8" aria-hidden="true" /> {name}</div>
               <Checkbox label="Enabled (shown on all pages)" checked={settings[`${name}Enabled`] !== false} onChange={e => set({ [`${name}Enabled`]: e.target.checked })} />
               <div className="ui-row" style={{ marginTop: 12 }}>
-                <Button variant="primary" size="sm" icon={Edit3} onClick={() => editPart(name)} style={{ flex: 1 }}>Edit {name}</Button>
-                <Button variant="danger" size="sm" icon={Trash2} onClick={() => deletePart(name)}>Delete</Button>
+                <Button variant="primary" size="sm" icon={Edit3} onClick={() => editPart(name)} style={{ flex: 1 }}>Edit {name}{pl ? ` (${plName})` : ''}</Button>
+                <Button variant="danger" size="sm" icon={Trash2} onClick={() => deletePart(name)}>{pl ? 'Use default' : 'Delete'}</Button>
               </div>
             </div>
           ))}
@@ -165,7 +179,7 @@ export default function GlobalSettings() {
             <Field label="Accept button"><Input value={cookie.acceptLabel || ''} onChange={e => setCookie({ acceptLabel: e.target.value })} placeholder="Accept" /></Field>
             <Field label="Decline button"><Input value={cookie.declineLabel || ''} onChange={e => setCookie({ declineLabel: e.target.value })} placeholder="Decline" /></Field>
             <Field label="Privacy policy page"><Select value={cookie.privacyUrl || ''} onChange={e => setCookie({ privacyUrl: e.target.value })}
-              options={[['', '— no link —'], ...pages.filter(p => !Number(p.is_draft_copy)).map(p => [p.clean_slug ? p.clean_slug + '/index.html' : 'index.html', p.title])]} /></Field>
+              options={[['', '— no link —'], ...pages.filter(p => !Number(p.is_draft_copy)).map(p => [pageFile(p, langs), p.title])]} /></Field>
             <Field label="Link text"><Input value={cookie.privacyLabel || ''} onChange={e => setCookie({ privacyLabel: e.target.value })} placeholder="Privacy policy" /></Field>
             <Field label="Position"><Select value={cookie.position || 'bottom'} onChange={e => setCookie({ position: e.target.value })}
               options={[['bottom', 'Bottom, centered'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]} /></Field>
@@ -181,8 +195,8 @@ export default function GlobalSettings() {
           <div className="ui-grid">
             <Field label="Icon (one emoji, optional)"><Input value={ann.icon || ''} onChange={e => setAnn({ icon: e.target.value })} /></Field>
             <Field label="Link text (empty = no link)"><Input value={ann.linkText || ''} onChange={e => setAnn({ linkText: e.target.value })} placeholder="Shop now" /></Field>
-            <Field label="Link to a page"><Select value={pages.some(p => !Number(p.is_draft_copy) && (p.clean_slug ? p.clean_slug + '/index.html' : 'index.html') === ann.linkUrl) ? ann.linkUrl : ''} onChange={e => setAnn({ linkUrl: e.target.value })}
-              options={[['', '— or type an address —'], ...pages.filter(p => !Number(p.is_draft_copy)).map(p => [p.clean_slug ? p.clean_slug + '/index.html' : 'index.html', p.title])]} /></Field>
+            <Field label="Link to a page"><Select value={pages.some(p => !Number(p.is_draft_copy) && (pageFile(p, langs)) === ann.linkUrl) ? ann.linkUrl : ''} onChange={e => setAnn({ linkUrl: e.target.value })}
+              options={[['', '— or type an address —'], ...pages.filter(p => !Number(p.is_draft_copy)).map(p => [pageFile(p, langs), p.title])]} /></Field>
             <Field label="Link address"><Input value={ann.linkUrl || ''} onChange={e => setAnn({ linkUrl: e.target.value })} placeholder="/offers or https://…" /></Field>
             <Field label="Colors"><Select value={ann.preset || 'info'} onChange={e => setAnn({ preset: e.target.value })}
               options={[['info', 'Dark'], ['promo', 'Brand color'], ['warning', 'Warning (yellow)'], ['success', 'Success (green)']]} /></Field>

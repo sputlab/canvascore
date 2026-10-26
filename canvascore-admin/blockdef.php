@@ -208,7 +208,8 @@ function cc_tpl_tf_button_hover($v, $s, $sib) {
 function cc_tpl_tf_legacy_url($v) {
     $u = cc_tpl_text($v);
     if (preg_match('~^(?:f|ht)tps?://~i', $u) || $u === '#') return $u;
-    if (in_array($u, ['index.html', 'index/index.html', 'home/index.html', '/'], true)) return '{{BASE_URL}}';
+    if (in_array($u, ['index.html', 'index/index.html', 'home/index.html'], true)) return function_exists('cc_lang_home') ? cc_lang_home() : '{{BASE_URL}}';   // the home page of the page's language
+    if ($u === '/') return '{{BASE_URL}}';
     return '{{BASE_URL}}' . ltrim(str_replace(['index/index.html', 'index.html'], '', $u), '/');
 }
 function cc_tpl_tf_plain($v) { return cc_plain((is_int($v) || is_float($v)) ? $v : 0); }

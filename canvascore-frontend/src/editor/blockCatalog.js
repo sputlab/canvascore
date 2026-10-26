@@ -6,7 +6,7 @@ import {
   GalleryHorizontal, GitCompare, Timer, ListOrdered, Hash, BarChart3, Table2, History, CreditCard, Users,
   Building2, Store, MapPin, Library, Crown, Square, Search, LayoutDashboard, Columns2, TrendingUp, CircleUserRound,
   StarHalf, MessagesSquare, SquareMousePointer, ScrollText, MapPinned, TableOfContents, Share2, Code2,
-  Calculator, ListChecks, Film, Headphones, Megaphone, MailPlus, Braces, Link2, Tags,
+  Calculator, ListChecks, Film, Headphones, Megaphone, MailPlus, Braces, Link2, Tags, Languages,
   Package, Quote, Heart, Bell, Camera, Gift, Rocket, Sparkles, Zap, Globe, Layers, Palette, Award, Bookmark, Calendar, Clock,
   Coffee, Flag, Lightbulb, MessageCircle, Music, Newspaper, Phone, Shield, ShoppingBag, Smile, ThumbsUp, Trophy, Video,
 } from 'lucide-react';
@@ -86,6 +86,7 @@ export const BLOCKS = [
   { type: 'ITEM_FIELD', label: 'Item Field', icon: Braces, category: 'business', color: '#a78bfa', keywords: 'field custom data value collection item' },
   { type: 'RELATED', label: 'Related Items', icon: Link2, category: 'business', color: '#f472b6', keywords: 'related items references team projects backlinks' },
   { type: 'ITEM_TERMS', label: 'Categories & Tags', icon: Tags, category: 'business', color: '#34d399', keywords: 'categories tags taxonomy terms labels topics' },
+  { type: 'LANGUAGE_SWITCHER', label: 'Language Switcher', icon: Languages, category: 'business', color: '#38bdf8', keywords: 'language translate translation switch multilingual locale flag english italian' },
 ];
 
 // The icons a block package can name in its catalog entry (anything else gets the package icon)

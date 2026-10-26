@@ -8,6 +8,7 @@ require_once __DIR__ . '/media.php';
 require_once __DIR__ . '/backup.php';
 require_once __DIR__ . '/update.php';
 require_once __DIR__ . '/roles.php';
+require_once __DIR__ . '/languages.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
 cc_security_headers();
@@ -476,6 +477,38 @@ if ($action === 'media_usage' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ---------------------------------------------------------------------------
+// Languages (Administration › Languages): who may read them is everyone who edits content (pages and items show their language),
+// who may change them is an admin. The texts of the languages (announcement, cookie banner) are read by admins only.
+// ---------------------------------------------------------------------------
+if ($action === 'get_languages') {
+    $lc = cc_lang_config();
+    if (!$is_admin) unset($lc['strings']);
+    echo json_encode(['success' => true, 'languages' => $lc, 'active' => cc_lang_active($lc), 'max' => CC_LANG_MAX]); exit;
+}
+if ($action === 'save_languages' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$is_admin) { echo json_encode(['success' => false, 'message' => 'Only admins can change the languages.']); exit; }
+    $d = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($d)) { echo json_encode(['success' => false, 'message' => 'Invalid languages.']); exit; }
+    $new = cc_lang_config_clean($d);
+    if (!empty($new['enabled']) && count($new['list']) < 2) { echo json_encode(['success' => false, 'message' => 'Add at least two languages, or switch multilingual off.']); exit; }
+    $sf = $data_dir . '/settings.json';
+    $cur = file_exists($sf) ? json_decode((string)file_get_contents($sf), true) : [];
+    if (!is_array($cur)) $cur = [];
+    $cur['languages'] = $new;
+    file_put_contents($sf, json_encode($cur, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    // A folder of a language may not be an address of a page or a collection (the default language's)
+    $clash = [];
+    if (cc_lang_active($new)) {
+        foreach (cc_lang_codes($new) as $code) {
+            if ($code === $new['default']) continue;
+            if (($o = cc_slug_owner($pdo, $code, null, null, '')) && $o !== 'the folder of a language') $clash[] = '/' . $code . '/ (' . $o . ')';
+        }
+    }
+    echo json_encode(['success' => true, 'languages' => $new, 'active' => cc_lang_active($new), 'clash' => $clash,
+        'message' => $clash ? 'Languages saved, but these addresses are already used: ' . implode(', ', $clash) . '. Rename them before you publish.' : 'Languages saved. Publish the site to apply them.']); exit;
+}
+
+// ---------------------------------------------------------------------------
 // Settings (validated JSON)
 // ---------------------------------------------------------------------------
 if ($action === 'get_settings') {
@@ -499,6 +532,9 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if (array_key_exists($k, $current)) $decoded[$k] = $current[$k]; else unset($decoded[$k]);
         }
     }
+    // The languages are changed in Administration › Languages (save_languages), never by a save of the other options
+    $curSet = @json_decode((string)@file_get_contents($data_dir . '/settings.json'), true);
+    if (is_array($curSet) && array_key_exists('languages', $curSet)) $decoded['languages'] = $curSet['languages']; else unset($decoded['languages']);
     if (isset($decoded['trustedProxies'])) {   // comma separated IP addresses only
         $decoded['trustedProxies'] = implode(', ', array_filter(array_map('trim', explode(',', (string)$decoded['trustedProxies'])), function ($ip) { return filter_var($ip, FILTER_VALIDATE_IP); }));
     }
@@ -531,11 +567,18 @@ if ($action === 'save_settings' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 // Slugs are URLs: each top-level path has a single owner site-wide (a live page, a collection or a
 // system folder). Drafts don't own a URL until they are published. Returns a description of the
 // current owner, or null if the slug is free.
-function cc_slug_owner($pdo, $slug, $except_page = null, $except_collection = null) {
+// $lang: the language of the page asking ('' = the default language: its addresses are at the root, next to the language folders);
+// null = a collection, whose address clashes with a page of any language (/it/blog/ is both the Italian blog and an Italian page).
+function cc_slug_owner($pdo, $slug, $except_page = null, $except_collection = null, $lang = '') {
     if (cc_slug_reserved($slug)) return 'a system folder';
-    $st = $pdo->prepare("SELECT title FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified') AND clean_slug = ? AND id IS NOT ?");
+    $lcfg = cc_lang_cfg();
+    $L = $lang === null ? null : cc_lang_norm($lang, $lcfg);
+    if (($L === null || $L === '') && cc_lang_folder_taken($slug, $lcfg)) return 'the folder of a language';
+    $st = $pdo->prepare("SELECT title, lang FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified') AND clean_slug = ? AND id IS NOT ?");
     $st->execute([$slug, $except_page]);
-    if (($t = $st->fetchColumn()) !== false) return 'the page "' . $t . '"';
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        if ($L === null || cc_lang_norm($r['lang'] ?? '', $lcfg) === $L) return 'the page "' . $r['title'] . '"';
+    }
     $st = $pdo->prepare("SELECT name FROM collections WHERE slug = ? AND id IS NOT ?");
     $st->execute([$slug, $except_collection]);
     if (($n = $st->fetchColumn()) !== false) return 'the collection "' . $n . '"';
@@ -543,10 +586,17 @@ function cc_slug_owner($pdo, $slug, $except_page = null, $except_collection = nu
 }
 
 // Set the homepage exclusively (only one page can be home).
+// (one per language: each language has its own home page, published at the root of its folder)
 function apply_home($pdo, $primaryId, $val) {
     if (!$primaryId) return;
     if ($val) {
-        $pdo->exec("UPDATE pages SET is_home = 0 WHERE is_draft_copy = 0");
+        $lcfg = cc_lang_cfg();
+        $me = $pdo->prepare("SELECT lang FROM pages WHERE id = ?"); $me->execute([$primaryId]);
+        $L = cc_lang_norm((string)$me->fetchColumn(), $lcfg);
+        $up = $pdo->prepare("UPDATE pages SET is_home = 0 WHERE id = ?");
+        foreach ($pdo->query("SELECT id, lang FROM pages WHERE is_draft_copy = 0 AND is_home = 1")->fetchAll(PDO::FETCH_ASSOC) as $h) {
+            if (cc_lang_norm($h['lang'] ?? '', $lcfg) === $L) $up->execute([$h['id']]);
+        }
         $pdo->prepare("UPDATE pages SET is_home = 1 WHERE id = ?")->execute([$primaryId]);
     } else {
         $pdo->prepare("UPDATE pages SET is_home = 0 WHERE id = ?")->execute([$primaryId]);
@@ -556,15 +606,18 @@ function apply_home($pdo, $primaryId, $val) {
 // Update internal links when the slug of a published page changes.
 // A page's address changed: links pointing to it are updated everywhere they can be stored
 // (pages, collection items, header/footer, masters, menu), see cc_relink_node() in config.php.
-function relink_slug_change($pdo, $data_dir, $old_slug, $new_slug) {
+// $prefix: the language folder of the page ("it/"), '' for the default language
+// $new_prefix: where it goes when its language changed in the same save (null = the same folder)
+function relink_slug_change($pdo, $data_dir, $old_slug, $new_slug, $prefix = '', $new_prefix = null) {
+    $np = $new_prefix ?? $prefix;
     // The page is published at /new/ now: no redirect may hide it
-    if ($new_slug && !in_array($new_slug, ['index', 'home'], true)) { try { cc_drop_redirect_from($pdo, '/' . $new_slug . '/'); } catch (Exception $e) {} }
-    if (!$old_slug || $old_slug === $new_slug) return;
+    if ($new_slug && !in_array($new_slug, ['index', 'home'], true)) { try { cc_drop_redirect_from($pdo, '/' . $np . $new_slug . '/'); } catch (Exception $e) {} }
+    if (!$old_slug || ($old_slug === $new_slug && $prefix === $np)) return;
     // The old address keeps working: it forwards to the new one
     if (!in_array($old_slug, ['index', 'home'], true)) {
-        try { cc_add_redirect($pdo, '/' . $old_slug . '/', in_array($new_slug, ['index', 'home'], true) ? '/' : '/' . $new_slug . '/'); } catch (Exception $e) {}
+        try { cc_add_redirect($pdo, '/' . $prefix . $old_slug . '/', in_array($new_slug, ['index', 'home'], true) ? '/' . $np : '/' . $np . $new_slug . '/'); } catch (Exception $e) {}
     }
-    $args = [$old_slug . '/index.html', $new_slug . '/index.html', '{{BASE_URL}}' . $old_slug . '/', '{{BASE_URL}}' . $new_slug . '/'];
+    $args = [$prefix . $old_slug . '/index.html', $np . $new_slug . '/index.html', '{{BASE_URL}}' . $prefix . $old_slug . '/', '{{BASE_URL}}' . $np . $new_slug . '/'];
     foreach ([['pages', 'id'], ['collection_items', 'id'], ['site_parts', 'name'], ['master_components', 'id']] as [$table, $key]) {
         try {
             $rows = $pdo->query("SELECT $key AS k, content_json FROM $table")->fetchAll(PDO::FETCH_ASSOC);
@@ -650,6 +703,11 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $seo_title   = mb_substr((string)($data['seo_title'] ?? ''), 0, 300);
     $seo_desc    = mb_substr((string)($data['seo_description'] ?? ''), 0, 1000);
     $seo_image   = mb_substr((string)($data['seo_image'] ?? ''), 0, 2000);
+    // The language of the page: only when the client sends it (a save without it keeps the current one)
+    $lcfg        = cc_lang_cfg();
+    $lang_sent   = array_key_exists('lang', $data);
+    $lang_new    = cc_lang_code($data['lang'] ?? '');
+    if ($lang_sent && $lang_new !== '' && !cc_lang_known($lang_new, $lcfg)) { echo json_encode(['success' => false, 'message' => 'This language is not one of the site languages (Administration › Languages).']); exit; }
     $layout      = ($data['layout'] ?? 'boxed') === 'full' ? 'full' : 'boxed';
     // These two go into the page's <style>: a color and a length only
     $bg_color    = cc_css_color($data['bg_color'] ?? '', '#ffffff');
@@ -671,6 +729,11 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $cur = $pdo->prepare("SELECT * FROM pages WHERE id = ?"); $cur->execute([$id]);
     $existing = $cur->fetch(PDO::FETCH_ASSOC);
+    $lang_old = (string)($existing['lang'] ?? '');
+    if ($existing && $lang_sent && (string)($existing['trans_group'] ?? '') !== '' && cc_lang_of($lang_new, $lcfg) !== cc_lang_of($lang_old, $lcfg)) {
+        echo json_encode(['success' => false, 'message' => 'This page is a translation: its language cannot change while it is linked to the others. Unlink it first.']); exit;
+    }
+    $lang_eff = $lang_sent ? $lang_new : $lang_old;   // the language the page will have
     // Roles: an author works on their own pages and cannot publish; a reviewer publishes only what was submitted
     $roleCheck = cc_page_save_check($pdo, $role, $username, $existing, $publish);
     if ($roleCheck !== true) { echo json_encode(['success' => false, 'code' => $roleCheck['code'], 'message' => $roleCheck['message']]); exit; }
@@ -680,7 +743,7 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $cschema = cc_version()['content_schema'];
     $has_noindex = is_array($data) && array_key_exists('noindex', $data);
     $noindex = !empty($data['noindex']) ? 1 : 0;
-    $writeRow = function ($targetId, $status, $isCopy, $parentId) use ($pdo, $title, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $author, $now, $cschema, $has_noindex, $noindex, $is_admin) {
+    $writeRow = function ($targetId, $status, $isCopy, $parentId) use ($pdo, $title, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $author, $now, $cschema, $has_noindex, $noindex, $is_admin, $lang_sent, $lang_new) {
         $chk = $pdo->prepare("SELECT id FROM pages WHERE id = ?"); $chk->execute([$targetId]);
         if ($chk->fetch()) {
             $pdo->prepare("UPDATE pages SET parent_id=?, title=?, slug=?, clean_slug=?, seo_title=?, seo_description=?, seo_image=?, layout=?, bg_color=?, boxed_width=?, content_json=?, status=?, is_draft_copy=?, content_schema=?, author=?, updated_at=? WHERE id=?")
@@ -692,20 +755,23 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([$targetId, $parentId, $title, $clean, $clean, $seo_title, $seo_desc, $seo_image, $layout, $bg_color, $boxed_width, $content, $status, $isCopy, $cschema, $author, $author, $now]);
         }
         if ($has_noindex) $pdo->prepare("UPDATE pages SET noindex = ? WHERE id = ?")->execute([$noindex, $targetId]);   // "Hide from search engines"
+        // A draft copy is written in its page's language and has its translations
+        if ($isCopy && $parentId) $pdo->prepare("UPDATE pages SET lang = (SELECT lang FROM pages WHERE id = ?), trans_group = (SELECT trans_group FROM pages WHERE id = ?) WHERE id = ?")->execute([$parentId, $parentId, $targetId]);
+        if ($lang_sent) $pdo->prepare("UPDATE pages SET lang = ? WHERE id = ? OR (parent_id = ? AND is_draft_copy = 1)")->execute([$lang_new, $targetId, $targetId]);
     };
 
     if ($publish) {
         $owner_id = ($existing && (int)($existing['is_draft_copy'] ?? 0) === 1) ? $existing['parent_id'] : $id;
-        if ($owner = cc_slug_owner($pdo, $clean, $owner_id)) {
+        if ($owner = cc_slug_owner($pdo, $clean, $owner_id, null, $lang_eff)) {
             echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL /$clean/ is already used by $owner. Change the slug in Page Info and publish again."]); exit;
         }
         if ($existing && (int)($existing['is_draft_copy'] ?? 0) === 1) {
             // Promote the draft copy onto the published parent page
             $parentId = $existing['parent_id'];
-            $parentRow = $pdo->prepare("SELECT clean_slug FROM pages WHERE id = ?"); $parentRow->execute([$parentId]);
+            $parentRow = $pdo->prepare("SELECT clean_slug, lang FROM pages WHERE id = ?"); $parentRow->execute([$parentId]);
             $old = $parentRow->fetch(PDO::FETCH_ASSOC);
             $writeRow($parentId, 'published', 0, null);
-            if ($old) relink_slug_change($pdo, $data_dir, $old['clean_slug'] ?? null, $clean);
+            if ($old) relink_slug_change($pdo, $data_dir, $old['clean_slug'] ?? null, $clean, cc_lang_prefix($old['lang'] ?? '', $lcfg), cc_lang_prefix($lang_eff, $lcfg));
             $pdo->prepare("DELETE FROM pages WHERE id = ?")->execute([$id]); // remove the copy
             if ($has_home) apply_home($pdo, $parentId, $is_home);
             cc_review_published($pdo, 'page', $parentId, $username, $wasPending);
@@ -714,7 +780,7 @@ if ($action === 'save_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $oldClean = $existing['clean_slug'] ?? null;
             $writeRow($id, 'published', 0, null);
-            relink_slug_change($pdo, $data_dir, $oldClean, $clean);
+            relink_slug_change($pdo, $data_dir, $oldClean, $clean, cc_lang_prefix($lang_old, $lcfg), cc_lang_prefix($lang_eff, $lcfg));
             if ($has_home) apply_home($pdo, $id, $is_home);
             cc_review_published($pdo, 'page', $id, $username, $wasPending);
             cc_add_revision($pdo, $id, $title, $content, 'published');
@@ -781,19 +847,22 @@ if ($action === 'delete_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (in_array($own['status'] ?? '', ['published', 'modified'], true)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'A published page is removed by an editor.']); exit; }
     }
     if ($id) {
-        $row = $pdo->prepare("SELECT clean_slug, is_draft_copy, status, is_home FROM pages WHERE id = ?"); $row->execute([$id]);
+        $row = $pdo->prepare("SELECT clean_slug, is_draft_copy, status, is_home, lang FROM pages WHERE id = ?"); $row->execute([$id]);
         $p = $row->fetch(PDO::FETCH_ASSOC);
         if ($p && (int)$p['is_draft_copy'] === 0) {
             // Remove the generated HTML from disk, only if this page is the one online
             // (a draft never published may share a slug with a live page and must not delete its file)
             if (in_array($p['status'] ?? '', ['published', 'modified'], true) && !cc_slug_reserved($p['clean_slug'] ?? '')) {
                 $slug = sanitize_slug($p['clean_slug'] ?? 'index');
+                $pre = cc_lang_prefix($p['lang'] ?? '', cc_lang_cfg());   // a translation lives in its language's folder
                 if ((int)($p['is_home'] ?? 0) === 1 || $slug === 'index' || $slug === 'home') {
-                    @unlink(__DIR__ . '/../index.html');
+                    @unlink(__DIR__ . '/../' . $pre . 'index.html');
+                    if ($pre !== '') @rmdir(__DIR__ . '/../' . rtrim($pre, '/'));
                 }
                 if ($slug !== 'index' && $slug !== 'home') {
-                    @unlink(__DIR__ . '/../' . $slug . '/index.html');
-                    @rmdir(__DIR__ . '/../' . $slug);
+                    @unlink(__DIR__ . '/../' . $pre . $slug . '/index.html');
+                    @rmdir(__DIR__ . '/../' . $pre . $slug);
+                    if ($pre !== '') @rmdir(__DIR__ . '/../' . rtrim($pre, '/'));
                 }
             }
             $pdo->prepare("DELETE FROM pages WHERE parent_id = ?")->execute([$id]); // delete the copies
@@ -802,6 +871,134 @@ if ($action === 'delete_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         try { $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?")->execute([$id]); } catch (Exception $e) {}
     }
     echo json_encode(['success' => true]); exit;
+}
+
+// ---------------------------------------------------------------------------
+// Translations (languages.php): a translation is a page (or an item) of its own, written in another language and linked to the
+// others by a shared id (trans_group). "Translate" makes a draft copy of the page in a language it does not exist in yet; the
+// copy is the starting point of the translation (same blocks, same settings). "Unlink" takes a page out of its group.
+// ---------------------------------------------------------------------------
+// A new group id
+function cc_new_trans_group() { return 'tg_' . bin2hex(random_bytes(6)); }
+// The languages a group already has (code => row id), among the rows of $table
+function cc_group_langs($pdo, $table, $group, $lcfg) {
+    $out = [];
+    if ($group === '') return $out;
+    $st = $pdo->prepare("SELECT id, lang FROM $table WHERE trans_group = ?" . ($table === 'pages' ? ' AND is_draft_copy = 0' : ''));
+    $st->execute([$group]);
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $out[cc_lang_of($r['lang'] ?? '', $lcfg)] = $r['id'];
+    return $out;
+}
+// The translation target of a request: a language of the site, not the source's own, not in the group already. Returns [code, error].
+function cc_translate_target($raw, $srcLang, $group, $groupLangs, $lcfg) {
+    if (!cc_lang_active($lcfg)) return ['', 'Switch on Languages (Administration › Languages) first.'];
+    $t = cc_lang_code($raw);
+    if ($t === '' || !in_array($t, cc_lang_codes($lcfg), true)) return ['', 'Choose one of the site languages.'];
+    if ($t === cc_lang_of($srcLang, $lcfg)) return ['', 'This is already the language of the page.'];
+    if (isset($groupLangs[$t])) return ['', 'It already has a translation in ' . cc_lang_name($t, $lcfg) . '.'];
+    return [$t, ''];
+}
+if ($action === 'translate_page' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    if (!cc_can_create($role)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit; }
+    $lcfg = cc_lang_cfg();
+    $st = $pdo->prepare("SELECT * FROM pages WHERE id = ? AND is_draft_copy = 0"); $st->execute([(string)($d['id'] ?? '')]);
+    $src = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$src) { echo json_encode(['success' => false, 'message' => 'The page was not found.']); exit; }
+    if ($role === 'author' && cc_owner_of_page($pdo, $src) !== $username) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You can only translate your own pages.']); exit; }
+    $group = (string)($src['trans_group'] ?? '');
+    [$target, $err] = cc_translate_target($d['lang'] ?? '', $src['lang'] ?? '', $group, cc_group_langs($pdo, 'pages', $group, $lcfg), $lcfg);
+    if ($err !== '') { echo json_encode(['success' => false, 'message' => $err]); exit; }
+    // Demo mode: a new page uses up one of the visitors' pages
+    if (!$is_admin && !cc_demo_take('pages')) { echo json_encode(['success' => false, 'message' => 'The demo allows ' . cc_demo_config()['maxNewPages'] . ' new pages until the next reset.']); exit; }
+    // The start of the translation is what the editor shows: the unpublished draft when there is one
+    $from = $src;
+    if (($src['status'] ?? '') === 'modified') {
+        $cp = $pdo->prepare("SELECT * FROM pages WHERE parent_id = ? AND is_draft_copy = 1 ORDER BY updated_at DESC LIMIT 1"); $cp->execute([$src['id']]);
+        if ($c = $cp->fetch(PDO::FETCH_ASSOC)) $from = $c;
+    }
+    // A free address in the language: the same one, else with the language code, else numbered
+    $base = cc_safe_slug($src['clean_slug'] ?? $src['slug'] ?? 'page');
+    $slug = $base;
+    for ($n = 1; cc_slug_owner($pdo, $slug, null, null, $target) || cc_slug_taken_draft($pdo, $slug, $target, $lcfg); $n++) $slug = $base . '-' . $target . ($n > 1 ? '-' . $n : '');
+    if ($group === '') {
+        $group = cc_new_trans_group();
+        $pdo->prepare("UPDATE pages SET trans_group = ? WHERE id = ? OR (parent_id = ? AND is_draft_copy = 1)")->execute([$group, $src['id'], $src['id']]);
+    }
+    $nid = 'page-' . round(microtime(true) * 1000);
+    $now = date('Y-m-d H:i:s');
+    $pdo->prepare("INSERT INTO pages (id, parent_id, title, slug, clean_slug, seo_title, seo_description, seo_image, layout, bg_color, boxed_width, content_json, status, is_draft_copy, is_home, content_schema, author, created_by, updated_at, noindex, lang, trans_group) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        ->execute([$nid, null, $from['title'], $slug, $slug, $from['seo_title'] ?? '', $from['seo_description'] ?? '', $from['seo_image'] ?? '', $from['layout'] ?? 'boxed', $from['bg_color'] ?? '#ffffff', $from['boxed_width'] ?? '1200px',
+            $from['content_json'] ?? '[]', 'draft', 0, 0, cc_version()['content_schema'], $username, $username, $now, (int)($src['noindex'] ?? 0), $target, $group]);
+    // The home page of a language: its translation is the home page of the other language, when that one has none yet
+    if ((int)($src['is_home'] ?? 0) === 1) {
+        $hs = $pdo->query("SELECT lang FROM pages WHERE is_draft_copy = 0 AND is_home = 1 AND id <> " . $pdo->quote($nid))->fetchAll(PDO::FETCH_COLUMN);
+        $has = false; foreach ($hs as $hl) if (cc_lang_norm($hl, $lcfg) === cc_lang_norm($target, $lcfg)) $has = true;
+        if (!$has) $pdo->prepare("UPDATE pages SET is_home = 1 WHERE id = ?")->execute([$nid]);
+    }
+    cc_add_revision($pdo, $nid, $from['title'], (string)($from['content_json'] ?? '[]'), 'draft');
+    $row = $pdo->prepare("SELECT * FROM pages WHERE id = ?"); $row->execute([$nid]);
+    echo json_encode(['success' => true, 'page' => $row->fetch(PDO::FETCH_ASSOC), 'message' => 'The ' . cc_lang_name($target, $lcfg) . ' translation was created as a draft.']); exit;
+}
+// Is a draft page of this language using the address already? (a translation made now would start on top of it)
+function cc_slug_taken_draft($pdo, $slug, $lang, $lcfg) {
+    $st = $pdo->prepare("SELECT lang FROM pages WHERE is_draft_copy = 0 AND clean_slug = ?"); $st->execute([$slug]);
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $l) if (cc_lang_norm($l, $lcfg) === cc_lang_norm($lang, $lcfg)) return true;
+    return false;
+}
+if ($action === 'translate_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    if (!cc_can_create($role)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit; }
+    $lcfg = cc_lang_cfg();
+    $st = $pdo->prepare("SELECT * FROM collection_items WHERE id = ?"); $st->execute([(string)($d['id'] ?? '')]);
+    $src = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$src) { echo json_encode(['success' => false, 'message' => 'The item was not found.']); exit; }
+    if (!cc_collection_allowed($pdo, $src['collection_id'], $role, $username) || ($role === 'author' && $src['created_by'] !== $username)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You do not have access to this item.']); exit; }
+    $group = (string)($src['trans_group'] ?? '');
+    [$target, $err] = cc_translate_target($d['lang'] ?? '', $src['lang'] ?? '', $group, cc_group_langs($pdo, 'collection_items', $group, $lcfg), $lcfg);
+    if ($err !== '') { echo json_encode(['success' => false, 'message' => $err]); exit; }
+    if (!$is_admin && !cc_demo_take('items')) { echo json_encode(['success' => false, 'message' => 'The demo allows ' . cc_demo_config()['maxNewItems'] . ' new collection items until the next reset.']); exit; }
+    // A free address among the items of the collection in that language
+    $base = cc_safe_slug($src['slug']);
+    $slug = $base;
+    $taken = function ($sl) use ($pdo, $src, $target, $lcfg) {
+        $q = $pdo->prepare("SELECT lang FROM collection_items WHERE collection_id = ? AND slug = ?"); $q->execute([$src['collection_id'], $sl]);
+        foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $l) if (cc_lang_norm($l, $lcfg) === cc_lang_norm($target, $lcfg)) return true;
+        return false;
+    };
+    for ($n = 1; $taken($slug); $n++) $slug = $base . '-' . $target . ($n > 1 ? '-' . $n : '');
+    if ($group === '') {
+        $group = cc_new_trans_group();
+        $pdo->prepare("UPDATE collection_items SET trans_group = ? WHERE id = ?")->execute([$group, $src['id']]);
+    }
+    $nid = 'item_' . uniqid();
+    $now = date('Y-m-d H:i:s');
+    $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, terms_json, updated_at, created_by, lang, trans_group) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        ->execute([$nid, $src['collection_id'], $src['title'], $slug, $src['excerpt'] ?? '', $src['cover_image'] ?? '', $src['date'] ?? '', 'draft', 0, $src['seo_title'] ?? '', $src['seo_description'] ?? '',
+            $src['content_json'] ?? '[]', cc_version()['content_schema'], $src['field_values'] ?? '{}', $src['terms_json'] ?? '{}', $now, $username, $target, $group]);
+    cc_add_revision($pdo, 'item:' . $nid, $src['title'], (string)($src['content_json'] ?? '[]'), 'draft');
+    $row = $pdo->prepare("SELECT id, collection_id, title, slug, excerpt, cover_image, date, status, archived, updated_at, created_by, review_state, review_note, review_by, lang, trans_group FROM collection_items WHERE id = ?"); $row->execute([$nid]);
+    echo json_encode(['success' => true, 'item' => $row->fetch(PDO::FETCH_ASSOC), 'message' => 'The ' . cc_lang_name($target, $lcfg) . ' translation was created as a draft.']); exit;
+}
+// Takes a page or an item out of its group of translations (the group disappears when only one is left)
+if ($action === 'unlink_translation' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    $isItem = ($d['kind'] ?? '') === 'item';
+    $table = $isItem ? 'collection_items' : 'pages';
+    $id = (string)($d['id'] ?? '');
+    $st = $pdo->prepare("SELECT * FROM $table WHERE id = ?"); $st->execute([$id]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$row) { echo json_encode(['success' => false, 'message' => 'Not found.']); exit; }
+    if ($isItem ? !cc_collection_allowed($pdo, $row['collection_id'], $role, $username) : false) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You do not have access to this item.']); exit; }
+    if (cc_is_contributor($role)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit; }
+    $g = (string)($row['trans_group'] ?? '');
+    if ($g !== '') {
+        $pdo->prepare("UPDATE $table SET trans_group = '' WHERE id = ?" . ($isItem ? '' : " OR (parent_id = ? AND is_draft_copy = 1)"))->execute($isItem ? [$id] : [$id, $id]);
+        $left = $pdo->prepare("SELECT id FROM $table WHERE trans_group = ?" . ($isItem ? '' : ' AND is_draft_copy = 0')); $left->execute([$g]);
+        $ids = $left->fetchAll(PDO::FETCH_COLUMN);
+        if (count($ids) === 1) $pdo->prepare("UPDATE $table SET trans_group = '' WHERE id = ?" . ($isItem ? '' : " OR (parent_id = ? AND is_draft_copy = 1)"))->execute($isItem ? [$ids[0]] : [$ids[0], $ids[0]]);
+    }
+    echo json_encode(['success' => true, 'message' => 'Unlinked from its translations.']); exit;
 }
 
 // ---------------------------------------------------------------------------
@@ -915,7 +1112,7 @@ if ($action === 'save_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $existing = $chk->fetch(PDO::FETCH_ASSOC);
     // Renaming keeps the address unless a new slug is sent explicitly
     $slug = cc_safe_slug(isset($d['slug']) && trim((string)$d['slug']) !== '' ? $d['slug'] : ($existing ? $existing['slug'] : $name));
-    if ($owner = cc_slug_owner($pdo, $slug, null, $id)) {
+    if ($owner = cc_slug_owner($pdo, $slug, null, $id, null)) {
         echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL /$slug/ is already used by $owner. Choose a different slug."]); exit;
     }
     if ($existing) {
@@ -1042,8 +1239,11 @@ if ($action === 'delete_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try { $rv = $pdo->prepare("DELETE FROM page_revisions WHERE owner = ?"); foreach ($item_ids as $iid) $rv->execute(['item:' . $iid]); } catch (Exception $e) {}
     // Its pages and feed go offline now (the folder is the collection's own: slugs are unique site-wide)
     $removed = 0;
-    if ($col_slug !== false && ($cs = cc_safe_slug($col_slug)) !== '' && !cc_slug_owner($pdo, $cs)) {
-        $removed = cc_unpublish_files($data_dir, $cs . '/', [$cs . '/feed.xml']);
+    if ($col_slug !== false && ($cs = cc_safe_slug($col_slug)) !== '' && !cc_slug_owner($pdo, $cs, null, null, null)) {
+        $lcfg = cc_lang_cfg();
+        foreach (array_merge([''], array_map(function ($c) { return $c . '/'; }, array_filter(cc_lang_codes($lcfg), function ($c) use ($lcfg) { return $c !== $lcfg['default']; }))) as $lp) {   // and in each language folder
+            $removed += cc_unpublish_files($data_dir, $lp . $cs . '/', [$lp . $cs . '/feed.xml']);
+        }
     }
     echo json_encode(['success' => true, 'removed_files' => $removed]); exit;
 }
@@ -1052,7 +1252,7 @@ if ($action === 'delete_collection' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'get_items') {
     $cid = $_GET['collection'] ?? '';
     if (!cc_collection_allowed($pdo, $cid, $role, $username)) { echo json_encode([]); exit; }
-    $st = $pdo->prepare("SELECT id, collection_id, title, slug, excerpt, cover_image, date, status, archived, updated_at, created_by, review_state, review_note, review_by FROM collection_items WHERE collection_id = ? ORDER BY (date = '') ASC, date DESC, updated_at DESC");
+    $st = $pdo->prepare("SELECT id, collection_id, title, slug, excerpt, cover_image, date, status, archived, updated_at, created_by, review_state, review_note, review_by, lang, trans_group FROM collection_items WHERE collection_id = ? ORDER BY (date = '') ASC, date DESC, updated_at DESC");
     $st->execute([$cid]);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
     if ($role === 'author') $rows = array_values(array_filter($rows, function ($r) use ($username) { return $r['created_by'] === $username; }));   // an author sees their own items
@@ -1083,6 +1283,11 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $archived = (!empty($d['archived']) && $d['archived'] !== '0') ? 1 : 0;
     $seo_t = $d['seo_title'] ?? '';
     $seo_d = $d['seo_description'] ?? '';
+    // The language of the item: only when the client sends it (a save without it keeps the current one)
+    $lcfg = cc_lang_cfg();
+    $lang_sent = array_key_exists('lang', $d);
+    $lang_new = cc_lang_code($d['lang'] ?? '');
+    if ($lang_sent && $lang_new !== '' && !cc_lang_known($lang_new, $lcfg)) { echo json_encode(['success' => false, 'message' => 'This language is not one of the site languages (Administration › Languages).']); exit; }
     $blocks = isset($d['blocks']) && is_array($d['blocks']) ? array_values($d['blocks']) : null;
     if ($blocks !== null) cc_sanitize_blocks($blocks);   // rich text never holds active code, for any role
     $title = mb_substr($title, 0, 300); $excerpt = mb_substr((string)$excerpt, 0, 2000); $cover = mb_substr((string)$cover, 0, 2000);
@@ -1099,15 +1304,24 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($missing) { echo json_encode(['success' => false, 'code' => 'required', 'message' => 'Fill in the required fields before publishing: ' . implode(', ', $missing) . '.']); exit; }
     }
 
+    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id, field_values, terms_json, created_by, review_state, lang, trans_group FROM collection_items WHERE id = ?"); $chk->execute([$id]);
+    $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
+    $lang_old = (string)($existing_item['lang'] ?? '');
+    if ($existing_item && $lang_sent && (string)($existing_item['trans_group'] ?? '') !== '' && cc_lang_of($lang_new, $lcfg) !== cc_lang_of($lang_old, $lcfg)) {
+        echo json_encode(['success' => false, 'message' => 'This item is a translation: its language cannot change while it is linked to the others. Unlink it first.']); exit;
+    }
+    $lang_eff = $lang_sent ? $lang_new : $lang_old;   // the language the item will have
+    $ipre = cc_lang_prefix($lang_eff, $lcfg);
     if ($status === 'published') {
-        $dup = $pdo->prepare("SELECT title FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id IS NOT ?");
+        // (the same address may be used once per language: /blog/hello/ and /it/blog/hello/)
+        $dup = $pdo->prepare("SELECT title, lang FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id IS NOT ?");
         $dup->execute([$cid, $slug, $id]);
-        if (($t = $dup->fetchColumn()) !== false) {
-            echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL slug \"$slug\" is already used by \"$t\" in this collection. Change it and publish again."]); exit;
+        foreach ($dup->fetchAll(PDO::FETCH_ASSOC) as $dr) {
+            if (cc_lang_norm($dr['lang'] ?? '', $lcfg) === cc_lang_norm($lang_eff, $lcfg)) {
+                echo json_encode(['success' => false, 'code' => 'slug_taken', 'message' => "The URL slug \"$slug\" is already used by \"{$dr['title']}\" in this collection" . ($ipre !== '' ? ' (in the same language)' : '') . ". Change it and publish again."]); exit;
+            }
         }
     }
-    $chk = $pdo->prepare("SELECT id, archived, content_json, slug, status, collection_id, field_values, terms_json, created_by, review_state FROM collection_items WHERE id = ?"); $chk->execute([$id]);
-    $existing_item = $chk->fetch(PDO::FETCH_ASSOC);
     // Roles and collection access: only those who may work in the collection (the one it is in, and the one it goes to)
     foreach (array_unique(array_filter([$cid, $existing_item['collection_id'] ?? ''])) as $ccid) {
         if (!cc_collection_allowed($pdo, $ccid, $role, $username)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You do not have access to this collection.']); exit; }
@@ -1137,6 +1351,7 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("INSERT INTO collection_items (id, collection_id, title, slug, excerpt, cover_image, date, status, archived, seo_title, seo_description, content_json, content_schema, field_values, terms_json, updated_at, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             ->execute([$id, $cid, $title, $slug, $excerpt, $cover, $date, $status, $archived, $seo_t, $seo_d, json_encode($b), $cschema, $fv_json, $tj_json, $now, $username]);
     }
+    if ($lang_sent) $pdo->prepare("UPDATE collection_items SET lang = ? WHERE id = ?")->execute([$lang_new, $id]);
     if ($status === 'published') cc_review_published($pdo, 'item', $id, $username, $wasPending);
     // A published item that changed its address: the old one forwards to the new one
     if ($status === 'published') {
@@ -1144,9 +1359,9 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $colSlug = $pdo->prepare("SELECT slug FROM collections WHERE id = ?"); $colSlug->execute([$cid]);
             $cs = (string)$colSlug->fetchColumn();
             if ($cs !== '') {
-                cc_drop_redirect_from($pdo, '/' . $cs . '/' . $slug . '/');
-                if ($existing_item && ($existing_item['status'] ?? '') === 'published' && ($existing_item['slug'] ?? '') !== '' && $existing_item['slug'] !== $slug && ($existing_item['collection_id'] ?? '') === $cid) {
-                    cc_add_redirect($pdo, '/' . $cs . '/' . $existing_item['slug'] . '/', '/' . $cs . '/' . $slug . '/');
+                cc_drop_redirect_from($pdo, '/' . $ipre . $cs . '/' . $slug . '/');
+                if ($existing_item && ($existing_item['status'] ?? '') === 'published' && ($existing_item['slug'] ?? '') !== '' && ($existing_item['slug'] !== $slug || cc_lang_prefix($lang_old, $lcfg) !== $ipre) && ($existing_item['collection_id'] ?? '') === $cid) {
+                    cc_add_redirect($pdo, '/' . cc_lang_prefix($lang_old, $lcfg) . $cs . '/' . $existing_item['slug'] . '/', '/' . $ipre . $cs . '/' . $slug . '/');
                 }
             }
         } catch (Exception $e) {}
@@ -1159,7 +1374,7 @@ if ($action === 'save_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 if ($action === 'delete_item' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
-    $st = $pdo->prepare("SELECT id, collection_id, slug, status FROM collection_items WHERE id = ?"); $st->execute([$id]);
+    $st = $pdo->prepare("SELECT id, collection_id, slug, status, lang FROM collection_items WHERE id = ?"); $st->execute([$id]);
     $item = $st->fetch(PDO::FETCH_ASSOC);
     if ($item && !cc_collection_allowed($pdo, $item['collection_id'], $role, $username)) { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'You do not have access to this collection.']); exit; }
     if ($role === 'reviewer') { echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit; }
@@ -1216,7 +1431,7 @@ if ($action === 'bulk_items' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $target = $tc->fetch(PDO::FETCH_ASSOC);
         if (!$target) { echo json_encode(['success' => false, 'message' => 'The destination collection no longer exists.']); exit; }
     }
-    $get = $pdo->prepare("SELECT i.id, i.collection_id, i.title, i.slug, i.status, c.slug AS col_slug FROM collection_items i LEFT JOIN collections c ON c.id = i.collection_id WHERE i.id = ?");
+    $get = $pdo->prepare("SELECT i.id, i.collection_id, i.title, i.slug, i.status, i.lang, c.slug AS col_slug FROM collection_items i LEFT JOIN collections c ON c.id = i.collection_id WHERE i.id = ?");
     $now = date('Y-m-d H:i:s');
     $done = 0; $skipped = []; $removed = 0;
     foreach ($ids as $iid) {
@@ -1233,17 +1448,20 @@ if ($action === 'bulk_items' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } else { // move
             if ($it['collection_id'] === $target['id']) { $skipped[] = ['id' => $iid, 'title' => $it['title'], 'reason' => 'it is already there']; continue; }
             if ($it['status'] === 'published') {
-                $dup = $pdo->prepare("SELECT title FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id <> ?");
+                $dup = $pdo->prepare("SELECT title, lang FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id <> ?");
                 $dup->execute([$target['id'], $it['slug'], $iid]);
-                if (($t = $dup->fetchColumn()) !== false) { $skipped[] = ['id' => $iid, 'title' => $it['title'], 'reason' => 'the URL slug "' . $it['slug'] . '" is already used there by "' . $t . '"']; continue; }
+                $t = false;
+                foreach ($dup->fetchAll(PDO::FETCH_ASSOC) as $dr) if (cc_lang_norm($dr['lang'] ?? '', cc_lang_cfg()) === cc_lang_norm($it['lang'] ?? '', cc_lang_cfg())) { $t = $dr['title']; break; }
+                if ($t !== false) { $skipped[] = ['id' => $iid, 'title' => $it['title'], 'reason' => 'the URL slug "' . $it['slug'] . '" is already used there by "' . $t . '"']; continue; }
             }
             $pdo->prepare("UPDATE collection_items SET collection_id = ?, updated_at = ? WHERE id = ?")->execute([$target['id'], $now, $iid]);
             // A published item forwards from its old address (the page moves at the next publish)
             if ($it['status'] === 'published' && (string)$it['col_slug'] !== '') {
                 $is = cc_safe_slug($it['slug']);
+                $bp = cc_lang_prefix($it['lang'] ?? '', cc_lang_cfg());
                 try {
-                    cc_drop_redirect_from($pdo, '/' . $target['slug'] . '/' . $is . '/');
-                    cc_add_redirect($pdo, '/' . cc_safe_slug($it['col_slug']) . '/' . $is . '/', '/' . $target['slug'] . '/' . $is . '/');
+                    cc_drop_redirect_from($pdo, '/' . $bp . $target['slug'] . '/' . $is . '/');
+                    cc_add_redirect($pdo, '/' . $bp . cc_safe_slug($it['col_slug']) . '/' . $is . '/', '/' . $bp . $target['slug'] . '/' . $is . '/');
                 } catch (Exception $e) {}
             }
         }
@@ -1265,6 +1483,10 @@ if ($action === 'get_parts') {
 if ($action === 'save_part' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $name = ($data['name'] ?? '') === 'footer' ? 'footer' : 'header';
+    // A language may have its own header and footer ("header:it"); without one it uses the default language's
+    $plang = cc_lang_code($data['lang'] ?? '');
+    if (!empty($data['lang']) && ($plang === '' || !cc_lang_known($plang, cc_lang_cfg()))) { echo json_encode(['success' => false, 'message' => 'This language is not one of the site languages (Administration › Languages).']); exit; }
+    if ($plang !== '' && $plang !== cc_lang_cfg()['default']) $name .= ':' . $plang;
     $blocks = isset($data['blocks']) && is_array($data['blocks']) ? array_values($data['blocks']) : [];
     cc_sanitize_blocks($blocks);
     if (!$is_admin) {   // editor: keeps the admin's code as saved, can't add new code
@@ -1274,12 +1496,13 @@ if ($action === 'save_part' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $pdo->prepare("INSERT INTO site_parts (name, content_json, content_schema) VALUES (?, ?, ?)
                    ON CONFLICT(name) DO UPDATE SET content_json = excluded.content_json, content_schema = excluded.content_schema")
         ->execute([$name, json_encode($blocks), cc_version()['content_schema']]);
-    echo json_encode(['success' => true, 'message' => ucfirst($name) . ' saved!']); exit;
+    echo json_encode(['success' => true, 'message' => ucfirst(explode(':', $name)[0]) . ' saved!']); exit;
 }
 
 if ($action === 'delete_part' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = json_decode(file_get_contents('php://input'), true)['name'] ?? '';
-    if (in_array($name, ['header', 'footer'], true)) {
+    $nb = is_string($name) ? explode(':', $name, 2) : [''];
+    if (in_array($nb[0], ['header', 'footer'], true) && (!isset($nb[1]) || cc_lang_code($nb[1]) === $nb[1])) {
         $pdo->prepare("DELETE FROM site_parts WHERE name = ?")->execute([$name]);
     }
     echo json_encode(['success' => true]); exit;

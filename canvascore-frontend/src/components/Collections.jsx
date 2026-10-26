@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
-import { Library, Plus, Trash2, Pencil, FileText, Folder, Archive, ArchiveRestore, Globe, CheckSquare, MoveRight, X, LayoutTemplate } from 'lucide-react';
+import { Library, Plus, Trash2, Pencil, FileText, Folder, Archive, ArchiveRestore, Globe, CheckSquare, MoveRight, X, LayoutTemplate, Languages as LanguagesIcon } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, Badge, StatusBadge, Select } from '../ui/kit';
 import { slugify } from '../utils/slug';
 import { notify } from '../ui/notify';
@@ -12,6 +12,7 @@ import CollectionTaxonomies from './CollectionTaxonomies';
 import CollectionArchives from './CollectionArchives';
 import CollectionAccess from './CollectionAccess';
 import { canCreate, canManageSite, reviewOf, REVIEW_LABEL } from '../session/permissions';
+import { isMultilingual, langOf, langName, translationsOf, missingLanguages } from '../editor/languages';
 
 // An item's custom field values as an object (the server keeps them as JSON text)
 const parseFieldValues = (raw) => {
@@ -39,6 +40,11 @@ export default function Collections() {
   const [needsPublish, setNeedsPublish] = useState(''); // why the public site is behind ('' = it is not)
   const [publishing, setPublishing] = useState(false);
   const [picking, setPicking] = useState(false);   // "New Item": choosing a starter template
+  // Languages: the filter of the list, the language of each item and its translations (Translate starts one)
+  const langs = useStore((s) => s.languages);
+  const multi = isMultilingual(langs);
+  const [langFilter, setLangFilter] = useState('');
+  const [translating, setTranslating] = useState('');
 
   const loadCollections = () => {
     return fetch('api.php?action=get_collections').then(r => r.json()).then(d => {
@@ -116,7 +122,7 @@ export default function Collections() {
     setView('editor');
   };
   const editItem = async (item, starter = null, col = active) => {
-    let full = { id: item?.id, collection_id: col.id, title: 'New Item', slug: 'new-item', excerpt: '', cover_image: '', date: new Date().toISOString().slice(0, 10), status: 'draft', archived: 0, seo_title: '', seo_description: '', blocks: starter ? starterBlocks(starter) : [] };
+    let full = { id: item?.id, collection_id: col.id, lang: multi ? (langFilter || langs.default) : '', trans_group: '', title: 'New Item', slug: 'new-item', excerpt: '', cover_image: '', date: new Date().toISOString().slice(0, 10), status: 'draft', archived: 0, seo_title: '', seo_description: '', blocks: starter ? starterBlocks(starter) : [] };
     if (item) {
       try {
         const res = await fetch('api.php?action=get_item&id=' + encodeURIComponent(item.id));
@@ -134,7 +140,7 @@ export default function Collections() {
     // open the block editor on the item's content
     setActivePage({
       id: full.id || ('item_' + Date.now()),
-      __item: true, collection_id: col.id,
+      __item: true, collection_id: col.id, lang: full.lang || '', trans_group: full.trans_group || '',
       title: full.title, slug: full.slug, excerpt: full.excerpt, cover_image: full.cover_image,
       date: full.date, status: full.status === 'published' ? 'published' : 'draft',
       archived: Number(full.archived) ? 1 : 0,
@@ -268,6 +274,18 @@ export default function Collections() {
     </>
   ));
   const others = collections.filter((c) => c.id !== active?.id);
+  const shownItems = multi && langFilter ? items.filter((it) => langOf(it, langs) === langFilter) : items;
+  // A translation of an item: a draft copy in another language, opened in the editor
+  const translateItem = async (it, code) => {
+    setTranslating(it.id + code);
+    try {
+      const d = await (await fetch('api.php?action=translate_item', { method: 'POST', body: JSON.stringify({ id: it.id, lang: code }) })).json();
+      if (!d || !d.success) { notify((d && d.message) || 'Could not create the translation.', 'error'); return; }
+      notify(d.message || 'Translation created.');
+      loadItems(active.id);
+      editItem(d.item);
+    } catch { notify('Could not create the translation (connection problem).', 'error'); } finally { setTranslating(''); }
+  };
   return (
     <>
       {picking && active && (
@@ -345,6 +363,10 @@ export default function Collections() {
                   <div className="ui-cell-muted" title={`/${active.slug}/`}>/{active.slug}/</div>
                 </div>
                 <span className="ui-row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+                  {multi && <Select aria-label="Filter items by language" value={langFilter} onChange={(e) => setLangFilter(e.target.value)} style={{ width: 'auto', maxWidth: 170 }}>
+                    <option value="">All languages</option>
+                    {langs.list.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+                  </Select>}
                   {userRole === 'admin' && <Button size="sm" icon={Pencil} onClick={() => startRename(active)}>Rename</Button>}
                   {userRole === 'admin' && <Button size="sm" icon={LayoutTemplate} onClick={() => openDesign(active)} title={active.has_design ? 'Edit the design every item page is built from' : 'Design the item pages of this collection'}>{active.has_design ? 'Design' : 'Make the design'}</Button>}
                   {mayCreate && <Button variant="primary" size="sm" icon={Plus} onClick={() => setPicking(true)}>New Item</Button>}
@@ -386,13 +408,26 @@ export default function Collections() {
                   <table className="ui-table cc-col-table">
                     <thead><tr>
                       <th className="cc-col-check"><input type="checkbox" checked={allSelected} ref={(el) => { if (el) el.indeterminate = n > 0 && !allSelected; }} onChange={toggleAll} aria-label="Select all items" /></th>
-                      <th>Title</th><th className="cc-col-date">Date</th><th className="cc-col-status">Status</th><th className="ui-cell-actions cc-col-actions">Actions</th>
+                      <th>Title</th>{multi && <th>Languages</th>}<th className="cc-col-date">Date</th><th className="cc-col-status">Status</th><th className="ui-cell-actions cc-col-actions">Actions</th>
                     </tr></thead>
                     <tbody>
-                      {items.map(it => (
+                      {shownItems.map(it => (
                         <tr key={it.id} onDoubleClick={() => editItem(it)} className={selected.has(it.id) ? 'cc-col-row--selected' : undefined}>
                           <td className="cc-col-check"><input type="checkbox" checked={selected.has(it.id)} onChange={() => {}} onClick={(e) => toggleSel(it.id, e)} onDoubleClick={(e) => e.stopPropagation()} aria-label={`Select ${it.title}`} /></td>
                           <td className="cc-col-title"><div className="ui-cell-title" title={it.title}>{it.title}</div><div className="ui-cell-muted" title={`/${it.slug}/`}>/{it.slug}/</div><div className="cc-col-status-inline">{statusBadge(it)}</div></td>
+                          {multi && (
+                            <td data-testid="item-languages">
+                              <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                                <Badge tone="accent" icon={LanguagesIcon}>{langOf(it, langs).toUpperCase()}</Badge>
+                                {translationsOf(items, it).map((t) => (
+                                  <button key={t.id} type="button" className="ui-btn ui-btn--ghost ui-btn--sm" title={`Edit the ${langName(langOf(t, langs), langs)} translation: ${t.title}`} onClick={() => editItem(t)}>{langOf(t, langs).toUpperCase()}</button>
+                                ))}
+                                {mayCreate && missingLanguages(items, it, langs).map((l) => (
+                                  <button key={l.code} type="button" className="ui-btn ui-btn--ghost ui-btn--sm" style={{ opacity: 0.8 }} disabled={translating !== ''} title={`Translate into ${l.name}`} aria-label={`Translate ${it.title} into ${l.name}`} onClick={() => translateItem(it, l.code)}>+ {l.code.toUpperCase()}</button>
+                                ))}
+                              </span>
+                            </td>
+                          )}
                           <td className="ui-cell-muted cc-col-date">{it.date || '—'}</td>
                           <td className="cc-col-status">{statusBadge(it)}</td>
                           <td className="ui-cell-actions">

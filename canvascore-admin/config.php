@@ -89,7 +89,7 @@ $GLOBALS['CC_HT_ADMIN'] =
     "  Header always set Referrer-Policy \"same-origin\"\n" .
     "  Header always set Cross-Origin-Opener-Policy \"same-origin\"\n" .
     "</IfModule>\n" .
-    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|popups|update|update-keys|update-source|library-source|integrations-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
+    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|popups|languages|installlib|install-cli|update|update-keys|update-source|library-source|integrations-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
     "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
     "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n" .
     "</FilesMatch>\n" .
@@ -945,10 +945,14 @@ function cc_unpublish_item($pdo, $data_dir, $item) {
     $col_slug = cc_safe_slug((string)$cs->fetchColumn());
     $it_slug = cc_safe_slug((string)$item['slug']);
     if ($col_slug === '' || $it_slug === '') return 0;
-    $other = $pdo->prepare("SELECT 1 FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id <> ?");
+    require_once __DIR__ . '/languages.php';
+    $lcfg = cc_lang_cfg();
+    $other = $pdo->prepare("SELECT lang FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id <> ?");
     $other->execute([$item['collection_id'], $item['slug'], $item['id']]);
-    if ($other->fetchColumn()) return 0;
-    return cc_unpublish_files($data_dir, $col_slug . '/' . $it_slug . '/', [$col_slug . '/' . $it_slug . '/index.html']);
+    // (the same address in another language is another page: /blog/hello/ and /it/blog/hello/)
+    foreach ($other->fetchAll(PDO::FETCH_COLUMN) as $ol) if (cc_lang_norm($ol, $lcfg) === cc_lang_norm($item['lang'] ?? '', $lcfg)) return 0;
+    $pre = cc_lang_prefix($item['lang'] ?? '', $lcfg);
+    return cc_unpublish_files($data_dir, $pre . $col_slug . '/' . $it_slug . '/', [$pre . $col_slug . '/' . $it_slug . '/index.html']);
 }
 
 // Static redirect page written at the old address (works on any host); $href = where to go
