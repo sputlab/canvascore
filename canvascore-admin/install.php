@@ -11,6 +11,7 @@
 // someone who can open the server's files can install (nobody can take over a freshly uploaded site first).
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
+require_once __DIR__ . '/installlib.php';
 
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store');
@@ -30,26 +31,6 @@ ensure_admin_htaccess(__DIR__);
 
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
-// ---------------------------------------------------------------------------
-// Installation state
-// ---------------------------------------------------------------------------
-function cc_install_state($db_file) {
-    if (!file_exists($db_file)) return 'fresh';
-    try {
-        $pdo = new PDO('sqlite:' . $db_file);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
-        if (in_array('cc_meta', $tables, true) && cc_meta_get($pdo, 'installed_at')) return 'installed';
-        if (in_array('admin', $tables, true)) {
-            foreach ($pdo->query("SELECT username, password_hash FROM admin") as $u) {
-                if (!cc_is_default_admin($u)) return 'installed';
-            }
-        }
-    } catch (Exception $e) {
-        return 'error';
-    }
-    return 'fresh';
-}
 
 
 // ---------------------------------------------------------------------------
@@ -158,23 +139,6 @@ function cc_has_failures($reqs) {
     return false;
 }
 
-function cc_load_starters() {
-    $file = __DIR__ . '/starters.json';
-    $list = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
-    return is_array($list) ? $list : [];
-}
-
-// Regenerate block ids (like Templates.jsx) to avoid collisions between pages.
-function cc_regen_block_ids(array $blocks) {
-    static $seq = 0;
-    foreach ($blocks as &$b) {
-        if (!is_array($b)) continue;
-        $b['id'] = 'block-' . (int)(microtime(true) * 1000) . '-' . ($seq++);
-        if (isset($b['children']) && is_array($b['children'])) $b['children'] = cc_regen_block_ids($b['children']);
-    }
-    unset($b);
-    return $blocks;
-}
 
 function cc_default_site_url() {
     $scheme = cc_is_https() ? 'https' : 'http';
@@ -183,88 +147,6 @@ function cc_default_site_url() {
     return $scheme . '://' . $host . $base;
 }
 
-// ---------------------------------------------------------------------------
-// Installation
-// ---------------------------------------------------------------------------
-function cc_install_validate($in, $starters, $key) {
-    $err = [];
-    $sent = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $in['setup_key']));
-    if ($key === null || $sent === '' || !hash_equals(str_replace('-', '', $key), $sent)) $err['setup_key'] = 'This is not the setup key in install-key.txt.';
-    if ($in['site_name'] === '') $err['site_name'] = 'Enter the site name.';
-    elseif (mb_strlen($in['site_name']) > 120) $err['site_name'] = 'Use at most 120 characters.';
-
-    if ($in['site_url'] !== '' && !preg_match('#^https?://[^\s/$.?\#].[^\s]*$#i', $in['site_url'])) {
-        $err['site_url'] = 'Enter a full address such as https://www.example.com, or leave it empty.';
-    }
-
-    if (!preg_match('/^[A-Za-z0-9._@-]{3,32}$/', $in['admin_user'])) {
-        $err['admin_user'] = '3–32 characters: letters, numbers, dot, dash, underscore or @.';
-    }
-
-    if (strlen($in['admin_pass']) < 8) $err['admin_pass'] = 'Use at least 8 characters.';
-    elseif (strtolower($in['admin_pass']) === 'admin' || $in['admin_pass'] === $in['admin_user']) $err['admin_pass'] = 'Choose a less guessable password.';
-    elseif (!hash_equals($in['admin_pass'], $in['admin_pass2'])) $err['admin_pass2'] = 'The passwords do not match.';
-
-    if ($in['admin_email'] !== '' && !filter_var($in['admin_email'], FILTER_VALIDATE_EMAIL)) {
-        $err['admin_email'] = 'Enter a valid email address, or leave it empty.';
-    }
-
-    $ids = array_column($starters, 'id');
-    if ($in['starter'] !== '' && !in_array($in['starter'], $ids, true)) $err['starter'] = 'Unknown starter.';
-    return $err;
-}
-
-function cc_run_install($db_file, $data_dir, $in, $starters) {
-    $pdo = new PDO('sqlite:' . $db_file);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    cc_migrate($pdo);           // create the schema
-    cc_migrate_content($pdo);
-
-    $pdo->beginTransaction();
-    try {
-        // Remove the old default admin/admin, if an earlier version created it: the only account allowed at this point.
-        $del = $pdo->prepare("DELETE FROM admin WHERE id = ?");
-        foreach ($pdo->query("SELECT id, username, password_hash FROM admin")->fetchAll(PDO::FETCH_ASSOC) as $u) {
-            if (cc_is_default_admin($u)) $del->execute([$u['id']]);
-        }
-        $pdo->prepare("INSERT INTO admin (username, password_hash, role, must_change_pw, session_gen) VALUES (?, ?, 'admin', 0, 0)")
-            ->execute([$in['admin_user'], password_hash($in['admin_pass'], PASSWORD_DEFAULT)]);
-
-        // Homepage (draft) from the chosen starter, only if the site has no pages yet.
-        $page_created = false;
-        if ($in['starter'] !== '' && (int)$pdo->query("SELECT COUNT(*) FROM pages")->fetchColumn() === 0) {
-            foreach ($starters as $s) {
-                if (($s['id'] ?? '') !== $in['starter']) continue;
-                $blocks = cc_regen_block_ids(is_array($s['blocks'] ?? null) ? $s['blocks'] : []);
-                $pdo->prepare("INSERT INTO pages (id, parent_id, title, slug, clean_slug, content_json, status, is_draft_copy, is_home, content_schema, author, updated_at)
-                               VALUES (?, NULL, 'Home', 'home', 'home', ?, 'draft', 0, 1, ?, ?, ?)")
-                    ->execute(['page-' . (int)(microtime(true) * 1000), json_encode($blocks), cc_version()['content_schema'], $in['admin_user'], date('Y-m-d H:i:s')]);
-                $page_created = true;
-            }
-        }
-
-        // Settings (merged with any existing ones): written before the commit, so an error rolls everything back.
-        $file = $data_dir . '/settings.json';
-        $settings = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
-        if (!is_array($settings)) $settings = [];
-        $settings['siteName'] = $in['site_name'];
-        $settings['siteUrl'] = rtrim($in['site_url'], '/');
-        if (!isset($settings['siteSuffix'])) $settings['siteSuffix'] = ' | ' . $in['site_name'];
-        if ($in['admin_email'] !== '') $settings['adminEmail'] = $in['admin_email'];
-        if (file_put_contents($file, json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) === false) {
-            throw new RuntimeException('Could not write settings.json');
-        }
-
-        cc_meta_set($pdo, 'installed_at', gmdate('c'));
-        cc_meta_set($pdo, 'installed_version', cc_version()['app']);
-        $pdo->commit();
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        throw $e;
-    }
-
-    return $page_created;
-}
 
 // Automatic sign-in with the new account (same session as api.php?action=login).
 function cc_install_login($db_file, $username) {
@@ -280,12 +162,20 @@ function cc_install_login($db_file, $username) {
 if (empty($_SESSION['install_csrf'])) $_SESSION['install_csrf'] = bin2hex(random_bytes(32));
 $csrf = $_SESSION['install_csrf'];
 
+// Answers left by a hosting installer (Softaculous…): used once, then the file is deleted. ?format=json answers a script instead of drawing the page.
+$prov = cc_install_from_provision();
+if (($_GET['format'] ?? '') === 'json') {
+    header('Content-Type: application/json; charset=utf-8');
+    $res = $prov ?? ['success' => false, 'message' => 'There are no answers to install with (install-provision.json).', 'errors' => []];
+    if (!$res['success']) http_response_code(409);
+    echo json_encode($res); exit;
+}
 $state     = cc_install_state($db_file);
 $reqs      = cc_install_requirements($data_dir, $site_dir);
 $starters  = cc_load_starters();
 $errors    = [];
 $view      = $state === 'installed' ? 'installed' : ($state === 'error' ? 'error' : 'form');
-$notice    = '';
+$notice    = $prov && !$prov['success'] ? $prov['message'] : '';
 $page_created = false;
 $in = [
     'site_name' => '', 'site_url' => cc_default_site_url(), 'admin_user' => '',

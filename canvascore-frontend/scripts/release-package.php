@@ -1,11 +1,12 @@
 <?php
 // scripts/release-package.php — the signed update package of a release (one-click updates).
-//   php scripts/release-package.php --key=<secret-key-file> [--dist=<built editor folder>] [--out=<folder>]
+//   php scripts/release-package.php --key=<secret-key-file> [--dist=<built editor folder>] [--out=<folder>] [--installers]
 // Packs the tracked files of canvascore-admin/ and the built editor into canvascore-<version>.zip (every file under
 // canvascore-admin/), and signs it: canvascore-<version>.zip.sig. Both are uploaded as assets of the GitHub release.
+// --installers also makes the hosting-installer packages from it (scripts/installer-package.php: Softaculous and a neutral manifest).
 // Without --dist the editor is built first (vite build into a temporary folder; version.json is not bumped).
 if (PHP_SAPI !== 'cli') exit(1);
-$opt = getopt('', ['key:', 'dist:', 'out:']);
+$opt = getopt('', ['key:', 'dist:', 'out:', 'installers']);
 $root = realpath(__DIR__ . '/../..');
 $front = $root . '/canvascore-frontend';
 $fail = function ($m) { fwrite(STDERR, $m . "\n"); exit(1); };
@@ -55,3 +56,7 @@ $sig = base64_encode(sodium_crypto_sign_detached(cc_update_signed_message($zipFi
 file_put_contents($zipFile . '.sig', $sig . "\n");
 if (!cc_update_verify($zipFile, $sig, cc_update_keys())) $fail('The signature does not verify.');
 echo "$zipFile ($n files, " . round(filesize($zipFile) / 1048576, 2) . " MB)\n$zipFile.sig\nUpload both as assets of the GitHub release v$ver.\n";
+if (isset($opt['installers'])) {
+    passthru('php ' . escapeshellarg(__DIR__ . '/installer-package.php') . ' --archive=' . escapeshellarg($zipFile) . ' --out=' . escapeshellarg($out), $rc);
+    if ($rc !== 0) $fail('The installer packages could not be made.');
+}

@@ -36,10 +36,22 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   - Migration 17 adds `lang` and `trans_group` to pages and collection items (both empty for what exists: it is all in the default language). The languages are kept
     in `settings.json` and the language menus in `menu.json`, so they are in site backups.
 
+- **One-click installers** (Softaculous and similar hosting installers). CanvasCore needs no MySQL database and no build step, so an installer only copies the files and
+  hands over the answers. The setup wizard's logic moved to `installlib.php` and is now also available without a browser:
+  - **`install-cli.php`**: `CC_ADMIN_PASS=… php canvascore-admin/install-cli.php --site-name=… --admin-user=… --admin-email=… --site-url=…` (also `--starter`, `--delete-installer`,
+    `--json`). The password comes from the environment or standard input (or a ready `--admin-pass-hash`), never from an argument. It runs only from the command line.
+  - **Provisioning file**: for installers that can only write files, `canvascore-admin/install-provision.json` (site name, address, username, `password_hash()` of the password, email,
+    starter) is used by the next request to `install.php` (`?format=json` answers a script), then deleted, whether it worked or not, and never used on an installed site.
+  - **Packages**: every release can now also publish `canvascore-X-softaculous.zip` (a Softaculous script package: install form, `__install()` that hands the answers to CanvasCore's installer, removal index)
+    and `canvascore-X-installer.json` (a neutral manifest for other installers: requirements, archive with SHA-256 and signature, questions, commands). `release-package.php --installers` makes them;
+    sources and notes in `installers/`. Updates after the installation stay CanvasCore's own (Administration › Updates).
+  - New suite `test:installers` (43 checks): the CLI and the provisioning file on real copies of the site, the package contents, and the Softaculous `__install()` run against a site served by PHP.
+  - Not tested inside a Softaculous server: the package follows Softaculous's published format, but they review and sign the scripts they list.
+
 ### Upgrade notes
 - Migration 17 (the schema becomes 17) runs by itself on the first request. Nothing changes on a site until at least two languages are added and *This site is
   multilingual* is on.
-- **Nginx**: add `languages` to the library-file rule of the example in the Administrator Guide (section 4.2); one-click updates do not change your server configuration. Apache needs nothing.
+- **Nginx**: add `languages|installlib|install-cli` to the library-file rule of the example in the Administrator Guide (section 4.2); one-click updates do not change your server configuration. Apache needs nothing.
 - A language folder (`it`, `de`…) is an address of the site: no page or collection of the default language may use it. Rename such a page or collection before you
   switch a language on (Languages tells you which ones clash).
 - Texts the site writes itself (the 404 page, the labels of listing and archive pages such as *Sort* or *Years*, the names of collections, taxonomies and
