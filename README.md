@@ -11,6 +11,16 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 > backup before an update is still a good habit, and please
 > [report what you find](https://github.com/sputlab/CanvasCore/issues).
 
+<p align="center"><img src="docs/images/editor.png" alt="The CanvasCore page editor" width="860"></p>
+
+<p align="center">
+  <a href="docs/images/pages.png"><img src="docs/images/pages.png" alt="Pages" width="280"></a>
+  <a href="docs/images/site-home.png"><img src="docs/images/site-home.png" alt="A published site" width="280"></a>
+  <a href="docs/images/languages.png"><img src="docs/images/languages.png" alt="Languages" width="280"></a>
+</p>
+
+**Try it, learn it:** the [tutorials](docs/tutorials/README.md) (install, shared hosting, first site, managing a site, a public demo) and the [manuals](docs/manuals/README.md). A finished demo site to restore is in [`demo/`](demo/README.md).
+
 ## What it does
 
 - **Block editor**: more than 50 blocks (text, images, galleries, layout, heroes, forms, pricing, FAQs, maps, and more),
