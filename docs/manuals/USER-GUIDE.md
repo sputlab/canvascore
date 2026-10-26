@@ -38,6 +38,10 @@ There are four roles:
 
 Your role is shown under your name at the bottom of the sidebar.
 
+### The language of the editor
+
+CanvasCore's editor speaks **English** and **Italian**. Choose the language with the **Interface language** menu at the bottom of the sidebar, or under the sign-in form. The page reloads in the language you chose, and the choice is kept in this browser (each person, and each browser, has their own). The first time, the browser's language is used when CanvasCore has it. This is the language of the editor only: the language of your *site* (and of its translations) is set in **Administration › Languages**. Messages from the server (for example "Page published") are translated too; a text that has no translation yet is shown in English.
+
 ### Signing in
 
 1. Open the CanvasCore address your administrator gave you. The sign-in screen shows your site's name and icon (its favicon), once they are set in **Global Options**.

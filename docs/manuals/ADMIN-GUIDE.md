@@ -219,6 +219,8 @@ the sign-in screen's own checks with HTTP 503 (`not_installed`).
 
 ### 3.5 After installation
 
+The editor is in English or Italian, chosen by each person on the sign-in screen or in the sidebar (section 7.10 is about the languages of the *site*). The setup wizard itself is in English.
+
 1. In **Global Options**, check the site address (needed for RSS feeds and canonical links),
    the form emails and the session timeout, and set the **Favicon** (it is also shown as the
    logo on the sign-in screen and in the admin sidebar). If the site is behind a reverse proxy or CDN, fill
@@ -1177,6 +1179,8 @@ What CanvasCore does for you:
   answered; a newsletter service gets an email only with consent; analytics ids are checked strictly; a payment button links only to Stripe (section 12.4).
 - **Popups**: editors and admins build them (authors and reviewers only read the list). Every setting is checked by the server, a popup's blocks follow the rules of a page (no code from an editor), and its name appears only as escaped text. Published
   popups are written into the pages they apply to at publish time; the runtime on the page only shows and hides them and keeps what it remembers in the visitor's own browser (`localStorage`: `cc_visited`, `cc_popup_<id>`).
+- **Uploads**: an uploaded file keeps one dot, the one before its extension (`shell.php.png` becomes `shell-php.png`), because servers that give a PHP handler to any extension of a name (Apache's `AddHandler`, common on cPanel) would run it; the uploads folder's rules also deny any such name already there. An icon (`.ico`) must be an icon, an SVG is checked element by element, and any other image must be one.
+- **Version history and schedules** follow the access of the page or item: authors read only their own, and nobody reads or schedules what a collection limited to chosen people keeps from them.
 - **Languages**: admins only (`get_languages` and `save_languages`; editors can read the list of languages, and `save_settings` never changes it). Language codes and names are cleaned by the server (at most 12), a page's or item's language is checked against them, and a language folder is refused as an address of the default language or of a collection, so a page can't take over another language's folder.
 - **Unattended installs**: `install-cli.php` runs only from the command line. The provisioning file of a hosting installer (section 3.6) can be written only by someone who can already write to the server's files, holds the password as a hash, is deleted as soon as it is read (also when it is wrong, and on an installed site, where it changes nothing).
 - **Template library**: admins only. The index is signed (Ed25519, the release keys) and a kit's download must match the checksum in it; downloads only from
@@ -1497,6 +1501,9 @@ content in a language the site no longer has ("left out"), and warns when multil
 
 **A page in a language folder answers "not found" (404) on Nginx**
 The rules of section 4.2 treat any folder alike, so a language folder (`/it/…`) works without changes. If you added a rule of your own for the first path segment, let it pass the language codes of the site; a site search or feed in a language is `search-index-<code>.json` and `<collection>/feed.xml` inside the language folder.
+
+**The publish says "Nothing was removed from the site this time"**
+A part of the site could not be published (the message before it says which: collections, listing pages, feeds or redirects; the details are in the server error log). To keep you safe, CanvasCore then leaves every page already online exactly as it is and removes nothing. Find the item or setting the log names (often a block with a value the renderer cannot use, or a missing PHP extension), fix it and publish again: the next whole publish catches up and removes what should go. **"Another publish is running"** means the scheduler, cron or someone else is publishing at that moment: try again in a few seconds.
 
 **A webhook fails, or nobody is added to Mailchimp or Brevo**
 Open *Integrations › Activity*: each delivery shows its result. A webhook needs a public https address that answers with a 2xx code within a few seconds; fix the receiver and use *Send again*.
