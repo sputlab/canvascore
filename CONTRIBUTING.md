@@ -1,7 +1,7 @@
 # Contributing to CanvasCore
 
-Thanks for your interest! CanvasCore is in public preview (`0.x`): bug reports, ideas and pull requests are
-welcome.
+Thanks for your interest! CanvasCore is stable (1.x, long-term support): bug reports, ideas, translations and pull requests are
+welcome. Trying it on your hosting and telling us what went wrong is the most useful thing you can do.
 
 ## Ways to help
 
@@ -10,7 +10,9 @@ welcome.
   For **security problems** follow [SECURITY.md](SECURITY.md) instead: never report them in public.
 - **Suggest a feature**: open an issue describing the problem it solves, or talk about it on
   [Discord](https://discord.gg/sD8KMc2kN) first.
-- **Improve the docs**: the manuals are in [`docs/manuals/`](docs/manuals/).
+- **Improve the docs**: the manuals are in [`docs/manuals/`](docs/manuals/), the step-by-step tutorials in [`docs/tutorials/`](docs/tutorials/) (English and Italian).
+- **Translate the editor**: the interface is one file per language, [`canvascore-frontend/src/i18n/locales/`](canvascore-frontend/src/i18n/locales/) (see section 15 of the Developer Guide). Copy `it.json`, translate the values, keep the `{0}` placeholders.
+- **Try it on your hosting**: install it, build a small site and tell us where it was hard (an *Installation or hosting* issue).
 - **Send code**: see below. For anything bigger than a small fix, open an issue first so we can agree on the
   approach before you spend time on it.
 
@@ -34,13 +36,15 @@ Use `npx vite build --outDir /tmp/cc-dist` instead, and leave `version.json` out
 
 1. Fork the repository and create a branch from `main` with a descriptive name.
 2. Keep each pull request focused on one change. Match the style of the surrounding code (see `.editorconfig`).
-3. **Blocks render twice**: in the editor (`src/render/renderBlock.mjs`) and on the published site
+3. **Formats are stable from 1.0** (the database, page content, backups, API actions; Developer Guide section 14): add, never remove or rename. `npm run test:formats` holds the line.
+4. **Visible text goes through `__("…")`** and needs its Italian translation (`node scripts/i18n.mjs` lists what is missing).
+5. **Blocks render twice**: in the editor (`src/render/renderBlock.mjs`) and on the published site
    (`canvascore-admin/compiler.php`). Any change to a block's output must be made in both, and `npm run test:parity`
    must stay green.
-4. Add or update tests for what you change, and add a line under `[Unreleased]` in
+6. Add or update tests for what you change, and add a line under `[Unreleased]` in
    [docs/CHANGELOG.md](docs/CHANGELOG.md).
-5. Database changes go through a numbered migration in `canvascore-admin/migrations.php` (see the Developer Guide).
-6. Describe what you changed and how you tested it in the pull request.
+7. Database changes go through a numbered migration in `canvascore-admin/migrations.php` (see the Developer Guide).
+8. Describe what you changed and how you tested it in the pull request.
 
 ## License of contributions
 

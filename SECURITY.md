@@ -58,6 +58,10 @@ From 0.26.0 a site can be multilingual (language folders, translations, hreflang
 to take over another language's folder or address, to put script into a page through a language name or code, to run the unattended installer from the web or on a site that is already installed, to make it use or leave behind a password in clear text,
 or to install a site without access to the server's files, is a vulnerability: report it as described below.
 
+## Public demo mode
+
+From 1.1.0 a demo site (`demo.json`) puts itself back to a saved starting point, and its visitors are editors with limits. A way for a demo's visitor to publish when `publish` is not set, to change the shared password or upload files, to run `demo-reset.php` without the token or on a site that is not a demo, or to reach another site through the reset, is a vulnerability: report it as described below.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue, pull request or Discord message for security problems.**

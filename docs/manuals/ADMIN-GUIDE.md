@@ -15,7 +15,7 @@ web root (the folder the domain serves). Replace both with your own values.
 
 1. [Requirements](#1-requirements)
 2. [Folder layout on the server](#2-folder-layout-on-the-server)
-3. [Installation](#3-installation) (the setup wizard, one-click installers and unattended installs)
+3. [Installation](#3-installation) (the setup wizard, one-click installers and unattended installs, a public demo)
 4. [Web server configuration](#4-web-server-configuration) (Apache, Nginx, HTTPS, reverse proxy / CDN)
 5. [Updating to a new version](#5-updating-to-a-new-version) (one-click updates, manual update, rollback)
 6. [Accounts and roles](#6-accounts-and-roles)
@@ -244,6 +244,56 @@ Two ways to run the setup without a browser, both with the checks of the wizard 
 2. **Provisioning file**: write `canvascore-admin/install-provision.json` (`site_name`, `site_url`, `admin_user`, `admin_pass_hash` from PHP's `password_hash()`, `admin_email`, `starter`, `delete_installer`) and request `canvascore-admin/install.php?format=json`: it installs, deletes the file and answers `{"success":true}` or `{"success":false,"message":…}`. If your server can't call itself, the first visit to `install.php` does the same. The file is deleted whether or not it worked, and is never used on a site that is already installed.
 
 Nobody needs the setup key in these cases: the proof of access to the server is that the installer could write the files. Updates after an installation are CanvasCore's own (section 5.1), also on a site that Softaculous installed. Removing the site from Softaculous deletes `canvascore-admin/` and `uploads/`; the published pages in the web root and the data folder (`canvascore-data`, section 2) are left for you to remove.
+
+### 3.5 After installation
+
+The editor is in English or Italian, chosen by each person on the sign-in screen or in the sidebar (section 7.10 is about the languages of the *site*). The setup wizard itself is in English.
+
+1. In **Global Options**, check the site address (needed for RSS feeds and canonical links),
+   the form emails and the session timeout, and set the **Favicon** (it is also shown as the
+   logo on the sign-in screen and in the admin sidebar). If the site is behind a reverse proxy or CDN, fill
+   in **Trusted proxy addresses** (section 4.4). Turn on the **Cookie banner** if the site needs
+   one (section 7.6).
+2. Build your homepage, mark it as Home and click **Publish Site**.
+3. Open `https://example.com/` and check that the page and `https://example.com/sitemap.xml` load.
+4. Make a first backup from the **Backup** page (section 8.1) and set up a server-level backup
+   (section 8.3).
+
+### 3.6 One-click installers and unattended installs
+
+CanvasCore needs no MySQL database and no build step on the server, so a hosting installer only copies the files and hands over four answers (site name, administrator username, password, email). Every release publishes, next to the signed update package (`canvascore-X.zip`, which is also the whole site: unpack it into the web root), two files for hosting companies:
+
+- `canvascore-X-softaculous.zip`: a **Softaculous** script package (install form, `install.php` with `__install()`, removal index and the release archive). Load it into your own Softaculous with *Admin › Add Custom Script*, or submit it to Softaculous, who review and sign the scripts they list. The form asks for the site name, the first homepage (a starter), and the administrator's username, password and email; the site address is the one Softaculous chose.
+- `canvascore-X-installer.json`: a neutral manifest for any other installer (Installatron, Plesk, DirectAdmin, Ansible, shell scripts): requirements (PHP 8.0, `pdo_sqlite`, `dom`, `json`, `session`; no database), the archive with its SHA-256 and signature, the questions and how to run the setup.
+
+Two ways to run the setup without a browser, both with the checks of the wizard (a short password, the username `admin`, a bad address are refused):
+
+1. **Command line**: `CC_ADMIN_PASS='…' php canvascore-admin/install-cli.php --site-name="My site" --admin-user=maria --admin-email=maria@example.com --site-url=https://www.example.com` (also `--starter=<id>`, `--delete-installer`, `--json`). The password comes from the environment, from standard input (`--admin-pass-stdin`) or as a ready hash (`--admin-pass-hash`), never as an argument. Exit code 0 means installed; 1 says why not.
+2. **Provisioning file**: write `canvascore-admin/install-provision.json` (`site_name`, `site_url`, `admin_user`, `admin_pass_hash` from PHP's `password_hash()`, `admin_email`, `starter`, `delete_installer`) and request `canvascore-admin/install.php?format=json`: it installs, deletes the file and answers `{"success":true}` or `{"success":false,"message":…}`. If your server can't call itself, the first visit to `install.php` does the same. The file is deleted whether or not it worked, and is never used on a site that is already installed.
+
+Nobody needs the setup key in these cases: the proof of access to the server is that the installer could write the files. Updates after an installation are CanvasCore's own (section 5.1), also on a site that Softaculous installed. Removing the site from Softaculous deletes `canvascore-admin/` and `uploads/`; the published pages in the web root and the data folder (`canvascore-data`, section 2) are left for you to remove.
+
+### 3.7 A public demo
+
+A site becomes a **public demo** when a file named `demo.json` is in its data folder. Visitors sign in with a shared editor account shown on the sign-in screen, can create a few pages and collection items, and the site **puts itself back to its starting point every few minutes**. No SSH and no cron job are needed. Use a separate installation (for example `demo.example.com`), never a real site. The step-by-step version, with a ready-made demo site to restore, is the [tutorial "Run a public demo"](../tutorials/05-public-demo.md).
+
+`demo.json`:
+
+| Field | Meaning |
+|---|---|
+| `username`, `password` | the login shown on the sign-in screen (the account is an editor; password at least 8 characters) |
+| `resetMinutes` | the reset period, 1 to 60 (default 10) |
+| `maxNewPages`, `maxNewItems` | how many pages and collection items a visitor may create between resets (default 5 each) |
+| `publish` | `true` lets visitors publish the site and schedule publications. **Off by default**: what they write would otherwise be public on the demo's address until the next reset |
+| `resetToken` | optional secret (16 to 128 letters, digits, `-` or `_`) of `canvascore-admin/demo-reset.php`, for a cron service; without it the address answers 404 |
+
+While demo mode is on: password changes and uploads are locked, form emails are not sent, the site is not indexed (`X-Robots-Tag`, `noindex`, `robots.txt`), and updates, packages, the WordPress importer, integrations, popups and the template library are turned off.
+
+**Backup › Public demo** (admins, only on a demo) shows the state and has three buttons: **Make the visitors' account** (creates or refreshes the editor with the password of `demo.json`, already chosen; an administrator account is never touched), **Keep this site as the starting point** (saves `demo-baseline.zip` in the data folder: a backup without version history or form messages), and **Reset now**. A reset restores that backup (pages, items, popups, menu, options, media; the accounts are not in a backup, the site address and the trusted proxies of the server are kept), gives visitors their new pages and items back and publishes the site again.
+
+The reset runs **on the first request of every period** (the editor, its sign-in screen), so a demo with visitors resets itself; the periods are the same ones the countdown shows (every `resetMinutes` minutes from the start of the hour). Two resets never run at once. The first time, with no record of a reset, the site as it is counts as the starting period and is not wiped. If there is no starting point yet, the reset says so and changes nothing. To change the demo, remove `demo.json`, edit as an administrator, save a new starting point and put the file back.
+
+
 
 ---
 
@@ -964,7 +1014,7 @@ A backup contains:
 
 - pages (live versions and their unpublished draft copies), collections and their items,
   templates, masters, popups, the global header and footer, and redirects;
-- Global Options (`settings.json`, including form emails, the session timeout and the languages of a multilingual site), the menu,
+- Global Options (`settings.json`, including form emails, the session timeout and the languages of a multilingual site; a restore keeps the site address and the trusted proxies of the server it is restored on), the menu,
   and the media library data (`media.json`: descriptions, sizes, folders; `media-folders.json`);
 - every uploaded file in `uploads/` (images, audio and video), including the optimized copies in `uploads/_cc/`;
 - optionally, **version history** ("Include the version history of pages and items") and
@@ -1504,6 +1554,9 @@ The rules of section 4.2 treat any folder alike, so a language folder (`/it/…`
 
 **The publish says "Nothing was removed from the site this time"**
 A part of the site could not be published (the message before it says which: collections, listing pages, feeds or redirects; the details are in the server error log). To keep you safe, CanvasCore then leaves every page already online exactly as it is and removes nothing. Find the item or setting the log names (often a block with a value the renderer cannot use, or a missing PHP extension), fix it and publish again: the next whole publish catches up and removes what should go. **"Another publish is running"** means the scheduler, cron or someone else is publishing at that moment: try again in a few seconds.
+
+**The demo does not reset**
+Open **Backup › Public demo**: it says when the last reset ran and what it said. *No starting point yet* means you have not pressed **Keep this site as the starting point**. A reset happens on the first visit of each period, so a demo nobody opens waits (set `resetToken` and call `demo-reset.php`, section 3.7, if you want it exact). Check that the data folder is writable and that `demo-baseline.zip` is there.
 
 **A webhook fails, or nobody is added to Mailchimp or Brevo**
 Open *Integrations › Activity*: each delivery shows its result. A webhook needs a public https address that answers with a 2xx code within a few seconds; fix the receiver and use *Send again*.

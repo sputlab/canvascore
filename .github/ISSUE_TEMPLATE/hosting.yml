@@ -1,0 +1,24 @@
+name: Installation or hosting problem
+description: The installer, a hosting panel, Softaculous, an update or the server check gave you trouble
+labels: [hosting, install]
+body:
+  - type: input
+    id: version
+    attributes: {label: CanvasCore version}
+    validations: {required: true}
+  - type: dropdown
+    id: how
+    attributes:
+      label: How did you install it?
+      options: [Setup wizard (install.php), Softaculous, Command line (install-cli.php), A one-click update, Something else]
+    validations: {required: true}
+  - type: input
+    id: host
+    attributes: {label: Hosting and control panel, description: "For example a cPanel shared hosting, Plesk, a VPS with Nginx"}
+  - type: input
+    id: php
+    attributes: {label: PHP version, description: "And which of pdo_sqlite, dom, zip, sodium, gd, curl, mbstring are missing, if the server check said so"}
+  - type: textarea
+    id: what
+    attributes: {label: What happened, description: "The message you saw, and the line of the PHP error log if you can find it. Never paste passwords or the setup key."}
+    validations: {required: true}

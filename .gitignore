@@ -27,6 +27,7 @@
 !/canvascore-frontend/
 !/installers/
 !/demo/
+!/.github/
 # A page or collection with the slug "docs" would be published in here
 /docs/**/index.html
 # Internal dev notes (phase notes, old release notes): kept locally, not published
