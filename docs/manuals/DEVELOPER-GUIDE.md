@@ -103,6 +103,8 @@ canvascore-frontend/         React editor
 | `update-keys.php` | The public keys (Ed25519) that releases are signed with; the private key is never in the repository |
 | `blockdef.php` | The PHP engine of the shared block definitions: setting cleaning, the template language, transforms, behaviour scripts (section 5) |
 | `popups.php`, `popups.css`, `popups.js` | Popups: settings and display rules (`cc_popup_settings_clean()`, `cc_popup_applies()`), the markup written into published pages (`cc_popups_html()`), its style sheet and the ES5 runtime (section 7) |
+| `languages.php` | Multilingual sites: the language settings (`cc_lang_config_clean()`, `cc_lang_cfg()`), a page's or item's language (`cc_lang_of()`, `cc_lang_prefix()`), the context of the page being published, the hreflang links and the Language Switcher renderer (section 7) |
+| `installlib.php`, `install-cli.php` | The installation itself, shared by `install.php`, the command line and hosting installers (`cc_install_validate_fields()`, `cc_run_install()`, `cc_install_unattended()`, the provisioning file); `install-cli.php` is the CLI front (section 7) |
 | `integrations.php` | Integrations: the settings file with its cleaners, the outgoing HTTP call, signed webhooks, Mailchimp and Brevo, the analytics snippet, Stripe payment links, the activity log (section 7) |
 | `library.php` | The template library: the signed index, kit reading and checks, cleaning, installing and undo (sections 7 and 8.4) |
 | `roles.php` | Roles and review: what each role may do, ownership, per-collection access and the review flow (section 7) |
@@ -127,7 +129,8 @@ canvascore-frontend/         React editor
 | `scripts/bump.mjs` | `prebuild` hook: increments `build` in `version.json`, syncs `package.json` version |
 | `scripts/library-kit.php`, `scripts/library-index.php` | Template library tools: `library-kit.php check` or `pack <folder>` for kit authors; `library-index.php --key … --kits … --base-url …` builds and signs the index (section 8.4) |
 | `scripts/block-package.php` | Developer tool for block packages: `check <folder or zip>` runs the install checks, `pack <folder>` makes the ZIP (section 8.3) |
-| `scripts/release-keygen.php`, `scripts/release-package.php` | Release tooling: make the signing key pair; pack and sign the update package of a release (section 13) |
+| `scripts/release-keygen.php`, `scripts/release-package.php` | Release tooling: make the signing key pair; pack and sign the update package of a release (section 13); `--installers` also makes the hosting-installer packages |
+| `scripts/installer-package.php` | Makes `canvascore-<version>-softaculous.zip` (from `../installers/softaculous/`, with the starters as the homepage choices) and `canvascore-<version>-installer.json` from the release archive (section 7) |
 | `.oxlintrc.json` | Lint config (react + oxc plugins) |
 | `src/main.jsx` | Entry: imports `apiClient.js` first (installs the fetch guard), then the CSS and `<App />`; refuses to render inside a frame (`window.top !== window.self`) |
 | `src/App.jsx` | Auth gate, view switch (`currentView`), overlays (session, drafts, toasts, dialogs) |
@@ -162,6 +165,7 @@ canvascore-frontend/         React editor
 | `src/components/ReviewQueue.jsx`, `ReviewBar.jsx`, `CollectionAccess.jsx` | Reviews / My submissions; the review banner of the page editor; Collections › Who can work here |
 | `src/components/ImageTools.jsx`, `src/editor/imageTools.js`, `mediaActions.js` | The media library's Crop and Focal point dialog and its pure maths (frame, handles, aspect, focal point); an image from a web address |
 | `src/components/Popups.jsx`, `src/components/panel/PopupSettings.jsx`, `src/components/PopupPreview.jsx`, `src/editor/popups.js` | Content › Popups: the list; the settings panel of a popup open in the editor (look, triggers, display rules); the preview (`popups.css` through `__POPUPS_CSS__`); the defaults, the words that sum a popup up, the starters |
+| `src/components/Languages.jsx`, `src/components/panel/LanguageSection.jsx`, `src/components/panel/blocks/LanguageSwitcherPanel.jsx`, `src/editor/languages.js` | Administration › Languages; the Language section of Page Settings (translations, Translate, Unlink); the switcher's panel; the pure helpers shared by the screens (`langOf`, `pagePath`, `pageFile`, `pageLink`, `translationsOf`, `missingLanguages`), the twin of `languages.php` |
 | `src/components/Integrations.jsx` | Administration › Integrations: the Webhooks, Newsletter, Analytics, Stripe and Activity tabs; keys are only typed in, never shown |
 | `src/components/TemplateLibrary.jsx` | Administration › Template library: cards, filters, the install dialog, results, installed kits and Restore |
 | `src/components/BlockPackages.jsx`, `src/editor/blockPackages.js` | Administration › Block packages; and the editor side of packages: `registerPackages()` registers their definitions, catalog entries and CSS, `loadBlockPackages()` fetches `pkg_list` after sign-in |
@@ -171,7 +175,7 @@ canvascore-frontend/         React editor
 | `src/session/` | Session manager, fetch guard, local draft backups and trackers |
 | `src/ui/` | UI kit (`kit.jsx`, `kit.css`), `global.css`, `notify.js` + `toast.jsx`, `dialog.js` + `dialogHost.jsx`, `branding.js` (`useBrandingHead()`, `brandIconUrl()`) + `BrandLogo.jsx` (site favicon as the admin logo) |
 | `src/menu/menuThemes.js` | Menu defaults, themes, effect groups (mirrored in `compiler.php`) |
-| `tests/` | The 13 test suites (11 Node, plus `server.php` and `security.php` in PHP) and the `render_php.php` / `render_php_list.php` / `render_def.php` / `render_menu.php` / `render_popups.php` CLI helpers |
+| `tests/` | The 15 test suites (12 Node, plus `server.php`, `security.php` and `installers.php` in PHP) and the `render_php.php` / `render_php_list.php` / `render_def.php` / `render_menu.php` / `render_popups.php` CLI helpers |
 
 ## 3. Local development
 
@@ -244,7 +248,7 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 
 ### Tests
 
-`npm test` runs the 13 suites in sequence (each exits non-zero on failure):
+`npm test` runs the 15 suites in sequence (each exits non-zero on failure):
 
 | Script | File | Covers |
 | --- | --- | --- |
@@ -257,6 +261,7 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 | `test:starters` | `tests/starters.mjs` | `starters.json`: known types, real content fields, unique ids, renders in JS and PHP |
 | `test:menu` | `tests/menu.mjs` | Menu effect catalog in sync with `compiler.php`, every theme/effect rendered by PHP, escaping |
 | `test:popups` | `tests/popups.mjs` | The popup runtime (`canvascore-admin/popups.js`) in jsdom on the HTML the real PHP writes (`render_popups.php`), with a fake clock: every trigger (time, scroll, exit intent, a click), the rules (devices, visitors, schedule, frequency), closing, the focus trap, one popup at a time, the cookie banner, a form sent in a popup |
+| `test:languages` | `tests/languages.mjs` | The Languages screen, the Language section of Page Settings, the lists' language filter and Translate buttons, the switcher panel and the helpers of `editor/languages.js`, mounted in jsdom; the PHP side is in `server.php` and `security.php` (LANGUAGES) |
 | `test:rich-text` | `tests/rich-text.mjs` | Paste cleanup, in-place editing keeps layout, toolbars, tidy on blur |
 | `test:ui` | `tests/ui-shell.mjs` | Sidebar, Pages screen, editor top bar and shortcuts, Add panel, property tabs, effects, Layers, dialogs, media library (folders, selection, uploads), site branding and About, Backup page, Collections (rename, bulk actions) |
 | `test:server` | `tests/server.php` (`php tests/server.php`) | Server helpers through the real PHP code: security helpers (rich-text styles and links, `cc_sanitize_blocks`, active URLs, reserved slugs, redirect targets, CSS colors/lengths, image URLs, `build_inline_style`), migration 8 on an old database (default account removed, installed flag, stored rich text cleaned, `session_gen` and unique names), code surfaces kept on editors' saves, re-linking after a slug change, client IP behind trusted proxies, SVG upload check, sanitizer, `cc_int`, slider arrows and reduced motion, form fallbacks and field types, revision history, image copies and `srcset`, redirects (chains, loops, `.htaccess` block, redirect page), cookie banner, Site Search block, public branding, media folders and image usage, backup and restore (contents, refused files, newer versions, safety copies), deleted collections and items going offline |
@@ -314,6 +319,8 @@ the web root can be written. It contains:
 | `canvascore.sqlite` | All structured content (tables below) |
 | `settings.json` | Global Options: `brandColor`, `fontFamily`, `siteName`, `siteSuffix`, `siteUrl`, `faviconUrl`, `defaultOgImage`, `robotsAllow`, `menuInheritTheme`, `headerEnabled`, `footerEnabled`, `cookieBanner` (`{ enabled, text, acceptLabel, declineLabel, privacyLabel, privacyUrl, position }`), `adminEmail`, `emailFrom`, `emailSubject`, `sessionTimeoutMinutes`, `trustedProxies` (the last five are admin-only: `get_settings` leaves them out for editors and an editor's save keeps the stored values) |
 | `menu.json` | `{ "items": [...], "settings": {...} }`, nested items (`children`), legacy flat format still read |
+| `settings.json` › `languages` | `{ enabled, default, list: [{ code, name }], strings: { code: { announcement, cookie } } }`: changed only by `save_languages` (`cc_lang_config_clean()`); `save_settings` always keeps the server's copy. At most 12 languages |
+| `pages.lang`, `pages.trans_group`, `collection_items.lang`, `collection_items.trans_group` | Migration 17. `lang` is a code, `''` = the default language; `trans_group` (`tg_<hex>`, `''` = none) is shared by the translations of one page or item |
 | `popups` (table) | Popups: `id` (`pop_` + hex), `name`, `status` draft or published, `content_json` (the blocks), `settings_json` (look, triggers, rules: always passed through `cc_popup_settings_clean()`), `created_by`, `created_at`, `updated_at` (migration 16; in site backups) |
 | `integrations.json` | Integrations (0600): `webhooks` (id, name, url, enabled, forms, secret), `mailchimp` and `brevo` (enabled, api_key, list_id, forms; double_optin), `analytics` (provider and ids, consent), `stripe` (api_key, links). Written by `cc_int_save()`; only masked copies reach the editor (`cc_int_public()`). Not in a backup |
 | `forms.json` | Written by each publish: form id → `{ to, labels, success, type, meta }` (recipient, field labels in order, success message; `type` form, newsletter or wizard; `meta` = the positions of the first `email`, `name` and `consent` fields), so addresses never reach the client and `submit_form.php` accepts only `field_0…field_N-1` with those labels. Older registries (id → recipient string) are still read |
@@ -441,13 +448,13 @@ undoable change.
 
 `api.php` runs `cc_migrate($pdo)` and `cc_migrate_content($pdo)` on every request (`migrations.php`).
 
-**DB schema** (currently 16; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
+**DB schema** (currently 17; 6 = `page_revisions`, 7 = `redirects` + `pages.noindex`, 8 = security: `admin.session_gen`,
 unique user names, old default account removed, pre-wizard sites marked installed, stored content sanitized, 9 = custom
 fields (`collections.fields`, `collection_items.field_values`), 10 = structured data (`collections.schema_json`), 11 = the
 collection design (`collections.design_json`), 12 = categories and tags (`collection_taxonomies`, `collection_terms`,
 `collection_items.terms_json`), 13 = listing and archives (`collections.archive_json`), 14 = scheduled publishing
 (`publish_at` / `unpublish_at` on pages and items), 15 = roles and review (`created_by` and the review columns on pages and
-items, `collections.access_json`), 16 = the `popups` table): add a numbered closure
+items, `collections.access_json`), 16 = the `popups` table, 17 = `lang` and `trans_group` on pages and items): add a numbered closure
 to `cc_db_migrations()`, then bump `db_schema` in `version.json` and note it in the CHANGELOG. Each migration
 runs once, in order, in a transaction, and the number is recorded in `cc_meta`.
 
@@ -884,6 +891,29 @@ editor like a page (`activePage.__popup`, saved by `VisualEditor` to `save_popup
 decides in the browser what the server cannot: devices (≤ 767 px mobile, ≤ 1024 px tablet), new or returning (`localStorage.cc_visited`), the schedule (the visitor's date), and the frequency (`localStorage.cc_popup_<id>` = `{ t, c }`, `sessionStorage` for "session"), then arms the
 triggers: `setTimeout`, a `scroll` listener, `mouseout` through the top edge (armed after 2 s; skipped when `(pointer: coarse)`) and clicks on `#popup-<id>` or `[data-cc-popup-open]`. One popup at a time (`shown`), the lowest `prio` first, deferred while `#cc-consent` is visible; it traps Tab in a
 dialog, closes on Esc / overlay / the close button and gives the focus back; a `submit` inside a popup records `c: 1`. `tests/popups.mjs` runs it with a fake clock; `tests/server.php` (POPUPS) covers the settings, the rules and the markup, and `tests/security.php` the whole flow over HTTP.
+
+### `languages.php` (multilingual sites)
+
+Loaded by `compiler.php` (so every front: `api.php`, `publish.php`, `rebuild_all.php`, `cron.php`). The default language is published at the root, every other one in `/<code>/…`; an empty `lang` means the default.
+
+| Function | What it does |
+| --- | --- |
+| `cc_lang_config_clean($raw)` / `cc_lang_config()` / `cc_lang_cfg()` | The only way the settings are stored or read (codes `xx` or `xx-yy`, names, the default, per-language texts for the announcement and the cookie banner, at most `CC_LANG_MAX` = 12). `cc_lang_cfg()` is cached by the hash of `settings.json`. `cc_lang_active()` is true with `enabled` and at least two languages |
+| `cc_lang_norm()`, `cc_lang_of()`, `cc_lang_known()`, `cc_lang_prefix()`, `cc_lang_tag()`, `cc_lang_name()` | The default becomes `''`, an unknown code `''`; `cc_lang_of` gives the default's code for an unmarked page; the folder (`it/`); the code as browsers write it (`pt-BR`) |
+| `cc_lang_folder_taken($slug)` | Is the address a language's folder? (refused for the default language's pages and for collections) |
+| `cc_lang_context()` | Set by `cc_publish_site()` around each page: `{ lang, self, alternates, cfg }`; read by the compiler (links, lists, the switcher) |
+| `cc_lang_filter_items()` | The lists on a page (Collection List, Related Items, related tags) show only the items in the page's language |
+| `cc_hreflang_html()` | The `<link rel="alternate" hreflang>` tags, `x-default` included |
+| `cc_render_language_switcher()` | The PHP renderer of the `LANGUAGE_SWITCHER` block (a list or a `<select>`; a language without a translation links to its published home, or is left out). The JS renderer returns `''` and the canvas draws a preview (`data-cc-lang-preview`) |
+| `cc_lang_override()`, `cc_lang_home()` | The per-language texts over the site's; the home of the language being published (used by `cc_block_url()`, `cc_menu_url()` and the definitions' index links) |
+
+**Slugs are owned per language**: `cc_slug_owner($pdo, $slug, $except_page, $except_collection, $lang)` takes a language (`null` = any, used for collections); home pages (`apply_home`) and redirects (`relink_slug_change($prefix, $new_prefix)`) are per language too. API: `get_languages` (everyone signed in; texts only for admins), `save_languages` (admins; refuses an enabled site with fewer than two languages and reports `clash`, language folders already in use), `translate_page` and `translate_item` (`{ id, lang }`: a draft copy in the group, a free slug `base`, `base-<code>`, then numbered; the source's home flag moves only to a language with no home), `unlink_translation` (`{ kind, id }`), and the `lang` field of `save_page` and `save_item` (locked while grouped). `site_parts` rows `header:it` / `footer:it` hold per-language header and footer (`save_part` and `delete_part` take `lang`), and `menu.json` keeps `langs[code].items`.
+
+`publish.php` loops over the languages: per language the menu, header and footer (rendered per page when they hold a `LANGUAGE_SWITCHER`), the home, the listing and archive pages, taxonomy pages and feeds (keyed by collection and language), `search-index-<code>.json`, and the cookie banner and announcement texts; `$finish()` adds `<html lang>`, hreflang, `og:locale`; the sitemap has `xmlns:xhtml` alternates. Content in a language the site lacks is skipped and counted in the result; multilingual with no site address adds a warning. `popups.php` has a `rules.language` that `cc_popup_applies()` checks against `$ctx['lang']`. Tests: `tests/server.php` and `tests/security.php` (LANGUAGES), `tests/languages.mjs`.
+
+### `installlib.php` and `install-cli.php` (installation)
+
+`install.php` draws the wizard; the installation itself is in `installlib.php`: `cc_install_state()`, `cc_install_validate_fields()` (all the answers; a password is `admin_pass` or an `admin_pass_hash` from `password_hash()`), `cc_install_validate()` (the wizard's, with the setup key), `cc_run_install()` (schema, account, first homepage, settings, in one transaction) and `cc_install_unattended($answers)`: the same without a browser, under the install lock, returning `{ success, message, errors }` (never signs anyone in, never prints). `install-cli.php` is its command-line front (`PHP_SAPI === 'cli'` only; the password from `CC_ADMIN_PASS` or standard input). A hosting installer without a shell writes `canvascore-admin/install-provision.json`; `install.php` calls `cc_install_from_provision()` first thing: it deletes the file whatever happens, installs only a fresh site, and with `?format=json` answers `{ success, message, errors }` (409 on failure) instead of the page. `scripts/installer-package.php` builds the Softaculous package from `installers/softaculous/` (its `install.php` writes the provisioning file with a hashed password and calls `install.php?format=json`) and the neutral `canvascore-<version>-installer.json`; `tests/installers.php` runs all of it on copies of the site and PHP's built-in server.
 
 ### `integrations.php` (integrations)
 
@@ -1420,6 +1450,8 @@ Recently added actions:
 | `media_import_url` | POST `{ url, folder }` | Downloads an image into the library (the importer's downloader); not in the demo. `save_media_meta` also takes `focal` (`{ x, y }` or `null`) and `get_media` returns it |
 | `get_popups` / `get_popup` | GET / GET `?id=` | Everyone signed in: the list (`id, name, status, blocks, settings`) and one popup (`content_json`, `settings`; an editor gets the content with admin code redacted) |
 | `save_popup` / `delete_popup` | POST | Editors and admins (not authors or reviewers; not in the demo). `save_popup` takes `{ id?, name, status, blocks, settings }`, checks the settings, refuses publishing a popup with no blocks (`code: empty`) and returns `{ id, status }`; at most 30 popups |
+| `get_languages` / `save_languages` | GET / POST | Everyone signed in reads `{ languages, active, max }` (the per-language texts only for admins); `save_languages` is admins only and answers `{ languages, clash }` |
+| `translate_page` / `translate_item` / `unlink_translation` | POST | Create a draft translation `{ id, lang }` (returns `page` or `item`); take a page or item out of its group `{ kind, id }`. Reviewers cannot translate; authors only their own |
 | `integrations_get` | GET | Admins: `{ config (masked), log (latest 60 deliveries), forms (from forms.json), demo, curl }` |
 | `integrations_save` | POST `{ section, data }` | Admins, not in the demo: `section` webhooks (a list; returns `new_secrets` once), mailchimp, brevo, analytics or stripe_key |
 | `integrations_test` / `integrations_rotate_secret` / `integrations_resend` / `integrations_log_clear` | POST | Admins: send a sample webhook or test a service's list; make a new webhook secret (returned once); send a failed delivery again; clear the log |
@@ -1507,6 +1539,7 @@ Cutting a release:
    npx vite build --outDir /tmp/cc-dist --emptyOutDir          # the editor, without bumping the build number
    php scripts/release-package.php --key=$HOME/.canvascore/release-signing.key --dist=/tmp/cc-dist --out=/tmp/cc-release
    ```
+   Add `--installers` to also build `canvascore-<version>-softaculous.zip` and `canvascore-<version>-installer.json` (from `installers/`); attach them to the release too.
    It packs the tracked files of `canvascore-admin/` and the built editor into `canvascore-<version>.zip`, runs the checks a
    site makes before installing (paths, required files, version), signs it and verifies the signature
    (`canvascore-<version>.zip.sig`). It refuses a key that is not in `update-keys.php`.

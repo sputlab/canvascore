@@ -49,6 +49,12 @@ is a vulnerability: report it as described below.
 From 0.25.0, editors and admins can build popups that are written into published pages. A way to get script or any code into a page through a popup (its name, its settings, its blocks), to publish
 a popup that is not published, to change popups as an author or a reviewer, or to make the popup runtime do anything but show and hide the popup, is a vulnerability: report it as described below.
 
+## Languages and installers
+
+From 0.26.0 a site can be multilingual (language folders, translations, hreflang links) and CanvasCore can be installed without a browser (`install-cli.php`, a provisioning file used by hosting installers). A way to change the languages as anyone but an admin,
+to take over another language's folder or address, to put script into a page through a language name or code, to run the unattended installer from the web or on a site that is already installed, to make it use or leave behind a password in clear text,
+or to install a site without access to the server's files, is a vulnerability: report it as described below.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue, pull request or Discord message for security problems.**

@@ -25,9 +25,11 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 - **Publishing**: a static site of HTML files, with RSS feeds, a sitemap, a search index with filters, redirects, scheduled
   publishing (a page or item goes live and comes down at a time; `cron.php` for sites nobody edits), and images
   optimised to WebP with responsive sizes.
+- **Multilingual sites**: translated pages and collection items in a folder per language, a Language Switcher block, per-language menus, header, footer, search and feeds, and hreflang links and sitemap alternates in published pages.
 - **Popups**: a popup builder with triggers (time, scroll, exit intent, a link) and display rules (pages, devices, visitors, schedule, frequency).
 - **Integrations**: webhooks for forms (signed), Mailchimp and Brevo sign-ups with consent, Google Analytics, Plausible or Matomo, and Stripe
   payment links with a Payment Button block.
+- **One-click installers**: an unattended installer (command line or provisioning file) and ready packages for Softaculous and other hosting installers, made with every release.
 - **Template library**: install starter pages, sections and whole-site kits shared by the community, from a signed library, as drafts you can edit
   (a kit cannot bring code).
 - **Roles and review**: authors write and submit for review, reviewers approve or send back with a note, editors publish directly, and a
@@ -64,9 +66,12 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 │   ├── library.php        Template library: signed index, kit checks and cleaning, installs
 │   ├── integrations.php   Webhooks, newsletter services, analytics and Stripe payment links
 │   ├── popups.php         Popups: settings, rules, the markup written into published pages (popups.css, popups.js)
+│   ├── languages.php      Multilingual sites: language settings, language of a page or item, hreflang, the Language Switcher
 │   ├── blocks/            One definition per block (settings, template, panel), read by PHP and the editor
 │   ├── submit_form.php    Public endpoint for form submissions
 │   ├── install.php        Setup wizard with setup key (delete after use)
+│   ├── installlib.php     The installation itself, shared by the wizard, `install-cli.php` and hosting installers
+│   ├── install-cli.php    Command-line installer (no questions asked)
 │   ├── config.php         Session, CSRF, data dir, security headers, HTML/SVG sanitizers
 │   ├── migrations.php     DB schema and content migrations
 │   ├── blocks.json        Block defaults (shared with the editor)
@@ -111,6 +116,8 @@ npm run build      # build into dist/ (increments the build in canvascore-admin/
    a homepage from a starter, deletes the key file and leaves you signed in to the editor.
 5. Delete `install.php` (the wizard offers a button for it). Once installation is complete the
    file locks itself anyway.
+
+No browser? `php canvascore-admin/install-cli.php --help`; hosting installers get ready packages (see `installers/`).
 
 There is no default account: until the wizard has run, the editor's sign-in screen points to `install.php`.
 

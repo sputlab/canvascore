@@ -20,7 +20,8 @@ CanvasCore is where you build and update your website. You put pages together fr
 12. [Global Options](#12-global-options)
 13. [Administration (admins only)](#13-administration-admins-only)
 14. [Popups](#14-popups)
-15. [Good to know and troubleshooting](#15-good-to-know-and-troubleshooting)
+15. [Languages](#15-languages)
+16. [Good to know and troubleshooting](#16-good-to-know-and-troubleshooting)
 
 ---
 
@@ -75,7 +76,7 @@ Every screen except the page editor has a sidebar on the left. On a narrow scree
 - **Publish Site**: rebuilds and publishes the whole site (see [Publish vs Publish Site](#publish-vs-publish-site)).
 - **Content**: **Pages**, **Collections**, **Reviews** (for authors: **My submissions**), **Templates**, **Popups**, **Media**. Authors and reviewers do not see Templates, or the Site group (Menu, Global Options).
 - **Site**: **Menu**, **Global Options**.
-- **Administration** (admins only): **Submissions**, **Accounts**, **Backup**, **Updates**, **Block packages**, **Template library**, **Integrations**, **Import from WordPress**.
+- **Administration** (admins only): **Submissions**, **Accounts**, **Backup**, **Updates**, **Block packages**, **Template library**, **Integrations**, **Languages**, **Import from WordPress**.
 
 At the bottom you see your name, your role, two icons (the key, **Change your password**, and the arrow leaving a box, **Log out**) and the CanvasCore version. The **ⓘ** next to the version opens **About CanvasCore**: the version and build, and links to the CanvasCore website, the source code on GitHub, the Discord community, the address for bugs and suggestions (bug@sputlab.com) and the donation page. If it says "Editor v… / server v…: reload the page after updating", CanvasCore was just updated. Reload the page in your browser.
 
@@ -1062,6 +1063,7 @@ These sections appear under **Administration** in the sidebar only for admins. D
 - **Block packages**: **Choose a package (.zip)…** adds blocks made by other people; they appear in the Add tab under **Block packages** and work like any other block (Content, Style and Advanced tabs, copy, templates). The page lists what is installed, with an **On** switch (off: the blocks leave the Add tab and the published pages, but stay saved in your pages) and **Remove**, which first tells you how many pages use the package's blocks. A package cannot run code and is checked before it is installed, but install packages only from people you trust. Packages are not part of a backup: keep the `.zip` files.
 - **Import from WordPress**: brings pages, posts, categories, tags and pictures over from a WordPress site. In WordPress choose **Tools › Export › All content** and keep the `.xml` file, then **Choose the export (.xml)…**: you see how much it holds (nothing changes yet), tick **Pages**, **Posts** (into a new collection or an existing one) and **Pictures**, and **Start the import**. Everything arrives as **drafts** (tick it off to import published entries as published, optionally forwarding the old addresses), so you can open each page and post, check it and publish when you are happy. Nothing you already have is changed or deleted. The report at the end lists what was left out or could not be copied (for example a contact-form shortcode or a picture that could not be downloaded). Menus are not imported: build yours in **Menu**.
 - **Integrations**: connect the site to other services (admins). **Webhooks** send each form submission to an address of your own; **Newsletter** adds people who sign up (with their consent) to Mailchimp or Brevo; **Analytics** adds Google Analytics, Plausible or Matomo to every page (the first two cookie-based ones wait for the cookie banner's Accept); **Stripe** keeps the payment links for the **Payment Button** block, which you can create there with a Stripe key or add by their address. **Activity** lists what was sent and lets you send a failed one again. After changing Analytics, publish the site.
+- **Languages**: publish the site in several languages: the list of languages, the default one and the texts per language (see [Languages](#15-languages)).
 - **Template library**: browse and install starter pages, sections and site kits (see [The online template library](#the-online-template-library-admins)); **Install from a file…**, **Refresh**, and **Restore the previous design** after a site kit.
 - **Updates**: **Check for updates** looks for a newer CanvasCore release on GitHub and shows its version and release notes. **Update to …** downloads it, checks its signature, saves a backup (a safety copy of the content, the database and the code), installs it and checks that it starts; if any check fails, the previous version is put back and the page says why. Keep the page open while it works (about a minute), tell the other people in the editor to save first, then click **Reload the editor** and **Publish Site**. The page also lists what the server needs and the history of the updates. Details and what to do when an update is refused are in the [Administrator Guide](ADMIN-GUIDE.md#5-updating-to-a-new-version).
 
@@ -1114,7 +1116,48 @@ What a popup remembers (that it was shown, when, and that it was answered) is ke
 - A bar across the bottom is gentler than a dialog for announcements.
 - Test the rules in a private window (it forgets what was shown), and remember to publish the site after any change.
 
-## 15. Good to know and troubleshooting
+## 15. Languages
+
+A site can be published in **several languages**. An administrator sets it up once (see below); after that, every page and every collection item can have **translations**: separate pages, each with its own address, texts and search engine details, linked together so that visitors (and search engines) can move between them.
+
+### Switching it on (admins)
+
+1. Open **Languages** under **Administration**, tick **This site is multilingual**, and add the languages (at most 12): choose from the list, or add any other with its code (`sq`, `pt-br`) and its name as the language writes it.
+2. Choose the **default language**: the one the site is written in now. It stays where it is (`/about/`); each other language gets a folder of its own (`/it/chi-siamo/`) and its own home page (`/it/`).
+3. Optionally fill **Texts per language**: the announcement bar and the cookie banner are set once in Global Options, and a field filled here replaces it in that language (a field left empty keeps the site's text).
+4. **Save languages**, and **Publish Site** when you want the change online. Nothing changes on a site until at least two languages are added and the box is ticked. All your existing pages stay in the default language.
+
+If the site address (Global Options) is empty, the screen warns you: search engines need absolute addresses for the hreflang links.
+
+### Translating a page or an item
+
+- In **Pages** (and in a collection's list), each row shows its language and its translations as small badges, and a **+ IT**-style button for each language it lacks. Click it: a **draft copy** is made in that language, with the same blocks and settings and an address of its own (`about`, then `about-it`…), and it opens for you to write over. The list can be filtered by language.
+- In **Page Settings** (and in an item's settings), the **Language** section tells which language the page is written in, lists its translations (click one to open it) and has **Translate into …** buttons. Save first: a translation starts from the saved version.
+- A page that has translations keeps its language. **Unlink from its translations** takes it out of the group (the pages stay as they are, but are no longer offered as each other's translation).
+- An address can be used once **per language**: `/about/` and `/it/about/` can both exist. The default language can't use another language's folder name (`it`), and a collection can't either.
+- Each language has its own **home page**: mark one page per language as Home. When you translate the home page, the translation becomes the home of its language if that language has none.
+- A translation made by an author is theirs to edit; reviewers cannot translate. The review flow works as for any page.
+
+### What each language gets
+
+- **Menu**: in the Menu Builder choose **Menu for** a language, and either start from the default menu or build its own. A language without its own menu uses the default one. Links to "Home" go to the home page of the language being published.
+- **Global header and footer**: Global Options lets you pick the language of a header or footer; one without a version in a language uses the default one.
+- **Collections**: listing pages, archives, categories, tags and RSS feeds are made per language (`/it/blog/`, `/it/blog/feed.xml`). Collection, category and tag **names** are not translated; the lists on a page (Collection List, Related Items) show only the items in the page's language.
+- **Site Search** searches only the pages of the visitor's language.
+- **Popups** can be limited to one language (Display rules › **Language**).
+- **Search engines**: every page gets `<html lang>`, `hreflang` links to its translations (and itself), an `x-default`, its own canonical address and `og:locale`; the sitemap lists the alternates.
+
+### The Language Switcher block
+
+Add the **Language Switcher** block (see the [Block Reference](BLOCK-REFERENCE.md#language-switcher)) to the global header to have it on every page, or to any page. It shows the languages of the site as a row of links or a drop-down; each goes to the translation of the page being viewed, or to that language's home page when the page has no translation there (a language with no published home page is left out).
+
+### Good to know
+
+- **Removing a language** stops publishing its pages and items (they stay in the editor, and come back if you add the language again). The publish result says how many were left out.
+- **Not translated yet**: the "not found" page (one for the whole site), the labels on listing pages ("Sort", "Years"…), and the names of collections and categories.
+- Switching **multilingual off** publishes only the default language, as before.
+
+## 16. Good to know and troubleshooting
 
 **My changes aren't on the live site.**
 You probably saved a draft. Open the page and click **Publish**. In the page list, **Modified** means there are saved changes that aren't online yet. For archive changes, moved or deleted collection items, a renamed collection, a changed global master or new redirects, click **Publish Site**.
@@ -1124,6 +1167,12 @@ The image was probably deleted from the Media Library, or its address was typed 
 
 **The sidebar or sign-in screen shows the default icon instead of my favicon.**
 The favicon address in **Global Options** is empty, or the image can't be loaded (deleted, or a wrong address). Choose it again with **Upload image** or **Library** and click **Save & Publish**.
+
+**A translation doesn't show, or the switcher lacks a language.**
+Publish the site after translating. A translation is online only when it is **published**; a language with no published page of its own sends the switcher to that language's home page, and is left out when it has no published home page either. Check also that the language is still in **Administration › Languages**.
+
+**I can't use an address I want in another language.**
+An address is free per language, but the default language can't use a folder name that belongs to another language (`it`), and a collection can't either. Choose another address.
 
 **Some collection items were "skipped" when moving them.**
 The destination collection already has a published item with the same URL slug (or the item was already there). Change the slug of one of them, then move it again.

@@ -15,11 +15,11 @@ web root (the folder the domain serves). Replace both with your own values.
 
 1. [Requirements](#1-requirements)
 2. [Folder layout on the server](#2-folder-layout-on-the-server)
-3. [Installation](#3-installation)
+3. [Installation](#3-installation) (the setup wizard, one-click installers and unattended installs)
 4. [Web server configuration](#4-web-server-configuration) (Apache, Nginx, HTTPS, reverse proxy / CDN)
 5. [Updating to a new version](#5-updating-to-a-new-version) (one-click updates, manual update, rollback)
 6. [Accounts and roles](#6-accounts-and-roles)
-7. [Publishing](#7-publishing) (what a publish writes, redirects, RSS, site search, cookie banner, images)
+7. [Publishing](#7-publishing) (what a publish writes, redirects, RSS, site search, cookie banner, images, multilingual sites)
 8. [Backup and restore](#8-backup-and-restore) (site backup as ZIP, restore, safety copies, server-level backups)
 9. [Forms and email](#9-forms-and-email)
 10. [Security](#10-security)
@@ -112,7 +112,8 @@ root, and published pages are written to the folder above it (the web root itsel
         ├── api.php, rebuild_all.php, submit_form.php, config.php, ...
         ├── blocks/               Definitions of the blocks (settings and template, one file per block)
         ├── update.php, update-keys.php   One-click updates and the public keys of the releases
-        ├── blockpkg.php, wpimport.php, roles.php, library.php, integrations.php, popups.php   Block packages, the WordPress importer, roles and review, the template library, integrations, popups (libraries)
+        ├── blockpkg.php, wpimport.php, roles.php, library.php, integrations.php, popups.php, languages.php   Block packages, the WordPress importer, roles and review, the template library, integrations, popups, languages (libraries)
+        ├── installlib.php, install-cli.php   The installation itself (shared by the wizard, the command line and hosting installers) and the command-line installer (section 3.6)
         ├── popups.css, popups.js         The look and the runtime of popups, written into the pages that have one
         ├── .htaccess             Security headers and access rules (Apache, written automatically)
         └── version.json          Version of the installed release
@@ -228,6 +229,20 @@ the sign-in screen's own checks with HTTP 503 (`not_installed`).
 4. Make a first backup from the **Backup** page (section 8.1) and set up a server-level backup
    (section 8.3).
 
+### 3.6 One-click installers and unattended installs
+
+CanvasCore needs no MySQL database and no build step on the server, so a hosting installer only copies the files and hands over four answers (site name, administrator username, password, email). Every release publishes, next to the signed update package (`canvascore-X.zip`, which is also the whole site: unpack it into the web root), two files for hosting companies:
+
+- `canvascore-X-softaculous.zip`: a **Softaculous** script package (install form, `install.php` with `__install()`, removal index and the release archive). Load it into your own Softaculous with *Admin › Add Custom Script*, or submit it to Softaculous, who review and sign the scripts they list. The form asks for the site name, the first homepage (a starter), and the administrator's username, password and email; the site address is the one Softaculous chose.
+- `canvascore-X-installer.json`: a neutral manifest for any other installer (Installatron, Plesk, DirectAdmin, Ansible, shell scripts): requirements (PHP 8.0, `pdo_sqlite`, `dom`, `json`, `session`; no database), the archive with its SHA-256 and signature, the questions and how to run the setup.
+
+Two ways to run the setup without a browser, both with the checks of the wizard (a short password, the username `admin`, a bad address are refused):
+
+1. **Command line**: `CC_ADMIN_PASS='…' php canvascore-admin/install-cli.php --site-name="My site" --admin-user=maria --admin-email=maria@example.com --site-url=https://www.example.com` (also `--starter=<id>`, `--delete-installer`, `--json`). The password comes from the environment, from standard input (`--admin-pass-stdin`) or as a ready hash (`--admin-pass-hash`), never as an argument. Exit code 0 means installed; 1 says why not.
+2. **Provisioning file**: write `canvascore-admin/install-provision.json` (`site_name`, `site_url`, `admin_user`, `admin_pass_hash` from PHP's `password_hash()`, `admin_email`, `starter`, `delete_installer`) and request `canvascore-admin/install.php?format=json`: it installs, deletes the file and answers `{"success":true}` or `{"success":false,"message":…}`. If your server can't call itself, the first visit to `install.php` does the same. The file is deleted whether or not it worked, and is never used on a site that is already installed.
+
+Nobody needs the setup key in these cases: the proof of access to the server is that the installer could write the files. Updates after an installation are CanvasCore's own (section 5.1), also on a site that Softaculous installed. Removing the site from Softaculous deletes `canvascore-admin/` and `uploads/`; the published pages in the web root and the data folder (`canvascore-data`, section 2) are left for you to remove.
+
 ---
 
 ## 4. Web server configuration
@@ -256,7 +271,7 @@ instead (section 7.4).
 `# CanvasCore: written automatically…`). If you replace it with a file of your own (for example to
 add HTTP basic auth), CanvasCore leaves it alone: copy CanvasCore's rules into it, or the security
 headers and deny rules are lost. Whatever the server, the library files (`config.php`, `compiler.php`,
-`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `library.php`, `integrations.php`, `popups.php`, `update.php`, `update-keys.php`) answer 404
+`migrations.php`, `media.php`, `backup.php`, `publish.php`, `blockdef.php`, `blockpkg.php`, `wpimport.php`, `roles.php`, `library.php`, `integrations.php`, `popups.php`, `languages.php`, `installlib.php`, `install-cli.php`, `update.php`, `update-keys.php`) answer 404
 when opened directly.
 
 ### 4.2 Nginx
@@ -291,7 +306,7 @@ server {
 
         location ^~ /canvascore-admin/data/ { deny all; return 404; }
         location ~ /\. { deny all; return 404; }
-        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|popups|update|update-keys|update-source|library-source|integrations-source)\.php$ { deny all; return 404; }
+        location ~ ^/canvascore-admin/(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|popups|languages|installlib|install-cli|update|update-keys|update-source|library-source|integrations-source)\.php$ { deny all; return 404; }
         location ~ ^/canvascore-admin/([^/]+/)?[^/]+\.(json|md|sqlite|log|zip|part|lock)$ { deny all; return 404; }
 
         # The Menu Builder's live preview is framed by the editor itself
@@ -354,7 +369,7 @@ order, so keep the deny rules above it. `add_header` inside a `location` replace
 the outer block, which is why the preview's block repeats all four. If the site lives in a
 sub-folder (`example.com/site/`), prefix the paths: `/site/canvascore-admin/`, `/site/uploads/`,
 `/site/canvascore-blocks/`. **Updating from before 0.22.0:** add the `canvascore-blocks` block and
-`blockpkg|wpimport|roles|library|integrations|popups` and `library-source|integrations-source` to the library-file rule shown above (one-click updates do not change your server configuration).
+`blockpkg|wpimport|roles|library|integrations|popups|languages|installlib|install-cli` and `library-source|integrations-source` to the library-file rule shown above (one-click updates do not change your server configuration). **Updating from 0.25.0:** add `languages|installlib|install-cli`.
 
 **Redirects on Nginx.** Nginx ignores the `.htaccess` block of 301s. The old addresses still
 work, because publishing also writes a small redirect page at each old address (it sends the
@@ -486,7 +501,7 @@ so always restore both together. The Backup page's safety copy restores the cont
    should not stay on the server).
 6. Open the editor. **Database migrations run automatically** on the first request: each
    pending schema step is applied in order, in a transaction, and recorded in the `cc_meta`
-   table (key `db_schema`). There is nothing to run by hand. The current schema is **16**
+   table (key `db_schema`). There is nothing to run by hand. The current schema is **17**
    (`db_schema` in `version.json`); the most recent steps are:
 
    | Migration | Adds |
@@ -501,9 +516,10 @@ so always restore both together. The Backup page's safety copy restores the cont
    | 13 | Listing and archive pages: `collections.archive_json` (page size and archives) |
    | 14 | Scheduled publishing: `publish_at` and `unpublish_at` on pages and items (section 7.9) |
    | 16 | Popups (0.25.0): the `popups` table (name, status, blocks, settings), included in site backups |
+   | 17 | Multilingual sites (0.26.0): `lang` and `trans_group` (both empty by default = the default language, no group) on `pages` and `collection_items`, with indexes |
    | 15 | Roles and review (0.23.0, section 6.6): `created_by` and the review columns (`review_state`, `review_note`, `review_by`, `review_at`, `reviewed_by`) on pages and items, `collections.access_json`; existing pages get their author as creator |
 
-   0.23.0 added migration 15, 0.24.0 none, and 0.25.0 adds migration 16 (the schema is 16). Existing accounts keep their role (admin or editor). The `library/` folder and
+   0.23.0 added migration 15, 0.24.0 none, and 0.25.0 adds migration 16, and 0.26.0 adds migration 17 (the schema is 17); nothing changes on existing pages, which stay in the default language. Existing accounts keep their role (admin or editor). The `library/` folder and
    the `integrations.json` file of the data directory are created when the template library and the integrations are first used (sections 12.3 and 12.4). New in 0.22.0: the `packages/` and `imports/`
    folders of the data directory and the `canvascore-blocks/` folder of the site are created when first
    used (section 12), and the Nginx rules of section 4.2 gain `canvascore-blocks` (Apache writes its
@@ -913,6 +929,23 @@ Times are the **server's local time** (the `date.timezone` setting of PHP). Chec
 scheduler once: make a draft item, set its **Publish at** a few minutes ahead, then run `php cron.php` after that time and check
 that it is published.
 
+### 7.10 Multilingual sites
+
+Administration › **Languages** (the [User Guide](USER-GUIDE.md#15-languages) explains the editing side). What changes in a publish, on a site with at least two languages:
+
+| Output | Path |
+|---|---|
+| Pages and items in the **default language** | where they always were (`about/index.html`, `blog/hello/index.html`, `index.html`) |
+| Pages and items in another language | in a folder of its own: `it/chi-siamo/index.html`, `it/blog/ciao/index.html`; the home of the language is `it/index.html` |
+| Listings, archives, categories, tags | per language: `it/blog/index.html`, `it/blog/2026/…`; feeds in `it/blog/feed.xml` |
+| Site search data | `search-index.json` for the default language, `search-index-it.json` for each other |
+| Sitemap | one `sitemap.xml` for all languages, with the alternates (`xhtml:link`, including `x-default`) |
+
+Every page also gets `<html lang>` (the code as browsers write it, `pt-BR`), `og:locale`, a canonical address of its own and one `hreflang` link for each translation (itself included) and `x-default` (the default language's version), when the site address is set. The menu, the global header and footer, the announcement bar and the cookie banner can each differ per language (the last two through *Texts per language*). Content in a language the site does not have is skipped, and the result says so; with multilingual **off**, only the default language is published (pages in other languages stay in the editor). There is one **404 page** for the whole site.
+
+Language folders are ordinary folders of the site, so Apache and Nginx need no rule for them. A page can't use a language code as its address in the default language (`/it/` would clash), and the Languages screen reports addresses already in use when you save. At most 12 languages. Scheduled publishing and `cron.php` publish every language.
+
+
 ## 8. Backup and restore
 
 There are two ways to back up a site: the **Backup** page in the admin (one ZIP file, made and
@@ -929,7 +962,7 @@ A backup contains:
 
 - pages (live versions and their unpublished draft copies), collections and their items,
   templates, masters, popups, the global header and footer, and redirects;
-- Global Options (`settings.json`, including form emails and the session timeout), the menu,
+- Global Options (`settings.json`, including form emails, the session timeout and the languages of a multilingual site), the menu,
   and the media library data (`media.json`: descriptions, sizes, folders; `media-folders.json`);
 - every uploaded file in `uploads/` (images, audio and video), including the optimized copies in `uploads/_cc/`;
 - optionally, **version history** ("Include the version history of pages and items") and
@@ -1144,6 +1177,8 @@ What CanvasCore does for you:
   answered; a newsletter service gets an email only with consent; analytics ids are checked strictly; a payment button links only to Stripe (section 12.4).
 - **Popups**: editors and admins build them (authors and reviewers only read the list). Every setting is checked by the server, a popup's blocks follow the rules of a page (no code from an editor), and its name appears only as escaped text. Published
   popups are written into the pages they apply to at publish time; the runtime on the page only shows and hides them and keeps what it remembers in the visitor's own browser (`localStorage`: `cc_visited`, `cc_popup_<id>`).
+- **Languages**: admins only (`get_languages` and `save_languages`; editors can read the list of languages, and `save_settings` never changes it). Language codes and names are cleaned by the server (at most 12), a page's or item's language is checked against them, and a language folder is refused as an address of the default language or of a collection, so a page can't take over another language's folder.
+- **Unattended installs**: `install-cli.php` runs only from the command line. The provisioning file of a hosting installer (section 3.6) can be written only by someone who can already write to the server's files, holds the password as a hash, is deleted as soon as it is read (also when it is wrong, and on an installed site, where it changes nothing).
 - **Template library**: admins only. The index is signed (Ed25519, the release keys) and a kit's download must match the checksum in it; downloads only from
   the library's https hosts. A kit is cleaned like an editor's save (no code), cannot replace anything (pages are drafts with new addresses), and a site
   kit's design is applied only when asked, after a safety copy (section 12.3).
@@ -1455,6 +1490,13 @@ The collection is limited to chosen people (Collections › Who can work here). 
 Check, in this order: the popup is **Published** (the list says so) and you published the **site** afterwards; its rules allow this page (Where), this device and this visitor; its schedule includes today; and it is not waiting for its
 frequency (a popup shown once per week stays away for a week: test in a private window, or clear the site's data). Exit intent needs a mouse; a popup waits while the cookie banner is on screen; and only one popup shows at a time (the lower
 priority number first).
+
+**A translation is missing from the site, or the language switcher lacks a language**
+Publish the site after translating, and check that the translation is **published** (a draft is never written). A language with no published page of its own sends the switcher to that language's home page, and is left out when it has no published home page either. The publish result lists
+content in a language the site no longer has ("left out"), and warns when multilingual is on but **Site address** is empty (the hreflang links need absolute addresses).
+
+**A page in a language folder answers "not found" (404) on Nginx**
+The rules of section 4.2 treat any folder alike, so a language folder (`/it/…`) works without changes. If you added a rule of your own for the first path segment, let it pass the language codes of the site; a site search or feed in a language is `search-index-<code>.json` and `<collection>/feed.xml` inside the language folder.
 
 **A webhook fails, or nobody is added to Mailchimp or Brevo**
 Open *Integrations › Activity*: each delivery shows its result. A webhook needs a public https address that answers with a 2xx code within a few seconds; fix the receiver and use *Send again*.

@@ -10,6 +10,8 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-26 — Multilingual sites and one-click installers
+
 ### Added
 - **Multilingual sites** (Administration › **Languages**, admins): publish the site in several languages. Switch it on and add the languages (at most 12; a list of
   common ones, or any code like `sq` or `pt-br`), and choose the **default language**: it stays where it is (`/about/`); every other language is published in a
@@ -35,7 +37,6 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
     language only, as before. The editor's link choosers (menu, buttons, rich text, announcement) offer each page at its real address.
   - Migration 17 adds `lang` and `trans_group` to pages and collection items (both empty for what exists: it is all in the default language). The languages are kept
     in `settings.json` and the language menus in `menu.json`, so they are in site backups.
-
 - **One-click installers** (Softaculous and similar hosting installers). CanvasCore needs no MySQL database and no build step, so an installer only copies the files and
   hands over the answers. The setup wizard's logic moved to `installlib.php` and is now also available without a browser:
   - **`install-cli.php`**: `CC_ADMIN_PASS=… php canvascore-admin/install-cli.php --site-name=… --admin-user=… --admin-email=… --site-url=…` (also `--starter`, `--delete-installer`,
@@ -56,6 +57,7 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
   switch a language on (Languages tells you which ones clash).
 - Texts the site writes itself (the 404 page, the labels of listing and archive pages such as *Sort* or *Years*, the names of collections, taxonomies and
   categories) are not translated: they are shown as they are written once. The 404 page is a single page for the whole site.
+- One-click installers change nothing on an installed site. `install.php` now uses `installlib.php`; both new files (and `install-cli.php`) are part of the update package.
 
 ## [0.25.0] - 2026-10-25 — Popups
 
