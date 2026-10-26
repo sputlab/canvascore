@@ -1,0 +1,8 @@
+{
+  "username": "demo",
+  "password": "canvasdemo",
+  "resetMinutes": 10,
+  "maxNewPages": 5,
+  "maxNewItems": 5,
+  "publish": false
+}

@@ -10,6 +10,29 @@ never removes anything, `PATCH` fixes. Before 1.0 (`0.x`) the API and formats co
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-26 — A demo that resets itself, screenshots and tutorials
+
+### Added
+- **A public demo that resets itself, with no SSH and no cron job.** Demo mode (`demo.json` in the data folder) now puts the site back to its starting point every `resetMinutes`
+  minutes: the first request of each period (the editor, even its sign-in screen) restores the baseline and publishes the site again. **Administration › Backup › Public demo**
+  (only on a demo) makes the visitors' editor account, saves the site as it is now as the starting point, and can reset on the spot. New `demo.json` options: `publish` (visitors can
+  publish; **off by default**, so what they type is never public on the demo's address) and `resetToken` (the secret of `canvascore-admin/demo-reset.php`, for a cron service; without it
+  that address answers 404). The scheduler also refuses non-admins in a demo that does not allow publishing.
+- **A ready-made demo site**: `demo/demo-baseline.zip` is *Lumen Studio*, in English and Italian (eight pages from the starters, a blog, a menu per language, the language switcher, a popup, a cookie
+  banner and pictures made for it). It is made by `scripts/demo-build.php` through the real API and is the source of the screenshots.
+- **Contributing**: issue templates (bug, idea, installation or hosting problem), and a CONTRIBUTING that points to the translations and the tutorials. SECURITY.md covers demo mode.
+- **Screenshots and tutorials**: `scripts/screenshots.mjs` takes the screenshots of every screen (English and Italian) with headless Firefox into `docs/images/`; the README shows them, and
+  `docs/tutorials/` (English and Italian) has five step-by-step guides: install, shared hosting, a first site, managing a site and running a public demo.
+
+### Fixed
+- Lost server messages after the 1.0 text wrapping: thirteen notifications (review, integrations, popups, user accounts, template library, image upload) showed a generic "success" text instead of the server's
+  message, even when the action had failed. A test now guards the pattern. The Language section of Page Settings read "page" untranslated in Italian.
+- Restoring a backup keeps **the site address of the server it is restored on** (like the trusted proxies): a backup from another server, or from the demo builder, no longer brings its address along.
+
+### Upgrade notes
+- Nothing to do: no migration, and the formats of 1.0 are unchanged (the 1.1 additions are new API actions and `demo.json` options).
+- **Nginx**: no new rule is needed (`demo-reset.php` is meant to be reachable; it answers 404 without a demo and its token).
+
 ## [1.0.0] - 2026-10-26 — Stable
 
 CanvasCore 1.0: the formats are stable, the 1.x line is the long-term support line, and the editor speaks Italian as well as English. A full review of security and stability went into this release (below).

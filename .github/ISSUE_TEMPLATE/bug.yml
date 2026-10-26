@@ -1,0 +1,22 @@
+name: Bug report
+description: Something does not work as the manuals say
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: {label: CanvasCore version, description: "At the bottom of the sidebar (for example 1.1.0 · build 60)"}
+    validations: {required: true}
+  - type: input
+    id: server
+    attributes: {label: PHP version and web server, description: "For example PHP 8.2, Apache (cPanel shared hosting)"}
+  - type: input
+    id: browser
+    attributes: {label: Browser}
+  - type: textarea
+    id: steps
+    attributes: {label: Steps to reproduce, placeholder: "1. Open… 2. Click… 3. See…"}
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes: {label: What you expected, and what happened instead}
+    validations: {required: true}

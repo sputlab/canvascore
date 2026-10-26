@@ -77,11 +77,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action !== 'login') {
 // (both already public on the published site). Nothing else from the settings is exposed here.
 if ($action === 'branding') {
     session_write_close();
+    // A public demo puts itself back: the first visit of each time slot (this one, on the sign-in screen) does it
+    if (cc_demo_on()) { require_once __DIR__ . '/demo.php'; cc_demo_maybe_reset($pdo); }
     $s = @json_decode((string)@file_get_contents($data_dir . '/settings.json'), true);
     $out = cc_public_branding(is_array($s) ? $s : []);
     // Demo mode: the public demo login is shown on the sign-in screen (never the password of a real account)
     if ($demo = cc_demo_config()) $out['demo'] = ['username' => $demo['username'], 'password' => $demo['password'], 'resetMinutes' => $demo['resetMinutes'],
-        'nextResetIn' => cc_demo_next_reset(), 'maxNewPages' => $demo['maxNewPages'], 'maxNewItems' => $demo['maxNewItems']];
+        'nextResetIn' => cc_demo_next_reset(), 'maxNewPages' => $demo['maxNewPages'], 'maxNewItems' => $demo['maxNewItems'], 'publish' => $demo['publish']];
     echo json_encode($out); exit;
 }
 
@@ -181,6 +183,9 @@ if (cc_is_contributor($role) && in_array($action, CC_CONTRIBUTOR_DENIED, true)) 
     echo json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Your role cannot do this. Ask an editor or an admin.']); exit;
 }
 
+// A public demo puts itself back every few minutes (the first request of each slot; see demo.php)
+if (cc_demo_on()) { require_once __DIR__ . '/demo.php'; cc_demo_maybe_reset($pdo); }
+
 // Scheduled publishing: the first admin request after a scheduled time makes the due changes (cron.php does it on a server
 // with no admin in use). A failure here never stops the request.
 try { if (cc_schedules_pending($pdo)) cc_run_schedules($pdo, cc_data_dir()); } catch (Throwable $e) { error_log('CanvasCore schedules: ' . $e->getMessage()); }
@@ -194,7 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') session_write_close();
 if ($action === 'keepalive') {
     echo json_encode(['success' => true, 'expires_in' => cc_session_expires_in(), 'timeout' => cc_session_limit()]); exit;
 }
-if (in_array($action, ['get_users', 'add_user', 'set_role', 'delete_user', 'force_password', 'export_site', 'import_site', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard', 'library_index', 'library_install', 'library_install_file', 'library_undo', 'library_preview', 'integrations_get', 'integrations_save', 'integrations_test', 'integrations_rotate_secret', 'integrations_resend', 'integrations_log_clear', 'stripe_link_create', 'stripe_link_add', 'stripe_link_set_active', 'stripe_link_remove']) && !$is_admin) {
+if (in_array($action, ['get_users', 'add_user', 'set_role', 'delete_user', 'force_password', 'export_site', 'import_site', 'demo_status', 'demo_account', 'demo_baseline', 'demo_reset', 'backup_info', 'backup_download', 'backup_create', 'backup_delete', 'backup_restore', 'backup_restore_saved', 'backup_upload_chunk', 'get_submissions', 'export_submissions', 'delete_submission', 'clear_submissions', 'update_info', 'update_check', 'update_install', 'pkg_info', 'pkg_install', 'pkg_set_enabled', 'pkg_remove', 'wp_info', 'wp_analyze', 'wp_start', 'wp_step', 'wp_discard', 'library_index', 'library_install', 'library_install_file', 'library_undo', 'library_preview', 'integrations_get', 'integrations_save', 'integrations_test', 'integrations_rotate_secret', 'integrations_resend', 'integrations_log_clear', 'stripe_link_create', 'stripe_link_add', 'stripe_link_set_active', 'stripe_link_remove']) && !$is_admin) {
     echo json_encode(['success' => false, 'message' => 'Only admins can do this.']); exit;
 }
 
@@ -242,6 +247,19 @@ if ($action === 'delete_user' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // its open sessions end at their next request (cc_session_account finds no account)
     $pdo->prepare("DELETE FROM admin WHERE id = ?")->execute([$uid]);
     echo json_encode(['success' => true, 'message' => 'User deleted.']); exit;
+}
+// Demo mode: visitors can't publish unless demo.json says so (what they write would be public on the demo's address), and so cannot schedule either
+if (cc_demo_on() && !$is_admin && !cc_demo_config()['publish'] && $action === 'set_schedule') {
+    echo json_encode(['success' => false, 'message' => 'Publishing and scheduling are turned off in the demo.']); exit;
+}
+// The public demo's tools (Backup › Public demo): admins only, and only on a demo site
+if (in_array($action, ['demo_status', 'demo_account', 'demo_baseline', 'demo_reset'], true)) {
+    if (!cc_demo_on()) { echo json_encode(['success' => false, 'message' => 'This site is not a demo: there is no demo.json in the data folder.']); exit; }
+    require_once __DIR__ . '/demo.php';
+    if ($action === 'demo_status') { echo json_encode(['success' => true] + cc_demo_status($pdo)); exit; }
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') { echo json_encode(['success' => false, 'message' => 'Use POST.']); exit; }
+    $r = $action === 'demo_account' ? cc_demo_account($pdo) : ($action === 'demo_baseline' ? cc_demo_baseline($pdo) : cc_demo_reset($pdo));
+    echo json_encode($r + ['status' => cc_demo_status($pdo)]); exit;
 }
 // Demo mode: the shared demo login keeps its password, and visitors can't put files on the server
 if (cc_demo_on() && in_array($action, ['force_password', 'change_own_password', 'upload_media'], true)) {

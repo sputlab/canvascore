@@ -68,7 +68,7 @@ export default function LanguageSection({ activePage, updateActivePage, pages })
 
   return (
     <PanelAccordion title={__("Language")} icon={Languages} defaultOpen={true}>
-      <label style={labelStyle} htmlFor="cc-page-lang">{__("This")} {isItem ? 'item' : 'page'} {__("is written in")}</label>
+      <label style={labelStyle} htmlFor="cc-page-lang">{isItem ? __("This item is written in") : __("This page is written in")}</label>
       <select id="cc-page-lang" style={inputStyle} value={code} disabled={grouped} onChange={(e) => updateActivePage({ lang: e.target.value })}>
         {langs.list.map((l) => <option key={l.code} value={l.code}>{l.name}{l.code === langs.default ? ' (default)' : ''}</option>)}
       </select>

@@ -259,12 +259,14 @@ function cc_backup_restore($pdo, $path) {
     }
     cc_backup_rrmdir($old);
 
-    // 4. options, menu and media descriptions. Trusted proxies describe THIS server: they are kept.
+    // 4. options, menu and media descriptions. Trusted proxies and the site address describe THIS server (a backup may come from another one,
+    //    or from a demo's builder): the current ones are kept; a site with no address yet takes the backup's.
     $data_dir = cc_backup_data_dir();
     if (isset($dataFiles['settings.json'])) {
         $cur = @json_decode((string)@file_get_contents($data_dir . '/settings.json'), true);
         $s = $dataFiles['settings.json'];
         if (is_array($cur) && array_key_exists('trustedProxies', $cur)) $s['trustedProxies'] = $cur['trustedProxies']; else unset($s['trustedProxies']);
+        if (is_array($cur) && trim((string)($cur['siteUrl'] ?? '')) !== '') $s['siteUrl'] = $cur['siteUrl'];
         cc_write_file($data_dir . '/settings.json', json_encode($s, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
     if (isset($dataFiles['menu.json'])) cc_write_file($data_dir . '/menu.json', json_encode($dataFiles['menu.json'], JSON_UNESCAPED_UNICODE));

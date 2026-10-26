@@ -61,7 +61,7 @@ export default function Popups() {
       const full = await (await fetch('api.php?action=get_popup&id=' + encodeURIComponent(p.id))).json();
       let blocks = []; try { blocks = JSON.parse(full.content_json || '[]'); } catch { blocks = []; }
       const d = await post('save_popup', { id: p.id, name: p.name, status, blocks, settings: full.settings });
-      notify(d.message || d.success ? __("Done.") : __("Not changed."), d.success ? 'success' : 'error');
+      notify(d.message || (d.success ? __("Done.") : __("Not changed.")), d.success ? 'success' : 'error');
       load();
     } catch { notify(__("Not changed (connection problem)."), 'error'); }
   };

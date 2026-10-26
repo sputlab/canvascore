@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A security problem
+    url: https://github.com/sputlab/canvascore/blob/main/SECURITY.md
+    about: Please do not open a public issue for security problems: follow SECURITY.md.
+  - name: Questions and chat
+    url: https://discord.gg/sD8KMc2kN
+    about: Ask on Discord first if you are not sure whether it is a bug.

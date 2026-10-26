@@ -17,6 +17,11 @@ console.log('  ' + out.trim().split('\n')[0]);
 const i18n = await import('../src/i18n/index.js');
 const { translatePayload, withTranslatedMessages } = await import('../src/i18n/apiMessages.js');
 
+// a slip the text wrapping once made: "a.message || a.success ? __(x) : __(y)" reads as "(a.message || a.success) ? …": the server's message is lost
+const slips = [];
+(function walk(d) { for (const f of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, f.name); if (f.isDirectory()) walk(p); else if (/\.(jsx|js|mjs)$/.test(f.name)) { const src = fs.readFileSync(p, 'utf8'); const re = /\bmessage \|\| [\w.]+ \? /g; let m; while ((m = re.exec(src))) slips.push(path.relative(root, p) + ': ' + src.slice(Math.max(0, m.index - 30), m.index + 60).replace(/\n/g, ' ')); } } })(path.join(root, 'src'));
+check('a message from the server is never lost to a wrapped condition (message || ok ? a : b)', slips.length === 0, slips.slice(0, 3).join(' | '));
+
 console.log('\nRUNTIME');
 check('English is the default and the key is the text', i18n.getLocale() === 'en' && i18n.__('Save') === 'Save');
 check('values are filled in', i18n.__('Delete {0}?', 'x') === 'Delete x?' && i18n.__('{0} of {1}', 1, 2) === '1 of 2');

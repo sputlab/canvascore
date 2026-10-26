@@ -816,7 +816,7 @@ unlink($bk . '/site/uploads/photo.png'); imagepng($img, $bk . '/site/uploads/new
 $r = cc_backup_restore($bdb, $zl);
 check('restoring a backup without history keeps the current versions', $r['success'] && (int)$bdb->query("SELECT COUNT(*) FROM page_revisions WHERE owner = 'p9'")->fetchColumn() === 1, json_encode($r));
 $bdb->exec("DELETE FROM pages WHERE id = 'p2'"); $bdb->exec("INSERT OR REPLACE INTO pages (id, title, slug, clean_slug) VALUES ('p9', 'New', 'new', 'new')");
-file_put_contents($bk . '/data/settings.json', json_encode(['siteName' => 'Changed', 'trustedProxies' => '10.0.0.2']));
+file_put_contents($bk . '/data/settings.json', json_encode(['siteName' => 'Changed', 'trustedProxies' => '10.0.0.2', 'siteUrl' => 'https://this-server.example']));
 imagepng($img, $bk . '/site/uploads/new.png');
 $r = cc_backup_restore($bdb, $zf);
 $ids = $bdb->query("SELECT id FROM pages ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
@@ -825,6 +825,7 @@ check('restore: collections, items, redirects, versions and form messages back',
     && (int)$bdb->query("SELECT COUNT(*) FROM page_revisions")->fetchColumn() === 1 && (int)$bdb->query("SELECT COUNT(*) FROM form_submissions")->fetchColumn() === 1);
 check('restore: accounts untouched', (int)$bdb->query("SELECT COUNT(*) FROM admin")->fetchColumn() === $adminsBefore);
 $set = json_decode(file_get_contents($bk . '/data/settings.json'), true);
+check('restore: this server\'s site address is kept (a backup may come from another server)', (json_decode(file_get_contents($bk . '/data/settings.json'), true)['siteUrl'] ?? '') === 'https://this-server.example');
 check('restore: options and menu back, this server\'s trusted proxies kept', $set['siteName'] === 'Acme' && $set['trustedProxies'] === '10.0.0.2' && json_decode(file_get_contents($bk . '/data/menu.json'), true)['items'][0]['label'] === 'Home');
 check('restore: the images are exactly the backup\'s (with descriptions and folders), uploads protected again',
     is_file($bk . '/site/uploads/photo.png') && is_file($bk . '/site/uploads/_cc/photo-480.webp') && !is_file($bk . '/site/uploads/new.png') && is_file($bk . '/site/uploads/.htaccess')

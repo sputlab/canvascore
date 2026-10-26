@@ -1,0 +1,11 @@
+name: Idea or improvement
+description: Something that would make CanvasCore easier or better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: What are you trying to do, and what gets in the way?}
+    validations: {required: true}
+  - type: textarea
+    id: idea
+    attributes: {label: What would help?, description: "A sketch is enough. Mention what you use today instead."}
