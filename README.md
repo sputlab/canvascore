@@ -3,9 +3,12 @@
 Block-based CMS that generates **static HTML** sites: a React visual editor (drag & drop)
 and a PHP + SQLite backend that compiles pages into `.html` files ready to serve.
 
-> **Status: public preview (0.x).** CanvasCore is feature-complete for everyday sites and well tested, but until
-> 1.0 the API and data formats may still change between minor versions (database and content migrations run
-> automatically on update). Take a backup before updating, and please
+> **Status: stable (1.x, long-term support).** From 1.0 the formats are stable: the database schema, the content of
+> pages, backups, block packages, template kits and the update packages only grow, so a site, a backup or a kit made
+> by any 1.x works with every later 1.x, and updating within 1.x is always safe. 1.x receives security and bug fixes
+> as the long-term support line; breaking changes wait for 2.0. See the
+> [stability and support policy](docs/manuals/DEVELOPER-GUIDE.md#14-stability-and-support-policy-1x-lts). Taking a
+> backup before an update is still a good habit, and please
 > [report what you find](https://github.com/sputlab/CanvasCore/issues).
 
 ## What it does
@@ -25,6 +28,7 @@ and a PHP + SQLite backend that compiles pages into `.html` files ready to serve
 - **Publishing**: a static site of HTML files, with RSS feeds, a sitemap, a search index with filters, redirects, scheduled
   publishing (a page or item goes live and comes down at a time; `cron.php` for sites nobody edits), and images
   optimised to WebP with responsive sizes.
+- **Translated admin interface**: the editor is available in English and Italian (chosen on the sign-in screen or in the sidebar); more languages are one file each (`canvascore-frontend/src/i18n/locales/`).
 - **Multilingual sites**: translated pages and collection items in a folder per language, a Language Switcher block, per-language menus, header, footer, search and feeds, and hreflang links and sitemap alternates in published pages.
 - **Popups**: a popup builder with triggers (time, scroll, exit intent, a link) and display rules (pages, devices, visitors, schedule, frequency).
 - **Integrations**: webhooks for forms (signed), Mailchimp and Brevo sign-ups with consent, Google Analytics, Plausible or Matomo, and Stripe

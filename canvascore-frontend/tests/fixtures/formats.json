@@ -1,0 +1,748 @@
+{
+    "schema": {
+        "admin": [
+            "id",
+            "must_change_pw",
+            "password_hash",
+            "role",
+            "session_gen",
+            "username"
+        ],
+        "cc_meta": [
+            "key",
+            "value"
+        ],
+        "collection_items": [
+            "archived",
+            "collection_id",
+            "content_json",
+            "content_schema",
+            "cover_image",
+            "created_by",
+            "date",
+            "excerpt",
+            "field_values",
+            "id",
+            "lang",
+            "publish_at",
+            "review_at",
+            "review_by",
+            "review_note",
+            "review_state",
+            "reviewed_by",
+            "seo_description",
+            "seo_title",
+            "slug",
+            "status",
+            "terms_json",
+            "title",
+            "trans_group",
+            "unpublish_at",
+            "updated_at"
+        ],
+        "collection_taxonomies": [
+            "collection_id",
+            "id",
+            "multiple",
+            "name",
+            "position",
+            "slug"
+        ],
+        "collection_terms": [
+            "collection_id",
+            "description",
+            "id",
+            "name",
+            "position",
+            "slug",
+            "taxonomy_id"
+        ],
+        "collections": [
+            "access_json",
+            "archive_json",
+            "created_at",
+            "design_json",
+            "fields",
+            "id",
+            "name",
+            "schema_json",
+            "slug"
+        ],
+        "form_submissions": [
+            "created_at",
+            "data_json",
+            "form_id",
+            "id",
+            "page"
+        ],
+        "master_components": [
+            "content_json",
+            "id",
+            "name",
+            "updated_at"
+        ],
+        "page_revisions": [
+            "author",
+            "content_json",
+            "created_at",
+            "id",
+            "kind",
+            "owner",
+            "title"
+        ],
+        "pages": [
+            "author",
+            "bg_color",
+            "boxed_width",
+            "clean_slug",
+            "content_json",
+            "content_schema",
+            "created_by",
+            "id",
+            "is_draft_copy",
+            "is_home",
+            "lang",
+            "layout",
+            "noindex",
+            "parent_id",
+            "publish_at",
+            "review_at",
+            "review_by",
+            "review_note",
+            "review_state",
+            "reviewed_by",
+            "seo_description",
+            "seo_image",
+            "seo_title",
+            "slug",
+            "status",
+            "title",
+            "trans_group",
+            "unpublish_at",
+            "updated_at"
+        ],
+        "popups": [
+            "content_json",
+            "content_schema",
+            "created_at",
+            "created_by",
+            "id",
+            "name",
+            "settings_json",
+            "status",
+            "updated_at"
+        ],
+        "redirects": [
+            "auto",
+            "created_at",
+            "from_path",
+            "to_path"
+        ],
+        "site_parts": [
+            "content_json",
+            "content_schema",
+            "name"
+        ],
+        "templates": [
+            "content_json",
+            "id",
+            "name"
+        ]
+    },
+    "actions": [
+        "add_user",
+        "backup_create",
+        "backup_delete",
+        "backup_download",
+        "backup_info",
+        "backup_restore",
+        "backup_restore_saved",
+        "backup_upload_chunk",
+        "branding",
+        "bulk_items",
+        "change_own_password",
+        "check_auth",
+        "clear_submissions",
+        "delete_collection",
+        "delete_item",
+        "delete_master",
+        "delete_media",
+        "delete_page",
+        "delete_part",
+        "delete_popup",
+        "delete_redirect",
+        "delete_submission",
+        "delete_template",
+        "delete_user",
+        "discard_draft",
+        "export_site",
+        "export_submissions",
+        "force_password",
+        "get_collection_design",
+        "get_collections",
+        "get_item",
+        "get_items",
+        "get_languages",
+        "get_masters",
+        "get_media",
+        "get_media_folders",
+        "get_menu",
+        "get_pages",
+        "get_parts",
+        "get_popup",
+        "get_popups",
+        "get_redirects",
+        "get_revision",
+        "get_revisions",
+        "get_settings",
+        "get_starters",
+        "get_submissions",
+        "get_taxonomies",
+        "get_taxonomy_list",
+        "get_templates",
+        "get_users",
+        "import_site",
+        "integrations_get",
+        "integrations_log_clear",
+        "integrations_payment_links",
+        "integrations_resend",
+        "integrations_rotate_secret",
+        "integrations_save",
+        "integrations_test",
+        "keepalive",
+        "library_index",
+        "library_install",
+        "library_install_file",
+        "library_preview",
+        "library_undo",
+        "login",
+        "logout",
+        "media_crop",
+        "media_folder_create",
+        "media_folder_delete",
+        "media_folder_rename",
+        "media_import_url",
+        "media_move",
+        "media_replace",
+        "media_usage",
+        "optimize_media",
+        "pkg_info",
+        "pkg_install",
+        "pkg_list",
+        "pkg_remove",
+        "pkg_set_enabled",
+        "preview_menu",
+        "review_back",
+        "review_queue",
+        "review_submit",
+        "review_withdraw",
+        "save_collection",
+        "save_collection_design",
+        "save_item",
+        "save_languages",
+        "save_master",
+        "save_media_meta",
+        "save_menu",
+        "save_page",
+        "save_part",
+        "save_popup",
+        "save_redirect",
+        "save_settings",
+        "save_taxonomies",
+        "save_template",
+        "session_status",
+        "set_role",
+        "set_schedule",
+        "stripe_link_add",
+        "stripe_link_create",
+        "stripe_link_remove",
+        "stripe_link_set_active",
+        "translate_item",
+        "translate_page",
+        "unlink_translation",
+        "update_check",
+        "update_health",
+        "update_info",
+        "update_install",
+        "upload_media",
+        "version",
+        "wp_analyze",
+        "wp_discard",
+        "wp_info",
+        "wp_start",
+        "wp_step"
+    ],
+    "blocks": {
+        "ACCORDION": [
+            "allowMultiple",
+            "icon",
+            "items",
+            "openFirst",
+            "variant"
+        ],
+        "ANNOUNCEMENT_BAR": [
+            "align",
+            "bg",
+            "color",
+            "dismissible",
+            "icon",
+            "linkText",
+            "linkUrl",
+            "preset",
+            "sticky",
+            "text"
+        ],
+        "AUDIO_PLAYER": [
+            "accent",
+            "artist",
+            "cover",
+            "layout",
+            "skip",
+            "speed",
+            "src",
+            "title"
+        ],
+        "AUTHOR_BIO": [
+            "bio",
+            "boxed",
+            "label",
+            "layout",
+            "links",
+            "name",
+            "photo",
+            "role"
+        ],
+        "BEFORE_AFTER": [
+            "after",
+            "aspectRatio",
+            "before",
+            "showLabels",
+            "startPosition"
+        ],
+        "BENTO": [
+            "columns",
+            "gap",
+            "hover",
+            "rowHeight",
+            "tiles"
+        ],
+        "BUSINESS": [
+            "address",
+            "businessType",
+            "closedLabel",
+            "directionsLabel",
+            "email",
+            "hours",
+            "hoursTitle",
+            "jsonLd",
+            "mapsLink",
+            "name",
+            "note",
+            "phone",
+            "website"
+        ],
+        "BUTTON": [
+            "text",
+            "url",
+            "useGlobal"
+        ],
+        "CALLOUT": [
+            "showIcon",
+            "text",
+            "title",
+            "variant"
+        ],
+        "CARDS": [
+            "items"
+        ],
+        "CASE_STUDY": [
+            "accent",
+            "alt",
+            "client",
+            "image",
+            "layout",
+            "linkText",
+            "linkUrl",
+            "logo",
+            "metric",
+            "metricLabel",
+            "quote",
+            "quoteAuthor",
+            "text",
+            "title"
+        ],
+        "CODE_SNIPPET": [
+            "code",
+            "copyButton",
+            "filename",
+            "fontSize",
+            "language",
+            "lineNumbers",
+            "maxHeight",
+            "theme"
+        ],
+        "COLLECTION_LIST": [
+            "collectionId",
+            "collectionName",
+            "collectionSlug",
+            "columns",
+            "limit",
+            "showCover",
+            "showDate",
+            "showExcerpt"
+        ],
+        "CONTAINER": [],
+        "COUNTDOWN": [
+            "datetime",
+            "endAction",
+            "endMessage",
+            "labelDays",
+            "labelHours",
+            "labelMinutes",
+            "labelSeconds",
+            "showDate",
+            "showSeconds",
+            "utcOffset"
+        ],
+        "COUNTERS": [
+            "animate",
+            "columns",
+            "duration",
+            "items"
+        ],
+        "CSS_GRID": [
+            "columns",
+            "gap"
+        ],
+        "DIVIDER": [
+            "color",
+            "flip",
+            "height",
+            "style",
+            "thickness",
+            "width"
+        ],
+        "FAQ": [
+            "items"
+        ],
+        "FLEX_ROW": [],
+        "FORM": [
+            "btnText",
+            "email",
+            "fields",
+            "successMsg",
+            "title"
+        ],
+        "GALLERY": [
+            "aspectRatio",
+            "borderRadius",
+            "columns",
+            "gap",
+            "images",
+            "layout",
+            "lightbox",
+            "showCaptions"
+        ],
+        "GRID": [
+            "columns",
+            "items"
+        ],
+        "HERO": [
+            "bgImage",
+            "buttons",
+            "subtitle",
+            "title"
+        ],
+        "HOTSPOTS": [
+            "alt",
+            "image",
+            "pinColor",
+            "pinTextColor",
+            "pins",
+            "pulse",
+            "radius",
+            "ratio"
+        ],
+        "HOVER_GRID": [
+            "aspectRatio",
+            "columns",
+            "effect",
+            "gap",
+            "items",
+            "overlay",
+            "radius"
+        ],
+        "HTML": [
+            "code"
+        ],
+        "ICON_BOX": [
+            "description",
+            "icon",
+            "title"
+        ],
+        "IMAGE": [
+            "alt",
+            "aspectRatio",
+            "objectFit",
+            "objectPosition",
+            "scale",
+            "src"
+        ],
+        "IMAGE_TEXT": [
+            "layout",
+            "src",
+            "text"
+        ],
+        "ITEM_FIELD": [
+            "dateFormat",
+            "decimals",
+            "field",
+            "showLabel"
+        ],
+        "ITEM_TERMS": [
+            "separator",
+            "taxonomy"
+        ],
+        "LANGUAGE_SWITCHER": [
+            "labels",
+            "showCurrent",
+            "style"
+        ],
+        "LOGOS": [
+            "columns",
+            "direction",
+            "fade",
+            "gap",
+            "grayscale",
+            "height",
+            "layout",
+            "logos",
+            "speed",
+            "title"
+        ],
+        "MAPS": [
+            "address",
+            "zoom"
+        ],
+        "NEWSLETTER": [
+            "accent",
+            "askName",
+            "buttonText",
+            "consentText",
+            "email",
+            "emailLabel",
+            "formLayout",
+            "layout",
+            "nameLabel",
+            "namePlaceholder",
+            "placeholder",
+            "successMsg",
+            "text",
+            "title"
+        ],
+        "PAYMENT_BUTTON": [
+            "accent",
+            "align",
+            "description",
+            "label",
+            "layout",
+            "link",
+            "note",
+            "priceText",
+            "title"
+        ],
+        "PRICE_CALCULATOR": [
+            "accent",
+            "addons",
+            "baseLabel",
+            "basePrice",
+            "billingToggle",
+            "buttonText",
+            "buttonUrl",
+            "currency",
+            "currencyPos",
+            "decimals",
+            "defaultBilling",
+            "intro",
+            "layout",
+            "monthlyLabel",
+            "note",
+            "numberFormat",
+            "periodMonth",
+            "periodYear",
+            "saveText",
+            "sliders",
+            "title",
+            "totalLabel",
+            "yearlyDiscount",
+            "yearlyLabel"
+        ],
+        "PRICING": [
+            "columns",
+            "plans"
+        ],
+        "PROGRESS": [
+            "animate",
+            "height",
+            "items",
+            "showValue"
+        ],
+        "RELATED": [
+            "cardFields",
+            "collectionId",
+            "columns",
+            "fieldId",
+            "limit",
+            "showCover",
+            "showDate",
+            "showExcerpt",
+            "sortBy",
+            "sortDir",
+            "title"
+        ],
+        "REVIEW_SUMMARY": [
+            "average",
+            "color",
+            "distribution",
+            "layout",
+            "linkText",
+            "linkUrl",
+            "rowValue",
+            "showDistribution",
+            "source",
+            "title",
+            "total",
+            "totalLabel"
+        ],
+        "SCROLLYTELLING": [
+            "gap",
+            "ratio",
+            "side",
+            "stepHeight",
+            "steps",
+            "stickyTop"
+        ],
+        "SEARCH": [
+            "buttonText",
+            "limit",
+            "noResults",
+            "placeholder"
+        ],
+        "SECTION": [],
+        "SHARE_BAR": [
+            "align",
+            "colors",
+            "message",
+            "networks",
+            "shape",
+            "size",
+            "style",
+            "title"
+        ],
+        "SLIDER": [
+            "aspectRatio",
+            "autoplay",
+            "delay",
+            "effect",
+            "images",
+            "objectFit",
+            "objectPosition"
+        ],
+        "SPLIT_CTA": [
+            "gap",
+            "left",
+            "radius",
+            "right"
+        ],
+        "STEPS": [
+            "items",
+            "layout"
+        ],
+        "TABLE": [
+            "bordered",
+            "caption",
+            "compact",
+            "data",
+            "headerRow",
+            "maxHeight",
+            "rowHeaders",
+            "stickyHeader",
+            "striped"
+        ],
+        "TABLE_OF_CONTENTS": [
+            "accent",
+            "highlight",
+            "layout",
+            "levels",
+            "numbered",
+            "offset",
+            "sticky",
+            "stickyTop",
+            "title"
+        ],
+        "TABS": [
+            "items",
+            "tabAlign",
+            "variant"
+        ],
+        "TEAM": [
+            "columns",
+            "layout",
+            "members",
+            "photoShape"
+        ],
+        "TESTIMONIAL": [
+            "author",
+            "quote",
+            "role"
+        ],
+        "TESTIMONIAL_WALL": [
+            "cardStyle",
+            "columns",
+            "gap",
+            "items",
+            "showRatings",
+            "starColor"
+        ],
+        "TEXT": [
+            "text"
+        ],
+        "TIMELINE": [
+            "items",
+            "layout"
+        ],
+        "VIDEO": [
+            "url"
+        ],
+        "VIDEO_HERO": [
+            "align",
+            "buttons",
+            "height",
+            "mobileVideo",
+            "overlay",
+            "overlayOpacity",
+            "poster",
+            "showPause",
+            "subtitle",
+            "textColor",
+            "title",
+            "video",
+            "video2"
+        ],
+        "WIZARD": [
+            "accent",
+            "backText",
+            "btnText",
+            "email",
+            "intro",
+            "layout",
+            "nextText",
+            "progress",
+            "stepLabel",
+            "steps",
+            "successMsg",
+            "title"
+        ]
+    },
+    "recorded": "1.0.0"
+}

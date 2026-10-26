@@ -5,6 +5,7 @@ import { CONTAINER_TYPES } from '../editor/blockCatalog';
 import { blockDef } from '../render/blockDef.mjs';
 import { notify } from '../ui/notify';
 import { confirmDialog, promptDialog } from '../ui/dialog';
+import { __ } from '../i18n/index.js';
 let paletteRequest = null;   // one settings request for all the colour fields
 
 // Unique ids even for many blocks created in the same millisecond (templates, masters, imports)
@@ -257,7 +258,7 @@ export const useStore = create((set, get) => ({
         });
       }
       return data;
-    } catch { return { success: false, message: 'Server error' }; }
+    } catch { return { success: false, message: __("Server error") }; }
   },
   // Login from the "session expired" screen. Does NOT adopt a different user's identity: this tab holds
   // another user's unsaved work and must neither inherit it nor write its backups into the other account.
@@ -275,7 +276,7 @@ export const useStore = create((set, get) => ({
         sessionExpiresAt: data.expires_in != null ? Date.now() + data.expires_in * 1000 : null, sessionTimeout: data.timeout ?? null,
       });
       return data;
-    } catch { return { success: false, message: 'Server error' }; }
+    } catch { return { success: false, message: __("Server error") }; }
   },
   logout: async () => {
     flushDrafts();                                   // back up unsaved work BEFORE resetting the state
@@ -298,7 +299,7 @@ export const useStore = create((set, get) => ({
       const data = await res.json();
       if (data.success) { if (data.csrf) window.__CC_CSRF = data.csrf; set({ mustChangePw: false }); get().fetchVersion(); }
       return data;
-    } catch { return { success: false, message: 'Server error' }; }
+    } catch { return { success: false, message: __("Server error") }; }
   },
 
   publishSiteAsync: async () => {
@@ -307,7 +308,7 @@ export const useStore = create((set, get) => ({
       const res = await fetch('rebuild_all.php', { method: 'POST', body: '{}' });
       const text = await res.text();
       return JSON.parse(text);
-    } catch { return { success: false, message: 'Connection error.' }; }
+    } catch { return { success: false, message: __("Connection error.") }; }
   },
 
   currentView: 'manager', setView: (view) => set({ currentView: view }),
@@ -360,7 +361,7 @@ export const useStore = create((set, get) => ({
   }),
   deleteTemplate: async (id) => {
     const t = (get().templates || []).find((x) => x.id === id);
-    if (!(await confirmDialog({ title: `Delete the template${t ? ` "${t.name}"` : ''}?`, message: 'Blocks already added to pages stay. This cannot be undone.', confirmLabel: 'Delete template', danger: true }))) return;
+    if (!(await confirmDialog({ title: __("Delete the template{0}?", t ? ` "${t.name}"` : ''), message: __("Blocks already added to pages stay. This cannot be undone."), confirmLabel: __("Delete template"), danger: true }))) return;
     await fetch('api.php?action=delete_template', { method: 'POST', body: JSON.stringify({ id }) });
     get().fetchTemplates();
   },
@@ -402,7 +403,7 @@ export const useStore = create((set, get) => ({
       });
       const data = await res.json().catch(() => null);
       // Only link the block once the master really exists (otherwise the block would be lost)
-      if (!res.ok || !data || !data.success) { notify('Master NOT saved: ' + ((data && data.message) || 'unexpected response') + '. The block was left as it is.', 'error'); return; }
+      if (!res.ok || !data || !data.success) { notify(__("Master NOT saved: {0}. The block was left as it is.", (data && data.message) || 'unexpected response'), 'error'); return; }
       await get().fetchMasters();
 
       const replaceWithPointer = (nodes, id) => {
@@ -413,8 +414,8 @@ export const useStore = create((set, get) => ({
         });
       };
       set(s => pushHistory(s, replaceWithPointer(s.blocks, blockId)));
-      notify(`Master "${name}" saved and linked.`);
-    } catch { notify('Error saving the master (connection problem). The block was left as it is.', 'error'); }
+      notify(__("Master \"{0}\" saved and linked.", name));
+    } catch { notify(__("Error saving the master (connection problem). The block was left as it is."), 'error'); }
   },
 
   enterMasterEditMode: (masterId) => {
@@ -445,12 +446,12 @@ export const useStore = create((set, get) => ({
         });
         const data = await res.json();
         if (!data || !data.success) {
-          notify('Master NOT saved: ' + ((data && data.message) || 'unknown error') + '. Your changes are still here: try again.', 'error');
+          notify(__("Master NOT saved: {0}. Your changes are still here: try again.", (data && data.message) || 'unknown error'), 'error');
           return;                                      // stays in edit mode: nothing lost
         }
         await get().fetchMasters();
       } catch {
-        notify('Master NOT saved (connection problem). Your changes are still here: try again.', 'error');
+        notify(__("Master NOT saved (connection problem). Your changes are still here: try again."), 'error');
         return;
       }
     }
@@ -461,12 +462,12 @@ export const useStore = create((set, get) => ({
       editingMaster: null, isEditingMaster: false,
       pastBlocks: [], futureBlocks: [], selectedBlockId: null
     });
-    if (save) notify('Master updated everywhere it is used.');
+    if (save) notify(__("Master updated everywhere it is used."));
   },
 
   deleteMaster: async (id) => {
     const m = (get().masters || []).find((x) => x.id === id);
-    if (!(await confirmDialog({ title: `Delete the master${m ? ` "${m.name}"` : ''}?`, message: 'It is removed from EVERY page that uses it. This cannot be undone.', confirmLabel: 'Delete master', danger: true }))) return;
+    if (!(await confirmDialog({ title: __("Delete the master{0}?", m ? ` "${m.name}"` : ''), message: __("It is removed from EVERY page that uses it. This cannot be undone."), confirmLabel: __("Delete master"), danger: true }))) return;
     await fetch('api.php?action=delete_master', { method: 'POST', body: JSON.stringify({ id }) });
     get().fetchMasters();
     set((state) => {
@@ -585,15 +586,15 @@ export const useStore = create((set, get) => ({
   saveBlockAsTemplate: async (id) => {
     const block = findNodeById(get().blocks, id);
     if (!block) return false;
-    const name = await promptDialog({ title: 'Save as template', message: 'A reusable copy of this block, under Add › My templates.', label: 'Template name', placeholder: 'e.g. Pricing table', confirmLabel: 'Save template' });
+    const name = await promptDialog({ title: __("Save as template"), message: __("A reusable copy of this block, under Add › My templates."), label: __("Template name"), placeholder: __("e.g. Pricing table"), confirmLabel: __("Save template") });
     if (!name || name.trim() === '') return false;
     try {
       await fetch('api.php?action=save_template', { method: 'POST', body: JSON.stringify({ name, content_json: JSON.stringify(block) }) });
       get().fetchTemplates();
-      notify(`Template "${name}" saved. Find it under Add › My templates.`);
+      notify(__("Template \"{0}\" saved. Find it under Add › My templates.", name));
       return true;
     } catch {
-      notify('Could not save the template.', 'error');
+      notify(__("Could not save the template."), 'error');
       return false;
     }
   },

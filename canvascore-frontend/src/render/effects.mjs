@@ -1,25 +1,27 @@
 // Block effects (Advanced tab) and button hovers: the allowed values and the classes they add.
 // Mirrored in compiler.php (cc_effect_classes / cc_button_hover); the CSS is canvascore-admin/effects.css.
 
+import { __ } from '../i18n/index.js';
+
 export const REVEAL_ANIMATIONS = [
-  ['none', 'None'], ['fade-in', 'Fade in'], ['fade-up', 'Fade up'], ['fade-down', 'Fade down'],
-  ['fade-left', 'Slide in from the left'], ['fade-right', 'Slide in from the right'],
-  ['zoom-in', 'Zoom in'], ['zoom-out', 'Zoom out'], ['flip-up', 'Flip up'], ['flip-left', 'Flip sideways'],
-  ['rotate-in', 'Rotate in'], ['blur-in', 'Blur in'], ['bounce-in', 'Bounce in'],
+  ['none', __("None")], ['fade-in', __("Fade in")], ['fade-up', __("Fade up")], ['fade-down', __("Fade down")],
+  ['fade-left', __("Slide in from the left")], ['fade-right', __("Slide in from the right")],
+  ['zoom-in', __("Zoom in")], ['zoom-out', __("Zoom out")], ['flip-up', __("Flip up")], ['flip-left', __("Flip sideways")],
+  ['rotate-in', __("Rotate in")], ['blur-in', __("Blur in")], ['bounce-in', __("Bounce in")],
 ];
-export const DURATIONS = [['', 'Normal (0.8s)'], ['fast', 'Fast (0.5s)'], ['slow', 'Slow (1.2s)'], ['slower', 'Very slow (1.8s)']];
-export const DELAYS = [['', 'No delay'], ['100', '0.1s'], ['200', '0.2s'], ['300', '0.3s'], ['500', '0.5s'], ['800', '0.8s'], ['1000', '1s'], ['1500', '1.5s']];
+export const DURATIONS = [['', __("Normal (0.8s)")], ['fast', __("Fast (0.5s)")], ['slow', __("Slow (1.2s)")], ['slower', __("Very slow (1.8s)")]];
+export const DELAYS = [['', __("No delay")], ['100', '0.1s'], ['200', '0.2s'], ['300', '0.3s'], ['500', '0.5s'], ['800', '0.8s'], ['1000', '1s'], ['1500', '1.5s']];
 export const HOVER_EFFECTS = [
-  ['', 'None'], ['lift', 'Lift'], ['grow', 'Grow'], ['shrink', 'Shrink'], ['shadow', 'Shadow'],
-  ['glow', 'Glow (brand color)'], ['tilt', 'Tilt'], ['brighten', 'Brighten'], ['grayscale', 'Black & white → color'],
+  ['', __("None")], ['lift', __("Lift")], ['grow', __("Grow")], ['shrink', __("Shrink")], ['shadow', __("Shadow")],
+  ['glow', __("Glow (brand color)")], ['tilt', __("Tilt")], ['brighten', __("Brighten")], ['grayscale', __("Black & white → color")],
 ];
 export const LOOP_EFFECTS = [
-  ['', 'None'], ['float', 'Float'], ['pulse', 'Pulse'], ['bounce', 'Bounce'], ['swing', 'Swing'],
-  ['heartbeat', 'Heartbeat'], ['shake', 'Shake (every few seconds)'], ['spin', 'Spin (slow)'],
+  ['', __("None")], ['float', __("Float")], ['pulse', __("Pulse")], ['bounce', __("Bounce")], ['swing', __("Swing")],
+  ['heartbeat', __("Heartbeat")], ['shake', __("Shake (every few seconds)")], ['spin', __("Spin (slow)")],
 ];
 export const BUTTON_EFFECTS = [
-  ['', 'Color change only'], ['lift', 'Lift'], ['grow', 'Grow'], ['press', 'Press'], ['shadow', 'Shadow'],
-  ['glow', 'Glow'], ['shine', 'Shine sweep'], ['ring', 'Outline ring'], ['pulse', 'Pulse'],
+  ['', __("Color change only")], ['lift', __("Lift")], ['grow', __("Grow")], ['press', __("Press")], ['shadow', __("Shadow")],
+  ['glow', __("Glow")], ['shine', __("Shine sweep")], ['ring', __("Outline ring")], ['pulse', __("Pulse")],
 ];
 
 const allowed = (list) => new Set(list.map(([v]) => v).filter((v) => v && v !== 'none'));

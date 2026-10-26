@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { __ } from '../i18n/index.js';
 
 // Demo mode only: a small fixed banner with the countdown to the next reset, which wipes every change and signs
 // everyone out. Shown over every section, the full-screen page editor included.
@@ -28,9 +29,9 @@ export default function DemoBanner() {
       <RotateCcw size={14} style={{ flexShrink: 0 }} aria-hidden="true" />
       <span>
         {secs > 0
-          ? <>Demo: every change is wiped in <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{mm}:{ss}</strong></>
-          : <strong>Demo: resetting now…</strong>}
-        {limits && <span style={{ opacity: 0.8 }}> · up to {limits}</span>}
+          ? <>{__("Demo: every change is wiped in")} <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{mm}:{ss}</strong></>
+          : <strong>{__("Demo: resetting now…")}</strong>}
+        {limits && <span style={{ opacity: 0.8 }}> {__("· up to")} {limits}</span>}
       </span>
     </div>
   );

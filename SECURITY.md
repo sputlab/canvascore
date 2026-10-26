@@ -2,13 +2,16 @@
 
 ## Supported versions
 
-CanvasCore is in public preview (`0.x`). Security fixes go into the **latest release** only; please update to it
-before reporting.
+From 1.0, the **1.x line is the long-term support (LTS) line**: it never breaks formats, so updating within it is always safe, and
+that is where security fixes go. Security fixes are released as a new 1.x version (a patch release) and are available from
+**Administration › Updates**; please update to the latest 1.x before reporting. The full policy is in the
+[Stability and support policy](docs/manuals/DEVELOPER-GUIDE.md#14-stability-and-support-policy-1x-lts).
 
 | Version | Supported |
 | --- | --- |
-| Latest 0.x release | ✅ |
-| Older releases | ❌ |
+| Latest 1.x release | ✅ security and bug fixes |
+| Earlier 1.x releases | ⚠️ update to the latest 1.x (it is always compatible) |
+| 0.x (before 1.0) | ❌ update to 1.x; every 0.x database upgrades |
 
 ## Releases and updates
 

@@ -12,30 +12,32 @@ import AboutDialog from './AboutDialog';
 import { BrandLogo } from '../ui/BrandLogo';
 import { notify } from '../ui/notify';
 import { canManageSite, canPublishSite, canReview, roleLabel } from '../session/permissions';
+import { __ } from '../i18n/index.js';
+import LocaleSelect from './LocaleSelect.jsx';
 
 const NAV = [
-  { group: 'Content', items: [
-    { view: 'manager', label: 'Pages', icon: FileText },
-    { view: 'collections', label: 'Collections', icon: Library },
-    { view: 'reviews', label: 'Reviews', authorLabel: 'My submissions', icon: ClipboardCheck },
-    { view: 'templates', label: 'Templates', icon: LayoutTemplate, site: true },
-    { view: 'popups', label: 'Popups', icon: AppWindow, site: true },
-    { view: 'media', label: 'Media', icon: ImageIcon },
+  { group: __("Content"), items: [
+    { view: 'manager', label: __("Pages"), icon: FileText },
+    { view: 'collections', label: __("Collections"), icon: Library },
+    { view: 'reviews', label: __("Reviews"), authorLabel: __("My submissions"), icon: ClipboardCheck },
+    { view: 'templates', label: __("Templates"), icon: LayoutTemplate, site: true },
+    { view: 'popups', label: __("Popups"), icon: AppWindow, site: true },
+    { view: 'media', label: __("Media"), icon: ImageIcon },
   ] },
-  { group: 'Site', site: true, items: [
-    { view: 'menu', label: 'Menu', icon: ListTree },
-    { view: 'settings', label: 'Global Options', icon: Palette },
+  { group: __("Site"), site: true, items: [
+    { view: 'menu', label: __("Menu"), icon: ListTree },
+    { view: 'settings', label: __("Global Options"), icon: Palette },
   ] },
-  { group: 'Administration', admin: true, items: [
-    { view: 'submissions', label: 'Submissions', icon: Inbox },
-    { view: 'users', label: 'Accounts', icon: Users },
-    { view: 'backup', label: 'Backup', icon: DatabaseBackup },
-    { view: 'updates', label: 'Updates', icon: CircleArrowUp },
-    { view: 'packages', label: 'Block packages', icon: Package },
-    { view: 'library', label: 'Template library', icon: Store },
-    { view: 'languages', label: 'Languages', icon: LanguagesIcon },
-    { view: 'integrations', label: 'Integrations', icon: Plug },
-    { view: 'wpimport', label: 'Import from WordPress', icon: DownloadCloud },
+  { group: __("Administration"), admin: true, items: [
+    { view: 'submissions', label: __("Submissions"), icon: Inbox },
+    { view: 'users', label: __("Accounts"), icon: Users },
+    { view: 'backup', label: __("Backup"), icon: DatabaseBackup },
+    { view: 'updates', label: __("Updates"), icon: CircleArrowUp },
+    { view: 'packages', label: __("Block packages"), icon: Package },
+    { view: 'library', label: __("Template library"), icon: Store },
+    { view: 'languages', label: __("Languages"), icon: LanguagesIcon },
+    { view: 'integrations', label: __("Integrations"), icon: Plug },
+    { view: 'wpimport', label: __("Import from WordPress"), icon: DownloadCloud },
   ] },
 ];
 
@@ -45,7 +47,7 @@ export default function AdminLayout({ children, wide }) {
   const [publishing, setPublishing] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const siteName = useStore((s) => s.branding.siteName) || 'My Site';
+  const siteName = useStore((s) => s.branding.siteName) || __("My Site");
   const demo = useStore((s) => s.demo);
   const version = (serverVersion && serverVersion.app) || appVersion || '0.0.0';
   const build = (serverVersion && serverVersion.build) || appBuild;
@@ -55,24 +57,24 @@ export default function AdminLayout({ children, wide }) {
     setPublishing(true);
     const res = await publishSiteAsync();
     setPublishing(false);
-    if (res && res.success) notify(res.message || 'Site published.');
-    else notify((res && res.message) || 'Publish failed.', 'error');
+    if (res && res.success) notify(res.message || __("Site published."));
+    else notify(res && res.message || __("Publish failed."), 'error');
     if (res && res.success) useStore.getState().refreshPages();
   };
 
   return (
     <div className="ui-shell" data-nav-open={navOpen}>
-      <aside className="ui-sidebar" aria-label="Main navigation">
+      <aside className="ui-sidebar" aria-label={__("Main navigation")}>
         <div className="ui-brand" title={siteName}><BrandLogo /> <span className="ui-brand__name">{siteName}</span></div>
         <div style={{ padding: '0 12px 6px' }}>
           {canPublishSite(userRole) && (
-            <Button variant="success" block icon={Globe} onClick={publish} disabled={publishing} title="Rebuild and publish the whole site">
-              {publishing ? 'Publishing…' : 'Publish Site'}
+            <Button variant="success" block icon={Globe} onClick={publish} disabled={publishing} title={__("Rebuild and publish the whole site")}>
+              {publishing ? __("Publishing…") : __("Publish Site")}
             </Button>
           )}
           {/* The published site's home page: the folder above canvascore-admin/ */}
-          <a className="ui-btn ui-btn--ghost ui-btn--block" href="../" target="_blank" rel="noopener noreferrer" title="Open the published site in a new tab" style={{ marginTop: 6 }}>
-            <ExternalLink size={16} aria-hidden="true" />View Site
+          <a className="ui-btn ui-btn--ghost ui-btn--block" href="../" target="_blank" rel="noopener noreferrer" title={__("Open the published site in a new tab")} style={{ marginTop: 6 }}>
+            <ExternalLink size={16} aria-hidden="true" />{__("View Site")}
           </a>
         </div>
         <nav className="ui-nav">
@@ -95,16 +97,17 @@ export default function AdminLayout({ children, wide }) {
                 <div className="ui-user__name">{username}</div>
                 <div className="ui-user__role" style={{ color: userRole === 'admin' ? '#38bdf8' : '#a78bfa' }}>{roleLabel(userRole).toLowerCase()}</div>
               </span>
-              {!demo && <Button variant="ghost" size="sm" icon={KeyRound} onClick={() => setPwOpen(true)} title="Change your password" aria-label="Change your password" />}
-              <Button variant="ghost" size="sm" icon={LogOut} onClick={logout} title="Log out" aria-label="Log out" />
+              {!demo && <Button variant="ghost" size="sm" icon={KeyRound} onClick={() => setPwOpen(true)} title={__("Change your password")} aria-label={__("Change your password")} />}
+              <Button variant="ghost" size="sm" icon={LogOut} onClick={logout} title={__("Log out")} aria-label={__("Log out")} />
             </div>
           )}
+          <div style={{ padding: '4px 12px 2px' }}><LocaleSelect /></div>
           <div className="ui-version ui-version--row">
-            <span>CanvasCore v{version}{build ? ` · build ${build}` : ''}</span>
-            <button type="button" className="ui-version__info" onClick={() => setAboutOpen(true)} aria-label="About CanvasCore" title="About CanvasCore"><Info size={14} aria-hidden="true" /></button>
+            <span>{__("CanvasCore v")}{version}{build ? ` · build ${build}` : ''}</span>
+            <button type="button" className="ui-version__info" onClick={() => setAboutOpen(true)} aria-label={__("About CanvasCore")} title={__("About CanvasCore")}><Info size={14} aria-hidden="true" /></button>
           </div>
           {serverVersion && appVersion && (serverVersion.app !== appVersion || (appBuild && serverVersion.build && Number(serverVersion.build) !== Number(appBuild))) && (
-            <div className="ui-version" style={{ color: '#f59e0b' }}>Editor v{appVersion}{appBuild ? ` (build ${appBuild})` : ''} / server v{serverVersion.app}{serverVersion.build ? ` (build ${serverVersion.build})` : ''}: reload the page after updating.</div>
+            <div className="ui-version" style={{ color: '#f59e0b' }}>{__("Editor v")}{appVersion}{appBuild ? __(" (build {0})", appBuild) : ''} {__("/ server v")}{serverVersion.app}{serverVersion.build ? __(" (build {0})", serverVersion.build) : ''}{__(": reload the page after updating.")}</div>
           )}
         </div>
       </aside>
@@ -113,7 +116,7 @@ export default function AdminLayout({ children, wide }) {
       {navOpen && <div className="ui-scrim" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <div className="ui-main">
         <div className="ui-topbar">
-          <button type="button" className="ui-btn ui-btn--ghost ui-btn--icon" aria-label={navOpen ? 'Close menu' : 'Open menu'} onClick={() => setNavOpen(!navOpen)}>
+          <button type="button" className="ui-btn ui-btn--ghost ui-btn--icon" aria-label={navOpen ? __("Close menu") : __("Open menu")} onClick={() => setNavOpen(!navOpen)}>
             {navOpen ? <X size={18} /> : <MenuIcon size={18} />}
           </button>
           <BrandLogo size={22} iconSize={13} radius={6} /> <span className="ui-brand__name">{siteName}</span>

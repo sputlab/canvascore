@@ -37,6 +37,7 @@ import { UTC_OFFSETS, BUSINESS_TYPES } from './constants';
 import { RichTextField } from '../../editor/RichText';
 import { placeholderImage } from '../../editor/placeholder';
 import { PANEL_WIDGETS } from './widgetRegistry';
+import { __ } from '../../i18n/index.js';
 
 // The icons a definition can name for its sections (anything else gets the generic one)
 const ICONS = {
@@ -49,8 +50,8 @@ const ICONS = {
 // Option lists the editor already has, by name (choicesFrom): one source for the panel and the rest of the editor
 const CHOICES = {
   buttonEffects: BUTTON_EFFECTS,
-  buttonPresets: [['', 'Custom'], ...BUTTON_PRESETS],
-  utcOffsets: UTC_OFFSETS.map((o) => [o, o === 'local' ? "Visitor's local time" : 'UTC' + o]),
+  buttonPresets: [['', __("Custom")], ...BUTTON_PRESETS],
+  utcOffsets: UTC_OFFSETS.map((o) => [o, o === 'local' ? __("Visitor's local time") : 'UTC' + o]),
   businessTypes: BUSINESS_TYPES.map((b) => [b, b]),
 };
 const hintStyle = { fontSize: '11px', color: '#64748b', margin: '8px 0 0 0' };
@@ -72,14 +73,14 @@ function holds(cond, scope) {
     return !(want.not || []).some((w) => w === v || String(w) === String(v));
   });
 }
-const choicesOf = (s) => (s.choicesFrom ? CHOICES[s.choicesFrom] || [] : s.choices || (s.options || []).map((o) => [o.value, o.label || o.value]));
+const choicesOf = (s) => (s.choicesFrom ? CHOICES[s.choicesFrom] || [] : (s.choices || (s.options || []).map((o) => [o.value, o.label || o.value])).map(([v, l]) => [v, typeof l === 'string' ? __(l) : l]));
 const makeItem = (tpl) => JSON.parse(JSON.stringify(tpl || {}), (k, v) => {
   const m = typeof v === 'string' && v.match(/^\$placeholder:(\d+)x(\d+)$/);
   return m ? placeholderImage(Number(m[1]), Number(m[2])) : v;
 });
 const itemTitle = (s, it, i) => {
   if (s.itemTitleKey && it[s.itemTitleKey]) return String(it[s.itemTitleKey]);
-  const t = (s.itemTitle || 'Item {n}').replace(/\{(\w+)(?:\|([^}]*))?\}/g, (_, k, d) => (k === 'n' ? String(i + 1) : String(it[k] ?? d ?? '')));
+  const t = __(s.itemTitle || __("Item {n}")).replace(/\{(\w+)(?:\|([^}]*))?\}/g, (_, k, d) => (k === 'n' ? String(i + 1) : String(it[k] ?? d ?? '')));
   return s.itemMark && it[s.itemMark.key] ? t + s.itemMark.text : t;
 };
 
@@ -93,8 +94,8 @@ function Control({ k, s, scope }) {
   const v = shownValue(s, raw);
   const onChange = (x) => (fromStyles ? ctx.handleStyleChange(key, x) : scope.patch(key, x));
   const alt = (s.labelWhen || []).find((w) => holds(w.when, scope)) || {};
-  const label = alt.label ?? s.label ?? '';
-  const placeholder = alt.placeholder ?? s.placeholder;
+  const label = __(alt.label ?? s.label ?? '');
+  const placeholder = __(alt.placeholder ?? s.placeholder);
   const onPick = ctx.pickTo({ ...scope.pick, key, ...(s.altKey ? { alt: s.altKey } : {}), ...(s.focalKey ? { focal: s.focalKey } : {}), ...(s.fileKind ? { kind: s.fileKind } : {}) });
   const control = s.control || '';
 
@@ -108,7 +109,7 @@ function Control({ k, s, scope }) {
     const fields = <Fields keys={s.itemKeys || Object.keys(s.item || {})} scope={inner} labels={s.labels} />;
     return s.flat ? fields : (
       <div style={{ background: '#0f172a', padding: '10px', borderRadius: '8px', marginBottom: '8px', border: '1px solid #334155' }}>
-        {s.boxTitle && <div style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' }}>{s.boxTitle}</div>}
+        {s.boxTitle && <div style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' }}>{__(s.boxTitle)}</div>}
         {fields}
       </div>
     );
@@ -117,7 +118,7 @@ function Control({ k, s, scope }) {
     const chosen = Array.isArray(raw) ? raw : [];
     const order = (s.options || []).map((o) => o.value);
     return (s.options || []).map((o) => (
-      <ChkF key={o.value} label={o.label || o.value} checked={chosen.includes(o.value)} onChange={(on) => onChange(order.filter((n) => (n === o.value ? on : chosen.includes(n))))} />
+      <ChkF key={o.value} label={__(o.label || o.value)} checked={chosen.includes(o.value)} onChange={(on) => onChange(order.filter((n) => (n === o.value ? on : chosen.includes(n))))} />
     ));
   }
   if (s.type === 'list' && control === 'lines') {
@@ -134,25 +135,25 @@ function Control({ k, s, scope }) {
       <Fld label={label}>
         <textarea rows={s.rows || 6} readOnly={locked} aria-label={label} placeholder={placeholder} style={{ ...fldInput, resize: 'vertical', fontFamily: 'monospace', fontSize: '11px', opacity: locked ? 0.7 : 1 }}
           value={raw ?? ''} onChange={(e) => onChange(e.target.value)} />
-        {locked && s.adminOnlyMessage && <p style={{ fontSize: '11px', color: '#94a3b8', margin: '6px 0 0' }}>{s.adminOnlyMessage}</p>}
+        {locked && s.adminOnlyMessage && <p style={{ fontSize: '11px', color: '#94a3b8', margin: '6px 0 0' }}>{__(s.adminOnlyMessage)}</p>}
       </Fld>
     );
   }
-  if (control === 'editor') return <><label style={labelStyle}>{label}</label><RichTextField label={s.editorLabel || label} variant={s.variant || 'full'} minHeight={s.minHeight} value={raw || ''} onChange={onChange} /></>;
+  if (control === 'editor') return <><label style={labelStyle}>{label}</label><RichTextField label={__(s.editorLabel) || label} variant={s.variant || 'full'} minHeight={s.minHeight} value={raw || ''} onChange={onChange} /></>;
   if (control === 'link') {
     return (
       <Fld label={label}>
-        <select style={{ ...fldInput, marginBottom: '6px' }} aria-label={`${label}: a page of the site`} value={raw ?? '#'} onChange={(e) => onChange(e.target.value)}>
-          <option value="#">Select internal page...</option>
+        <select style={{ ...fldInput, marginBottom: '6px' }} aria-label={__("{0}: a page of the site", label)} value={raw ?? '#'} onChange={(e) => onChange(e.target.value)}>
+          <option value="#">{__("Select internal page...")}</option>
           {(ctx.pages || []).map((p) => <option key={p.id} value={pageFile(p, langs)}>📄 {p.title}{langs && langs.enabled && p.lang ? ` (${p.lang.toUpperCase()})` : ''}</option>)}
         </select>
-        <input type="text" style={fldInput} aria-label={label} placeholder={placeholder || 'Custom URL...'} value={raw ?? ''} onChange={(e) => onChange(e.target.value)} />
+        <input type="text" style={fldInput} aria-label={label} placeholder={placeholder || __("Custom URL...")} value={raw ?? ''} onChange={(e) => onChange(e.target.value)} />
       </Fld>
     );
   }
   if (control === 'datetime') return <Fld label={label}><input type="datetime-local" aria-label={label} style={fldInput} value={raw || ''} onChange={(e) => onChange(e.target.value)} /></Fld>;
   if (control === 'range') {
-    const shown = s.valueLabel ? s.valueLabel.replace('{v}', v) : (s.showValue ? `${label}: ${v}` : label);
+    const shown = s.valueLabel ? __(s.valueLabel).replace('{v}', v) : (s.showValue ? `${label}: ${v}` : label);
     return (
       <Fld label={shown}>
         <input type="range" aria-label={label} min={s.rangeMin ?? s.min} max={s.rangeMax ?? s.max} step={s.step ?? 1} style={{ width: '100%', cursor: 'pointer', ...(s.rtl ? { direction: 'rtl' } : {}) }}
@@ -163,7 +164,7 @@ function Control({ k, s, scope }) {
   if (s.type === 'enum' || control === 'select') {
     let opts = choicesOf(s);
     // a value the choices don't list but the setting accepts (a focal point such as "30% 70%" set by the picker): shown as it is
-    if (s.pattern && v !== '' && v != null && !opts.some(([o]) => String(o) === String(v)) && new RegExp(s.pattern).test(String(v))) opts = [...opts, [v, `Focal point (${v})`]];
+    if (s.pattern && v !== '' && v != null && !opts.some(([o]) => String(o) === String(v)) && new RegExp(s.pattern).test(String(v))) opts = [...opts, [v, __("Focal point ({0})", v)]];
     const has = (x) => opts.some(([o]) => String(o) === String(x));
     const cur = has(v) ? v : has(s.default) ? s.default : (opts[0] || [''])[0];   // a value that is not one of the choices: the default, else the first
     const numeric = s.type === 'number';
@@ -174,7 +175,7 @@ function Control({ k, s, scope }) {
   return (
     <>
       <TxtF label={label} value={v} onChange={onChange} placeholder={placeholder} multiline={control === 'textarea'} rows={s.rows} />
-      {warn && <p role="alert" style={{ fontSize: '11px', color: '#fbbf24', margin: '6px 0 0' }}>{s.checkMessage}</p>}
+      {warn && <p role="alert" style={{ fontSize: '11px', color: '#fbbf24', margin: '6px 0 0' }}>{__(s.checkMessage)}</p>}
     </>
   );
 }
@@ -190,9 +191,9 @@ function Fields({ keys, scope, labels }) {
     const s = labels && labels[k] ? { ...s0, label: labels[k] } : s0;
     const el = (
       <React.Fragment key={k}>
-        {s.subhead && <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #334155' }}><span style={{ fontSize: '11px', fontWeight: 800, color: '#38bdf8', letterSpacing: '.5px' }}>{s.subhead}</span></div>}
+        {s.subhead && <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #334155' }}><span style={{ fontSize: '11px', fontWeight: 800, color: '#38bdf8', letterSpacing: '.5px' }}>{__(s.subhead)}</span></div>}
         <Control k={k} s={s} scope={scope} />
-        {s.hint && holds(s.hintIf, scope) && <p style={{ ...hintStyle, margin: '6px 0 0 0' }}>{s.hint}</p>}
+        {s.hint && holds(s.hintIf, scope) && <p style={{ ...hintStyle, margin: '6px 0 0 0' }}>{__(s.hint)}</p>}
       </React.Fragment>
     );
     if (s.half) { pair.push(el); if (pair.length === 2) flush(); } else { flush(); out.push(el); }
@@ -223,10 +224,10 @@ function ListField({ k, s, scope }) {
       })}
       {!full && s.addFromMedia && (
         <button type="button" onClick={() => ctx.setMediaPickerTarget({ type: 'into', list: k, add: true, key: s.addFromMedia.key, alt: s.addFromMedia.alt, item: makeItem(s.newItem) })}
-          style={{ ...lstAddBtn, marginBottom: '6px' }}>{s.addFromMedia.label}</button>
+          style={{ ...lstAddBtn, marginBottom: '6px' }}>{__(s.addFromMedia.label)}</button>
       )}
       {!full && s.addLabel !== false && (
-        <button type="button" onClick={() => ctx.lstAdd(k, makeItem(s.newItem))} style={s.addFromMedia ? secondary : lstAddBtn}>{s.addLabel || '+ Add item'}</button>
+        <button type="button" onClick={() => ctx.lstAdd(k, makeItem(s.newItem))} style={s.addFromMedia ? secondary : lstAddBtn}>{__(s.addLabel || __("+ Add item"))}</button>
       )}
     </>
   );
@@ -244,10 +245,10 @@ export default function SchemaPanel({ def, ctx }) {
         const W = g.widget ? PANEL_WIDGETS[g.widget] : null;
         const hints = [].concat(g.hint || []);
         return (
-          <PanelAccordion key={g.title} title={g.title} icon={ICONS[g.icon] || LayoutGrid} defaultOpen={!!g.open}>
+          <PanelAccordion key={g.title} title={__(g.title)} icon={ICONS[g.icon] || LayoutGrid} defaultOpen={!!g.open}>
             {W && <W ctx={ctx} def={def} />}
             <Fields keys={g.keys || []} scope={scope} />
-            {holds(g.hintIf, scope) && hints.map((h, i) => <p key={i} style={hintStyle}>{h}</p>)}
+            {holds(g.hintIf, scope) && hints.map((h, i) => <p key={i} style={hintStyle}>{__(h)}</p>)}
           </PanelAccordion>
         );
       })}

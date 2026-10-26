@@ -1,9 +1,10 @@
+import { __ } from '../i18n/index.js';
 // Image tools of the media library: the maths of the crop frame and the focal point. Pure functions (the dialog,
 // ImageTools.jsx, only draws and listens). A rectangle is { x, y, w, h } in pixels of the image; `nat` is { w, h }.
 
 export const ASPECTS = [
-  ['free', 'Free'], ['orig', 'Original shape'], ['1:1', 'Square 1:1'], ['4:3', '4:3'], ['3:2', '3:2'], ['16:9', '16:9 wide'],
-  ['4:5', '4:5 portrait'], ['9:16', '9:16 tall'], ['3:1', '3:1 banner'],
+  ['free', __("Free")], ['orig', __("Original shape")], ['1:1', __("Square 1:1")], ['4:3', '4:3'], ['3:2', '3:2'], ['16:9', __("16:9 wide")],
+  ['4:5', __("4:5 portrait")], ['9:16', __("9:16 tall")], ['3:1', __("3:1 banner")],
 ];
 export const MIN_CROP = 8;
 // The formats the server can crop (GD): JPEG, PNG and WebP

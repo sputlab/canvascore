@@ -5,6 +5,7 @@ import { MousePointerClick } from 'lucide-react';
 import { Card, Field } from '../ui/kit';
 import { ColorInput } from './panel/fields';
 import { normalizeKit, cleanKitValue, BUTTON_PRESETS } from '../render/kit.mjs';
+import { __ } from '../i18n/index.js';
 
 const RADIUS_HINT = 'e.g. 6px or 999px';
 
@@ -23,7 +24,7 @@ export default function ButtonsFieldsCard({ settings, set }) {
   };
   // A corner radius is typed: it is applied when the field loses focus, and only a valid length is kept
   const radiusInput = (label, value, onCommit) => (
-    <input className="ui-input" aria-label={label} defaultValue={value || ''} key={`${label}-${value || ''}`} placeholder="Built-in" style={{ minWidth: 0 }}
+    <input className="ui-input" aria-label={label} defaultValue={value || ''} key={`${label}-${value || ''}`} placeholder={__("Built-in")} style={{ minWidth: 0 }}
       onBlur={(e) => {
         const v = e.target.value.trim();
         if (v !== '' && cleanKitValue('radius', v) !== v) { e.target.value = value || ''; return; }   // not a length: keep the saved one
@@ -32,29 +33,29 @@ export default function ButtonsFieldsCard({ settings, set }) {
   );
   const grid = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 };
   return (
-    <Card title="Buttons & fields" icon={MousePointerClick} description="Button presets: blocks that pick one (the Button block and the buttons of a Hero) use these colours and corners. Form fields use the field style. Colours can be global colours.">
+    <Card title={__("Buttons & fields")} icon={MousePointerClick} description={__("Button presets: blocks that pick one (the Button block and the buttons of a Hero) use these colours and corners. Form fields use the field style. Colours can be global colours.")}>
       {BUTTON_PRESETS.map(([id, label]) => {
         const v = kit.buttons[id] || {};
         return (
           <div key={id} className="cc-button-preset" style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 6 }}>{label} button</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 6 }}>{label} {__("button")}</div>
             <div style={grid}>
-              <Field label="Background"><ColorInput label={`${label} button background`} value={v.bg || ''} allowTransparent onChange={(c) => putButton(id, 'bg', c)} placeholder="Built-in" /></Field>
-              <Field label="Text"><ColorInput label={`${label} button text`} value={v.text || ''} allowTransparent={false} allowClear onChange={(c) => putButton(id, 'text', c)} placeholder="Built-in" /></Field>
-              <Field label="Border (empty = none)"><ColorInput label={`${label} button border`} value={v.border || ''} allowTransparent={false} onChange={(c) => putButton(id, 'border', c)} placeholder="No border" /></Field>
-              <Field label="Corner radius">{radiusInput(`${label} button corner radius`, v.radius, (r) => putButton(id, 'radius', r))}</Field>
+              <Field label={__("Background")}><ColorInput label={__("{0} button background", label)} value={v.bg || ''} allowTransparent onChange={(c) => putButton(id, 'bg', c)} placeholder={__("Built-in")} /></Field>
+              <Field label={__("Text")}><ColorInput label={__("{0} button text", label)} value={v.text || ''} allowTransparent={false} allowClear onChange={(c) => putButton(id, 'text', c)} placeholder={__("Built-in")} /></Field>
+              <Field label={__("Border (empty = none)")}><ColorInput label={__("{0} button border", label)} value={v.border || ''} allowTransparent={false} onChange={(c) => putButton(id, 'border', c)} placeholder={__("No border")} /></Field>
+              <Field label={__("Corner radius")}>{radiusInput(`${label} button corner radius`, v.radius, (r) => putButton(id, 'radius', r))}</Field>
             </div>
           </div>
         );
       })}
       <div className="cc-field-style" style={{ borderTop: '1px solid #1e293b', paddingTop: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 6 }}>Form fields</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 6 }}>{__("Form fields")}</div>
         <div style={grid}>
-          <Field label="Background"><ColorInput label="Form field background" value={kit.field.bg || ''} allowTransparent={false} onChange={(c) => putField('bg', c)} placeholder="White" /></Field>
-          <Field label="Border"><ColorInput label="Form field border" value={kit.field.border || ''} allowTransparent={false} onChange={(c) => putField('border', c)} placeholder="Light grey" /></Field>
-          <Field label="Corner radius">{radiusInput('Form field corner radius', kit.field.radius, (r) => putField('radius', r))}</Field>
+          <Field label={__("Background")}><ColorInput label={__("Form field background")} value={kit.field.bg || ''} allowTransparent={false} onChange={(c) => putField('bg', c)} placeholder={__("White")} /></Field>
+          <Field label={__("Border")}><ColorInput label={__("Form field border")} value={kit.field.border || ''} allowTransparent={false} onChange={(c) => putField('border', c)} placeholder={__("Light grey")} /></Field>
+          <Field label={__("Corner radius")}>{radiusInput(__("Form field corner radius"), kit.field.radius, (r) => putField('radius', r))}</Field>
         </div>
-        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748b' }}>Form fields: forms, wizards, newsletter sign-ups and site search. Radius: {RADIUS_HINT}.</p>
+        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748b' }}>{__("Form fields: forms, wizards, newsletter sign-ups and site search. Radius:")} {RADIUS_HINT}.</p>
       </div>
     </Card>
   );

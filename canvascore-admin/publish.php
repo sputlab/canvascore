@@ -11,6 +11,21 @@ require_once __DIR__ . '/languages.php';
 
 // Publishes the site. Returns ['success' => bool, 'message' => string] (the message says what was published or what failed).
 function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
+    // A slow host must not cut a publish short, and two publishes (the editor, the scheduler, cron) must not write the same files at once
+    @set_time_limit(0); @ignore_user_abort(true);
+    $lock = @fopen($data_dir . '/publish.lock', 'c');
+    if ($lock) {
+        // another publish (the scheduler, cron, someone else) is usually done in a second or two: wait for it, a few seconds at most
+        $got = false; for ($i = 0; $i < 50 && !($got = @flock($lock, LOCK_EX | LOCK_NB)); $i++) usleep(200000);
+        if (!$got) { fclose($lock); return ['success' => false, 'message' => 'Another publish is running. Try again in a moment.']; }
+    }
+    try {
+        return cc_publish_site_locked($pdo, $data_dir, $base_dir);
+    } finally {
+        if ($lock) { @flock($lock, LOCK_UN); fclose($lock); }
+    }
+}
+function cc_publish_site_locked(PDO $pdo, string $data_dir, string $base_dir): array {
     try {
         $base_url = $base_dir . '/';
         // Global settings: loaded first of all (menu and header/footer read them right below).
@@ -85,7 +100,11 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         $font_family = preg_replace('/[^A-Za-z0-9 \-]/', '', (string)($settings['fontFamily'] ?? 'Inter'));
         if (trim($font_family) === '') $font_family = 'Inter';
         $site_suffix = htmlspecialchars(isset($settings['siteSuffix']) ? (string)$settings['siteSuffix'] : ' | My Site');
-        $site_url     = rtrim(trim($settings['siteUrl'] ?? ''), '/');
+        // the site address is one line with a scheme (it ends up in robots.txt, canonical links and feeds)
+        $site_url     = rtrim(trim((string)($settings['siteUrl'] ?? '')), '/');
+        if ($site_url !== '' && !preg_match('#^https?://[^\s"<>\\\\]+$#i', $site_url)) $site_url = '';
+        // text an editor types is never read again as a placeholder of the page template ({{PAGE_CONTENT}}, {{MAIN_MENU}}…)
+        $no_tpl = function ($t) { return str_replace('{{', '&#123;&#123;', $t); };
         $site_name    = trim($settings['siteName'] ?? '');
         $favicon_url  = trim($settings['faviconUrl'] ?? '');
         $default_og   = trim($settings['defaultOgImage'] ?? '');
@@ -107,6 +126,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         // Every file written by this build (relative to the site root), and the ones that could not be written
         $site_root = realpath(__DIR__ . '/..');
         $written = []; $failed = []; $warnings = [];
+        $partial = false;   // a whole section failed (collections, archives, feeds, redirects): the pages it did not write stay online and are not counted as removed
         $write = function ($fp, $content) use (&$written, &$failed, $site_root) {
             // Never outside the site folder, never into CanvasCore's own folders, never a server configuration or script file
             $rel = ltrim(str_replace('\\', '/', substr($fp, strlen(__DIR__ . '/../'))), '/');
@@ -114,7 +134,9 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 || cc_slug_reserved(explode('/', $rel)[0]) && strpos($rel, '/') !== false) { $failed[] = $fp; return; }
             $d = dirname($fp);
             if (!is_dir($d)) @mkdir($d, 0755, true);
-            if (@file_put_contents($fp, $content) === false) { $failed[] = $fp; return; }
+            // written beside it and renamed over it, so a full disk or a crash never leaves a half-written page online
+            $tmp = $fp . '.cc-tmp-' . bin2hex(random_bytes(4));
+            if (@file_put_contents($tmp, $content) === false || !@rename($tmp, $fp)) { @unlink($tmp); if (@file_put_contents($fp, $content) === false) { $failed[] = $fp; return; } }
             $real = realpath($fp);
             if ($real && $site_root && strpos($real, $site_root . DIRECTORY_SEPARATOR) === 0) $written[] = str_replace(DIRECTORY_SEPARATOR, '/', substr($real, strlen($site_root) + 1));
         };
@@ -132,7 +154,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     $fl = cc_lang_norm($fc['lang'] ?? '', $lcfg);
                     $feeds[$fc['id'] . '|' . $fl] = ['name' => (string)$fc['name'], 'slug' => cc_safe_slug($fc['slug']), 'lang' => $fl, 'dir' => cc_lang_prefix($fl, $lcfg) . cc_safe_slug($fc['slug']), 'items' => []];
                 }
-            } catch (Throwable $e) { error_log('CanvasCore publish (feeds): ' . $e->getMessage()); $warnings[] = 'Feeds could not be published (details in the server error log).'; }
+            } catch (Throwable $e) { error_log('CanvasCore publish (feeds): ' . $e->getMessage()); $partial = true; $warnings[] = 'Feeds could not be published (details in the server error log).'; }
         }
         $feed_links_by_lang = [];
         foreach ($feeds as $fd) $feed_links_by_lang[$fd['lang']] = ($feed_links_by_lang[$fd['lang']] ?? '') . '<link rel="alternate" type="application/rss+xml" title="' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '" href="' . htmlspecialchars($site_url . '/' . $fd['dir'] . '/feed.xml') . '">' . "\n";
@@ -183,7 +205,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 $ph = cc_popups_html($popups, $ctx);
                 if ($ph !== '') $html = preg_replace_callback('#</body>#i', function ($m) use ($ph, $base_url) { return str_replace('{{BASE_URL}}', $base_url, $ph) . $m[0]; }, $html, 1);
             }
-            if ($cookie_html !== '') $html = preg_replace('#</body>#i', str_replace('{{BASE_URL}}', $base_url, $cookie_html) . '</body>', $html, 1);
+            if ($cookie_html !== '') { $cb = str_replace('{{BASE_URL}}', $base_url, $cookie_html) . '</body>'; $html = preg_replace_callback('#</body>#i', function () use ($cb) { return $cb; }, $html, 1); }
             // (a callback: the text may contain $1 or \\, which a replacement string would read as references)
             if ($announce_html !== '') $html = preg_replace_callback('#<body[^>]*>#i', function ($m) use ($announce_html, $base_url) { return $m[0] . "\n" . str_replace('{{BASE_URL}}', $base_url, $announce_html); }, $html, 1);
             return cc_optimize_images($html, $base_url . 'uploads/', $media_meta);
@@ -263,8 +285,8 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             if (cc_slug_reserved($slug)) { $warnings[] = 'Not published: "' . ($page['title'] ?? '') . '" uses the reserved address /' . $slug . '/'; continue; }
             if ($L === '' && cc_lang_folder_taken($slug, $lcfg)) { $warnings[] = 'Not published: "' . ($page['title'] ?? '') . '" uses /' . $slug . '/, the folder of a language.'; continue; }
             $title = htmlspecialchars($page['title'] ?? '');
-            $seo_title = !empty($page['seo_title']) ? htmlspecialchars($page['seo_title']) : $title . $site_suffix;
-            $seo_description = htmlspecialchars($page['seo_description'] ?? '');
+            $seo_title = $no_tpl(!empty($page['seo_title']) ? htmlspecialchars($page['seo_title']) : $title . $site_suffix);
+            $seo_description = $no_tpl(htmlspecialchars($page['seo_description'] ?? ''));
             $page_layout = $page['layout'] ?? 'boxed';
             $page_bg = htmlspecialchars(cc_css_color($page['bg_color'] ?? '', '#ffffff'));
             $boxed_width = htmlspecialchars(cc_css_length($page['boxed_width'] ?? '', '1200px'));
@@ -379,8 +401,8 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     $pre = cc_lang_prefix($L, $lcfg);
                     $it_slug = cc_safe_slug($it['slug']);
                     $i_title = htmlspecialchars($it['title'] ?? '');
-                    $i_seo_title = !empty($it['seo_title']) ? htmlspecialchars($it['seo_title']) : $i_title . $site_suffix;
-                    $i_seo_desc = htmlspecialchars($it['seo_description'] ?? $it['excerpt'] ?? '');
+                    $i_seo_title = $no_tpl(!empty($it['seo_title']) ? htmlspecialchars($it['seo_title']) : $i_title . $site_suffix);
+                    $i_seo_desc = $no_tpl(htmlspecialchars($it['seo_description'] ?? $it['excerpt'] ?? ''));
                     // One design per collection: when it has blocks, every item page is built from them (the item's own
                     // blocks are kept, and used again if the design is removed)
                     $col_design = json_decode((string)($col['design_json'] ?? '[]'), true);
@@ -455,7 +477,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     if (count($i_abs_alts) > 1 && $i_abs !== '') $sitemap_alts[$i_abs] = $i_abs_alts;
                 }
             }
-        } catch (Throwable $e) { error_log('CanvasCore publish (collections): ' . $e->getMessage()); $warnings[] = 'Collections could not be published (details in the server error log).'; }
+        } catch (Throwable $e) { error_log('CanvasCore publish (collections): ' . $e->getMessage()); $partial = true; $warnings[] = 'Collections could not be published (details in the server error log).'; }
 
         // --- Listing, archive and taxonomy pages. One layout for all of them, paginated (cc_archive_nav), built from the
         // live items of each collection: the listing (/<col>/, /<col>/page/N/), its sorts (/<col>/sort/title/, /<col>/sort/oldest/),
@@ -464,7 +486,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         // An address that an item already uses is never written over.
         try {
             $arch_lang = '';   // the language being published ('' = the default one); $path starts with its folder
-            $render_page = function ($path, $title, $desc, $inner) use (&$sitemap_urls, &$arch_lang, $template, $menu_for, $parts_for, $google_fonts_link, $brand_color, $font_family, $site_suffix, $base_url, $site_url, $finish, $write, $pdo, $lcfg, $dlang) {
+            $render_page = function ($path, $title, $desc, $inner) use ($multi, &$sitemap_urls, &$arch_lang, $template, $menu_for, $parts_for, $google_fonts_link, $brand_color, $font_family, $site_suffix, $base_url, $site_url, $finish, $write, $pdo, $lcfg, $dlang) {
                 $L = $arch_lang;
                 $menu_html = $menu_for($L);
                 [$header_html, $footer_html] = $parts_for($L, []);
@@ -587,7 +609,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     }
                 }
             }
-        } catch (Throwable $e) { error_log('CanvasCore publish (archives): ' . $e->getMessage()); $warnings[] = 'Listing and archive pages could not be published (details in the server error log).'; }
+        } catch (Throwable $e) { error_log('CanvasCore publish (archives): ' . $e->getMessage()); $partial = true; $warnings[] = 'Listing and archive pages could not be published (details in the server error log).'; }
 
         // --- RSS feeds (newest 50 items each) ---
         foreach ($feeds as $fd) {
@@ -634,7 +656,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 $write(__DIR__ . '/../' . $rel, cc_redirect_page_html($href));
                 $apache_rules[] = [rtrim($base_url, '/') . $rd['from_path'], preg_match('~^https?://~i', $to) ? $to : rtrim($base_url, '/') . $to];
             }
-        } catch (Throwable $e) { error_log('CanvasCore publish (redirects): ' . $e->getMessage()); $warnings[] = 'Redirects could not be published (details in the server error log).'; }
+        } catch (Throwable $e) { error_log('CanvasCore publish (redirects): ' . $e->getMessage()); $partial = true; $warnings[] = 'Redirects could not be published (details in the server error log).'; }
 
         // Form recipient registry (per form, server-side: no email addresses in the client)
         $forms = function_exists('cc_form_registry') ? cc_form_registry() : [];
@@ -681,7 +703,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         $manifest_file = $data_dir . '/published_files.json';
         $previous = file_exists($manifest_file) ? json_decode((string)@file_get_contents($manifest_file), true) : [];
         $removed = 0;
-        if (is_array($previous) && !$failed) {
+        if (is_array($previous) && !$failed && !$partial) {
             $keep = array_flip($written);
             foreach ($previous as $rel) {
                 if (!is_string($rel) || isset($keep[$rel]) || $rel === 'index.html') continue;
@@ -695,7 +717,8 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 }
             }
         }
-        if (!$failed) @file_put_contents($manifest_file, json_encode(array_values(array_unique($written))));
+        if (!$failed && !$partial) @file_put_contents($manifest_file, json_encode(array_values(array_unique($written))));
+        if ($partial) $warnings[] = 'Nothing was removed from the site this time, so no page is lost: fix the problem above and publish again.';
 
         if ($failed) {
             return ['success' => false, 'message' => 'Publish incomplete: ' . count($failed) . ' file(s) could not be written (check the folder permissions on the server), e.g. ' . basename(dirname($failed[0])) . '/' . basename($failed[0]) . '.'];

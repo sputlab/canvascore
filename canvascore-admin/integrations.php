@@ -163,7 +163,7 @@ function cc_int_http($method, $url, $body = null, array $o = []) {
     curl_setopt_array($ch, $opts);
     curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE); $err = curl_error($ch);
-    curl_close($ch);
+    if (PHP_VERSION_ID < 80000) curl_close($ch);   // a no-op since PHP 8.0, deprecated in 8.5
     return ['code' => $code, 'body' => $got, 'error' => $code === 0 ? ($err !== '' ? $err : 'no answer') : ''];
 }
 

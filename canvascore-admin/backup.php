@@ -247,6 +247,8 @@ function cc_backup_restore($pdo, $path) {
                 if ($t !== 'pages' || empty($row['is_draft_copy'])) $counts[$t]++;
             }
         }
+        // a backup from before roles (0.15) has no creator on its pages: the author is it, as when the site itself was upgraded
+        if (cc_backup_table_exists($pdo, 'pages') && in_array('created_by', cc_backup_columns($pdo, 'pages'), true) && in_array('author', cc_backup_columns($pdo, 'pages'), true)) $pdo->exec("UPDATE pages SET created_by = author WHERE (created_by = '' OR created_by IS NULL) AND author IS NOT NULL");
         cc_sanitize_all_content($pdo);   // restored rich text is cleaned like a new save
         $pdo->commit();
     } catch (Exception $e) {
@@ -263,14 +265,14 @@ function cc_backup_restore($pdo, $path) {
         $cur = @json_decode((string)@file_get_contents($data_dir . '/settings.json'), true);
         $s = $dataFiles['settings.json'];
         if (is_array($cur) && array_key_exists('trustedProxies', $cur)) $s['trustedProxies'] = $cur['trustedProxies']; else unset($s['trustedProxies']);
-        file_put_contents($data_dir . '/settings.json', json_encode($s, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        cc_write_file($data_dir . '/settings.json', json_encode($s, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
-    if (isset($dataFiles['menu.json'])) file_put_contents($data_dir . '/menu.json', json_encode($dataFiles['menu.json'], JSON_UNESCAPED_UNICODE));
+    if (isset($dataFiles['menu.json'])) cc_write_file($data_dir . '/menu.json', json_encode($dataFiles['menu.json'], JSON_UNESCAPED_UNICODE));
     $metaFile = function_exists('cc_media_meta_file') ? cc_media_meta_file() : $data_dir . '/media.json';
     $foldFile = function_exists('cc_media_folders_file') ? cc_media_folders_file() : $data_dir . '/media-folders.json';
     // descriptions/folders of the OLD images must not stick to the restored ones
-    file_put_contents($metaFile, json_encode($dataFiles['media.json'] ?? new stdClass(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-    file_put_contents($foldFile, json_encode($dataFiles['media-folders.json'] ?? [], JSON_UNESCAPED_UNICODE));
+    cc_write_file($metaFile, json_encode($dataFiles['media.json'] ?? new stdClass(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    cc_write_file($foldFile, json_encode($dataFiles['media-folders.json'] ?? [], JSON_UNESCAPED_UNICODE));
 
     cc_migrate_content($pdo);
     $counts['images'] = count($names) - count($skipped);

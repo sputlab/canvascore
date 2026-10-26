@@ -5,6 +5,7 @@ import { uniqueSlug } from '../utils/slug';
 import { LayoutTemplate, Plus, FileText, Store } from 'lucide-react';
 import { Button, PageHeader, EmptyState } from '../ui/kit';
 import { fetchStarters, starterBlocks, starterOutline } from '../editor/starters';
+import { __ } from '../i18n/index.js';
 
 const newPageId = () => 'page-' + Date.now();
 
@@ -22,7 +23,7 @@ export default function Templates() {
     const id = newPageId();
     const blocks = starterBlocks(starter);
     // The slug follows the title, as for a new blank page (and skips slugs already in use)
-    const title = starter.name === 'Blank' ? 'New Page' : starter.name;
+    const title = starter.name === 'Blank' ? __("New Page") : starter.name;
     const slug = uniqueSlug(title, { pages });
     const newPage = {
       id, title, slug, clean_slug: slug,
@@ -32,8 +33,8 @@ export default function Templates() {
     };
     try {
       const data = await (await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks, publish: false }) })).json();
-      if (!data || data.success === false) { notify('Could not create the page: ' + ((data && data.message) || 'unexpected answer'), 'error'); setBusy(false); return; }
-    } catch { notify('Could not create the page (connection problem).', 'error'); setBusy(false); return; }
+      if (!data || data.success === false) { notify(__("Could not create the page: {0}", (data && data.message) || 'unexpected answer'), 'error'); setBusy(false); return; }
+    } catch { notify(__("Could not create the page (connection problem)."), 'error'); setBusy(false); return; }
     setPages([newPage, ...pages]);
     setActivePage(newPage);
     setBlocks(blocks);
@@ -46,11 +47,11 @@ export default function Templates() {
 
   return (
     <>
-      <PageHeader icon={LayoutTemplate} title="Start from a template"
-        description="Pick a starting point. It creates a new draft page you can fully edit."
-        actions={userRole === 'admin' && <Button icon={Store} onClick={() => setView('library')}>Browse the online library</Button>} />
+      <PageHeader icon={LayoutTemplate} title={__("Start from a template")}
+        description={__("Pick a starting point. It creates a new draft page you can fully edit.")}
+        actions={userRole === 'admin' && <Button icon={Store} onClick={() => setView('library')}>{__("Browse the online library")}</Button>} />
       {starters.length === 0 ? (
-        <EmptyState icon={LayoutTemplate} title="No templates available" />
+        <EmptyState icon={LayoutTemplate} title={__("No templates available")} />
       ) : (
         <div className="ui-grid" style={{ '--ui-min': '240px', gap: 16 }}>
           {starters.map(st => (
@@ -62,10 +63,10 @@ export default function Templates() {
                 <h2 style={{ margin: 0, fontSize: 15, color: '#f8fafc' }}>{st.name}</h2>
                 <p style={{ margin: 0, fontSize: 12.5, color: '#94a3b8', lineHeight: 1.5 }}>{st.description}</p>
                 {outline(st).length > 0 && (
-                  <p style={{ margin: 0, fontSize: 11, color: '#64748b', lineHeight: 1.5 }} title="Sections in this template">{outline(st).join(' · ')}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: '#64748b', lineHeight: 1.5 }} title={__("Sections in this template")}>{outline(st).join(' · ')}</p>
                 )}
                 <div style={{ flex: 1 }} />
-                <Button variant="primary" block disabled={busy} onClick={() => applyStarter(st)}>Use template</Button>
+                <Button variant="primary" block disabled={busy} onClick={() => applyStarter(st)}>{__("Use template")}</Button>
               </div>
             </article>
           ))}

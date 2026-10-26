@@ -1,9 +1,10 @@
+import { __ } from '../i18n/index.js';
 // Global colours (Global Options): a named palette in the settings ("colors": [{id, name, value}]). Each colour is
 // a CSS variable, --cc-color-<id>, on published pages and in the editor. A field that uses one stores a reference,
 // var(--cc-color-<id>, <its value when chosen>): change the palette and the whole site follows; the value after the
 // comma is only a fallback. "primary" is the brand colour (brandColor, --brand-color). Mirrors cc_palette() in config.php.
-export const DEFAULT_COLORS = [['primary', 'Primary', '#3b82f6'], ['secondary', 'Secondary', '#0f172a'], ['accent', 'Accent', '#f59e0b'],
-  ['text', 'Text', '#0f172a'], ['background', 'Background', '#ffffff']];
+export const DEFAULT_COLORS = [['primary', __("Primary"), '#3b82f6'], ['secondary', __("Secondary"), '#0f172a'], ['accent', __("Accent"), '#f59e0b'],
+  ['text', __("Text"), '#0f172a'], ['background', __("Background"), '#ffffff']];
 export const BUILT_IN_IDS = DEFAULT_COLORS.map(([id]) => id);
 
 const REF_RE = /^var\(--(brand-color|cc-color-([a-z][a-z0-9-]{0,31}))(?:\s*,\s*(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20}))?\)$/;

@@ -24,6 +24,8 @@ never in a public issue).
 11. [UI conventions](#11-ui-conventions)
 12. [Backend API conventions](#12-backend-api-conventions-canvascore-adminapiphp)
 13. [Versioning, releases and git workflow](#13-versioning-releases-and-git-workflow)
+14. [Stability and support policy (1.x LTS)](#14-stability-and-support-policy-1x-lts)
+15. [Translating the admin interface](#15-translating-the-admin-interface)
 
 ---
 
@@ -175,7 +177,7 @@ canvascore-frontend/         React editor
 | `src/session/` | Session manager, fetch guard, local draft backups and trackers |
 | `src/ui/` | UI kit (`kit.jsx`, `kit.css`), `global.css`, `notify.js` + `toast.jsx`, `dialog.js` + `dialogHost.jsx`, `branding.js` (`useBrandingHead()`, `brandIconUrl()`) + `BrandLogo.jsx` (site favicon as the admin logo) |
 | `src/menu/menuThemes.js` | Menu defaults, themes, effect groups (mirrored in `compiler.php`) |
-| `tests/` | The 15 test suites (12 Node, plus `server.php`, `security.php` and `installers.php` in PHP) and the `render_php.php` / `render_php_list.php` / `render_def.php` / `render_menu.php` / `render_popups.php` CLI helpers |
+| `tests/` | The 18 test suites (14 Node, plus `server.php`, `security.php`, `installers.php` and `formats.php` in PHP) and the `render_php.php` / `render_php_list.php` / `render_def.php` / `render_menu.php` / `render_popups.php` CLI helpers |
 
 ## 3. Local development
 
@@ -248,7 +250,7 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 
 ### Tests
 
-`npm test` runs the 15 suites in sequence (each exits non-zero on failure):
+`npm test` runs the 18 suites in sequence (each exits non-zero on failure):
 
 | Script | File | Covers |
 | --- | --- | --- |
@@ -262,6 +264,10 @@ npm run lint                      # oxlint --max-warnings 0: the repo is kept at
 | `test:menu` | `tests/menu.mjs` | Menu effect catalog in sync with `compiler.php`, every theme/effect rendered by PHP, escaping |
 | `test:popups` | `tests/popups.mjs` | The popup runtime (`canvascore-admin/popups.js`) in jsdom on the HTML the real PHP writes (`render_popups.php`), with a fake clock: every trigger (time, scroll, exit intent, a click), the rules (devices, visitors, schedule, frequency), closing, the focus trap, one popup at a time, the cookie banner, a form sent in a popup |
 | `test:languages` | `tests/languages.mjs` | The Languages screen, the Language section of Page Settings, the lists' language filter and Translate buttons, the switcher panel and the helpers of `editor/languages.js`, mounted in jsdom; the PHP side is in `server.php` and `security.php` (LANGUAGES) |
+| `test:i18n` | `tests/i18n.mjs` | The translated interface: every text of the source has its translation in every locale file, nothing is left over, the `{values}` match; the runtime (`__`, `_n`, the fallback to English) and the server's messages translated as they arrive (never the content an answer carries) |
+| `test:i18n-ui` | `tests/i18n-ui.mjs` | The real app mounted in jsdom in Italian: the sign-in screen, the sidebar and every screen are scanned for English left on them |
+| `test:installers` | `tests/installers.php` | One-click installs: the command-line installer, the provisioning file, the Softaculous package and its `__install()` on real copies of the site |
+| `test:formats` | `tests/formats.php` | The formats stable through 1.x (section 14): the schema, upgrades from every earlier step, a 1.0 backup, the API actions and the block types of 1.0 |
 | `test:rich-text` | `tests/rich-text.mjs` | Paste cleanup, in-place editing keeps layout, toolbars, tidy on blur |
 | `test:ui` | `tests/ui-shell.mjs` | Sidebar, Pages screen, editor top bar and shortcuts, Add panel, property tabs, effects, Layers, dialogs, media library (folders, selection, uploads), site branding and About, Backup page, Collections (rename, bulk actions) |
 | `test:server` | `tests/server.php` (`php tests/server.php`) | Server helpers through the real PHP code: security helpers (rich-text styles and links, `cc_sanitize_blocks`, active URLs, reserved slugs, redirect targets, CSS colors/lengths, image URLs, `build_inline_style`), migration 8 on an old database (default account removed, installed flag, stored rich text cleaned, `session_gen` and unique names), code surfaces kept on editors' saves, re-linking after a slug change, client IP behind trusted proxies, SVG upload check, sanitizer, `cc_int`, slider arrows and reduced motion, form fallbacks and field types, revision history, image copies and `srcset`, redirects (chains, loops, `.htaccess` block, redirect page), cookie banner, Site Search block, public branding, media folders and image usage, backup and restore (contents, refused files, newer versions, safety copies), deleted collections and items going offline |
@@ -1570,3 +1576,50 @@ Git workflow used in this repository:
   `.gitignore`.
 - Internal working notes (phase notes, old release notes, design notes) go in `docs/dev/`, which is git-ignored:
   they stay on your machine. Anything other developers need belongs in these manuals or the CHANGELOG.
+
+## 14. Stability and support policy (1.x LTS)
+
+From **1.0.0** CanvasCore follows [Semantic Versioning](https://semver.org/) strictly, and the 1.x line is the **long-term support (LTS) line**.
+
+### What stays stable through 1.x
+
+A minor or patch release of 1.x may **add** to these, never remove or rename anything in them. A site, a backup, a kit or a package made by any 1.x works with every later 1.x.
+
+| Format | What is guaranteed |
+| --- | --- |
+| **Database** | The tables and columns of 1.0 stay. New migrations only add (tables, columns, indexes); a database at any earlier schema step, including every 0.x one, upgrades to the current schema. |
+| **Page content** | Blocks saved in pages (`content_json`: `type`, `styles`, `content`, `children`) keep their keys and meaning (`content_schema` stays 1). A block type is never removed; a new setting has a default, so old blocks render as before. |
+| **Backups** | A backup ZIP (`canvascore-backup`, format 1) made by any 1.x restores into any later 1.x. New fields are added to the manifest; none is removed. |
+| **Settings files** | `settings.json`, `menu.json`, `media.json`, `media-folders.json`, `integrations.json`: keys are kept; new keys are optional. |
+| **Block packages and template kits** | The package and kit formats and their format versions: one made for 1.0 installs on every 1.x. |
+| **Updates** | The signed update package (`canvascore-<version>.zip` and its `.sig`) and the release keys: a 1.x site can always update to a later 1.x from **Administration › Updates**, and a key change is announced one release ahead (section 13). |
+| **Editor API** | The `api.php` actions of 1.0, their parameters and the shape of their answers (section 12). Fields and actions may be added. |
+| **Published sites** | The addresses a site publishes (`/<slug>/`, `/<collection>/<item>/`, `/<language>/…`, feeds, sitemap, search index) and the CSS classes and data attributes of the published blocks that are documented. The markup of a block may improve. |
+| **Requirements** | PHP 8.0 or newer and SQLite for the whole 1.x line. |
+
+### How it is held
+
+`npm test` runs `tests/formats.php`: it compares the current code with what 1.0 recorded in `tests/fixtures/formats.json` (every table and column, every API action, every block type and its content keys), upgrades a database from **every** earlier schema step, restores a backup made by 1.0 (`tests/fixtures/backup-1.0.zip`), and checks the backup manifest. A change that removes or renames something fails the test. After a deliberate *addition* run `php tests/formats.php --update` (it only adds to the record) and commit the result with the change.
+
+### Releases
+
+- **Patch** (1.0.x): bug and security fixes only.
+- **Minor** (1.x.0): new features and additions; everything above keeps working. A database migration may run on update.
+- **Major** (2.0): the only release that may remove or change what is listed above. Anything deprecated in 1.x keeps working through the rest of 1.x and is announced in the CHANGELOG at least one minor release before it goes.
+
+### Support
+
+- **1.x is the long-term support line.** Security fixes and bug fixes go into new 1.x releases, which are always safe to install because 1.x does not break compatibility (there is no separate backport branch to maintain: the latest 1.x is the supported release).
+- After **2.0** is released, the last 1.x continues to receive **security fixes for at least 24 months**.
+- **0.x** is not supported after 1.0; every 0.x site updates to 1.x (migrations run by themselves; take a backup first, as always).
+- Security reports: [SECURITY.md](../../SECURITY.md).
+
+## 15. Translating the admin interface
+
+The editor's texts are written in English in the source and pass through `__("text")` (`src/i18n/index.js`): the English text is the key, a locale file `src/i18n/locales/<code>.json` maps it to the language, and `{0}`, `{1}`… stand for the values put into it. `_n(count, 'page', 'pages')` writes a count with its noun (the two forms are translated on their own; a sentence that changes with the count has one text per form). The texts of the settings panels of the blocks (`canvascore-admin/blocks/*.json`) and the server's messages (`'message' => '…'` in `canvascore-admin/*.php`, translated as they arrive by `src/i18n/apiMessages.js`) are in the same files. A text with no translation shows in English.
+
+- **Choosing the language**: the select in the sidebar and on the sign-in screen (`LocaleSelect.jsx`); it is kept in this browser (`localStorage.cc_locale`), defaults to the browser's language, and the page reloads to apply it, so texts built at load time are in the language too.
+- **`npm run test:i18n`** (`scripts/i18n.mjs`) fails when a text of the source has no translation in any locale file, when a locale file has a text that no longer exists, or when the `{values}` of a text and its translation differ. `node scripts/i18n.mjs --add` adds the missing texts with an empty translation to fill in; `--list` prints every text with where it is used. `npm run test:i18n-ui` opens every screen in Italian in jsdom and fails if English is left on it.
+- **Adding a language**: copy `locales/it.json` to `locales/<code>.json`, translate the values, add the code and its name to `LOCALES` and `DICTS` in `src/i18n/index.js`.
+- **Rules for new code**: wrap every visible text, `placeholder`, `title`, `aria-label`, notification and dialog text in `__()`; never build a sentence from fragments or with `s` for the plural (use two texts or `_n`); never compare or key on a translated text (use ids).
+- **Not translated**: the setup wizard (`install.php`) and the server-check lines in it, the texts of published sites (those are the site's content, in the site's languages: see Administration › Languages), and the names of collections, taxonomies and the field presets, which are the site's data.

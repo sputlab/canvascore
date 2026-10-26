@@ -9,6 +9,7 @@ import { Button, Select, Tabs, Field, Input } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
 import { ASPECTS, CROPPABLE, HANDLE_IDS, aspectValue, initialRect, reshape, dragRect, setField, focalFromPoint, focalCss } from '../editor/imageTools';
+import { __ } from '../i18n/index.js';
 
 const post = async (action, body) => (await fetch('api.php?action=' + action, { method: 'POST', body: JSON.stringify(body) })).json();
 const extOf = (n) => String(n || '').split('.').pop().toLowerCase();
@@ -53,10 +54,9 @@ export default function ImageTools({ image, onClose, onDone, start = 'crop' }) {
       try { usage = (await post('media_usage', { names: [image.name] })).usage || {}; } catch { usage = {}; }
       const where = usage[image.name] || [];
       const ok = await confirmDialog({
-        title: 'Crop the original?',
-        message: (where.length ? `“${image.name}” is used in: ${where.slice(0, 6).join(', ')}${where.length > 6 ? '…' : ''}. They will show the cropped image after the next publish.` : 'No page uses this image.')
-          + '\n\nThe original is replaced and this cannot be undone. To keep it, save the crop as a new image instead.',
-        confirmLabel: 'Crop and replace', danger: true,
+        title: __("Crop the original?"),
+        message: __("{0}\n\nThe original is replaced and this cannot be undone. To keep it, save the crop as a new image instead.", where.length ? __("“{0}” is used in: {1}{2}. They will show the cropped image after the next publish.", image.name, where.slice(0, 6).join(', '), where.length > 6 ? '…' : '') : __("No page uses this image.")),
+        confirmLabel: __("Crop and replace"), danger: true,
       });
       if (!ok) return;
     }
@@ -64,8 +64,8 @@ export default function ImageTools({ image, onClose, onDone, start = 'crop' }) {
     try {
       const d = await post('media_crop', { name: image.name, x: rect.x, y: rect.y, w: rect.w, h: rect.h, mode });
       if (d.success) { notify(d.message); if (onDone) onDone({ cropped: d.name, replaced: d.replaced }); onClose(); }
-      else notify(d.message || 'The image was not cropped.', 'error');
-    } catch { notify('The image was not cropped (connection problem).', 'error'); }
+      else notify(d.message || __("The image was not cropped."), 'error');
+    } catch { notify(__("The image was not cropped (connection problem)."), 'error'); }
     setBusy(false);
   };
 
@@ -87,13 +87,13 @@ export default function ImageTools({ image, onClose, onDone, start = 'crop' }) {
     setBusy(true);
     try {
       const d = await post('save_media_meta', { name: image.name, focal: value });
-      if (d.success) { notify(value ? 'Focal point saved.' : 'Focal point cleared.'); if (onDone) onDone({ focal: value }); onClose(); }
-      else notify(d.message || 'The focal point was not saved.', 'error');
-    } catch { notify('The focal point was not saved (connection problem).', 'error'); }
+      if (d.success) { notify(value ? __("Focal point saved.") : __("Focal point cleared.")); if (onDone) onDone({ focal: value }); onClose(); }
+      else notify(d.message || __("The focal point was not saved."), 'error');
+    } catch { notify(__("The focal point was not saved (connection problem)."), 'error'); }
     setBusy(false);
   };
 
-  const tabs = [...(canCrop ? [['crop', 'Crop', Crop]] : []), ['focal', 'Focal point', Crosshair]];
+  const tabs = [...(canCrop ? [['crop', __("Crop"), Crop]] : []), ['focal', __("Focal point"), Crosshair]];
   const pct = (v, total) => `${(v / total) * 100}%`;
   return (
     <div className="ui-dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -102,11 +102,11 @@ export default function ImageTools({ image, onClose, onDone, start = 'crop' }) {
         <div className="ui-dialog__head" style={{ justifyContent: 'space-between' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <span className="ui-dialog__icon" aria-hidden="true"><Crop size={18} /></span>
-            <h2 id="cc-imgtools-title" className="ui-dialog__title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Edit {image.name.replace(/^\d+_/, '')}</h2>
+            <h2 id="cc-imgtools-title" className="ui-dialog__title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{__("Edit")} {image.name.replace(/^\d+_/, '')}</h2>
           </span>
-          <button ref={closeRef} type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label="Close" onClick={onClose}><X size={16} /></button>
+          <button ref={closeRef} type="button" className="ui-btn ui-btn--ghost ui-btn--sm ui-btn--icon" aria-label={__("Close")} onClick={onClose}><X size={16} /></button>
         </div>
-        <Tabs value={tab} onChange={setTab} tabs={tabs} label="Image tools" idPrefix="imgtool" />
+        <Tabs value={tab} onChange={setTab} tabs={tabs} label={__("Image tools")} idPrefix="imgtool" />
 
         {tab === 'crop' && (
           <div role="tabpanel" aria-labelledby="imgtool-crop">
@@ -126,37 +126,37 @@ export default function ImageTools({ image, onClose, onDone, start = 'crop' }) {
                 </div>
               </div>
               <div style={{ flex: '0 1 250px', minWidth: 220 }}>
-                <Field label="Shape">
-                  <Select aria-label="Crop shape" value={aspectId} onChange={(e) => pickAspect(e.target.value)} options={ASPECTS} />
+                <Field label={__("Shape")}>
+                  <Select aria-label={__("Crop shape")} value={aspectId} onChange={(e) => pickAspect(e.target.value)} options={ASPECTS} />
                 </Field>
                 {rect && nat && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {[['x', 'Left'], ['y', 'Top'], ['w', 'Width'], ['h', 'Height']].map(([k, l]) => (
-                      <Field key={k} label={`${l} (px)`}>
-                        <Input type="number" aria-label={`Crop ${l.toLowerCase()} in pixels`} min={0} max={k === 'x' || k === 'w' ? nat.w : nat.h} value={rect[k]} onChange={(e) => setRect(setField(rect, k, e.target.value, nat, aspect))} />
+                    {[['x', __("Left")], ['y', __("Top")], ['w', __("Width")], ['h', __("Height")]].map(([k, l]) => (
+                      <Field key={k} label={__("{0} (px)", l)}>
+                        <Input type="number" aria-label={__("Crop {0} in pixels", l.toLowerCase())} min={0} max={k === 'x' || k === 'w' ? nat.w : nat.h} value={rect[k]} onChange={(e) => setRect(setField(rect, k, e.target.value, nat, aspect))} />
                       </Field>
                     ))}
                   </div>
                 )}
-                {rect && <p className="ui-hint" data-testid="crop-size">The result is {rect.w} × {rect.h} px{nat && (rect.w < nat.w || rect.h < nat.h) ? ` (from ${nat.w} × ${nat.h})` : ''}.</p>}
+                {rect && <p className="ui-hint" data-testid="crop-size">{__("The result is")} {rect.w} × {rect.h} {__("px")}{nat && (rect.w < nat.w || rect.h < nat.h) ? __(" (from {0} × {1})", nat.w, nat.h) : ''}.</p>}
                 <fieldset style={{ border: 0, padding: 0, margin: '10px 0 0' }}>
-                  <legend className="ui-label" style={{ marginBottom: 6 }}>Save as</legend>
-                  <label className="ui-check" style={{ display: 'flex', marginBottom: 6 }}><input type="radio" name="crop-mode" checked={mode === 'copy'} onChange={() => setMode('copy')} /> A new image (the original stays)</label>
-                  <label className="ui-check" style={{ display: 'flex' }}><input type="radio" name="crop-mode" checked={mode === 'replace'} onChange={() => setMode('replace')} /> Replace the original</label>
+                  <legend className="ui-label" style={{ marginBottom: 6 }}>{__("Save as")}</legend>
+                  <label className="ui-check" style={{ display: 'flex', marginBottom: 6 }}><input type="radio" name="crop-mode" checked={mode === 'copy'} onChange={() => setMode('copy')} /> {__("A new image (the original stays)")}</label>
+                  <label className="ui-check" style={{ display: 'flex' }}><input type="radio" name="crop-mode" checked={mode === 'replace'} onChange={() => setMode('replace')} /> {__("Replace the original")}</label>
                 </fieldset>
-                {mode === 'replace' && <p className="ui-hint" role="note">Every page that uses this image will show the cropped one.</p>}
+                {mode === 'replace' && <p className="ui-hint" role="note">{__("Every page that uses this image will show the cropped one.")}</p>}
               </div>
             </div>
             <div className="ui-dialog__actions" style={{ marginTop: 14 }}>
-              <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button variant="primary" icon={Save} disabled={busy || !rect} onClick={saveCrop}>{busy ? 'Saving…' : mode === 'copy' ? 'Save the cropped image' : 'Crop the original'}</Button>
+              <Button variant="ghost" onClick={onClose}>{__("Cancel")}</Button>
+              <Button variant="primary" icon={Save} disabled={busy || !rect} onClick={saveCrop}>{busy ? __("Saving…") : mode === 'copy' ? __("Save the cropped image") : __("Crop the original")}</Button>
             </div>
           </div>
         )}
 
         {tab === 'focal' && (
           <div role="tabpanel" aria-labelledby="imgtool-focal">
-            <p className="ui-hint" style={{ marginTop: 10 }}>Click the most important part of the picture. When a block shows this image cropped to fit (a banner, a square), it keeps that point in view.</p>
+            <p className="ui-hint" style={{ marginTop: 10 }}>{__("Click the most important part of the picture. When a block shows this image cropped to fit (a banner, a square), it keeps that point in view.")}</p>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 380px', minWidth: 0, display: 'flex', justifyContent: 'center', background: '#0b1220', borderRadius: 8, padding: 8 }}>
                 <div ref={stageRef} data-testid="focal-stage" onPointerDown={pointerOnStage} style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', cursor: 'crosshair', touchAction: 'none', userSelect: 'none' }}>
@@ -166,11 +166,11 @@ export default function ImageTools({ image, onClose, onDone, start = 'crop' }) {
               </div>
               <div style={{ flex: '0 1 250px', minWidth: 220 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <Field label="Across (%)"><Input type="number" min={0} max={100} step={0.5} aria-label="Focal point across in percent" value={focal ? focal.x : ''} placeholder="50" onChange={(e) => typeFocal('x', e.target.value)} /></Field>
-                  <Field label="Down (%)"><Input type="number" min={0} max={100} step={0.5} aria-label="Focal point down in percent" value={focal ? focal.y : ''} placeholder="50" onChange={(e) => typeFocal('y', e.target.value)} /></Field>
+                  <Field label={__("Across (%)")}><Input type="number" min={0} max={100} step={0.5} aria-label={__("Focal point across in percent")} value={focal ? focal.x : ''} placeholder="50" onChange={(e) => typeFocal('x', e.target.value)} /></Field>
+                  <Field label={__("Down (%)")}><Input type="number" min={0} max={100} step={0.5} aria-label={__("Focal point down in percent")} value={focal ? focal.y : ''} placeholder="50" onChange={(e) => typeFocal('y', e.target.value)} /></Field>
                 </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }} aria-label="How it looks when cropped" role="group">
-                  {[['16 / 9', 'Wide'], ['1 / 1', 'Square'], ['4 / 5', 'Portrait']].map(([ar, label]) => (
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }} aria-label={__("How it looks when cropped")} role="group">
+                  {[['16 / 9', __("Wide")], ['1 / 1', __("Square")], ['4 / 5', __("Portrait")]].map(([ar, label]) => (
                     <figure key={ar} style={{ margin: 0, flex: ar === '16 / 9' ? '1.6 1 0' : '1 1 0', minWidth: 0 }}>
                       <div style={{ aspectRatio: ar, overflow: 'hidden', borderRadius: 6, background: '#0b1220' }}>
                         <img src={src} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: focal ? focalCss(focal) : 'center', display: 'block' }} />
@@ -182,9 +182,9 @@ export default function ImageTools({ image, onClose, onDone, start = 'crop' }) {
               </div>
             </div>
             <div className="ui-dialog__actions" style={{ marginTop: 14 }}>
-              {image.focal && <Button variant="ghost" disabled={busy} onClick={() => saveFocal(null)}>Remove the focal point</Button>}
-              <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button variant="primary" icon={Save} disabled={busy || !focal} onClick={() => saveFocal(focal)}>{busy ? 'Saving…' : 'Save the focal point'}</Button>
+              {image.focal && <Button variant="ghost" disabled={busy} onClick={() => saveFocal(null)}>{__("Remove the focal point")}</Button>}
+              <Button variant="ghost" onClick={onClose}>{__("Cancel")}</Button>
+              <Button variant="primary" icon={Save} disabled={busy || !focal} onClick={() => saveFocal(focal)}>{busy ? __("Saving…") : __("Save the focal point")}</Button>
             </div>
           </div>
         )}

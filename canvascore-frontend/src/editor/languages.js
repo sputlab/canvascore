@@ -1,14 +1,15 @@
+import { __ } from '../i18n/index.js';
 // Multilingual sites, the editor's side (the server's is canvascore-admin/languages.php). The site's languages are { enabled, default, list: [{ code, name }] }.
 // A page or an item has a language (`lang`, '' = the default language) and shares `trans_group` with its translations. The default language is
 // published at the root (/about/), the others in a folder of their own (/it/chi-siamo/). Pure functions: the screens only draw and listen.
 
 // The languages offered when adding one (the name is how the language writes its own name: it is what visitors read in the switcher)
 export const LANGUAGE_PRESETS = [
-  ['en', 'English'], ['it', 'Italiano'], ['fr', 'Français'], ['de', 'Deutsch'], ['es', 'Español'], ['pt', 'Português'], ['pt-br', 'Português (Brasil)'],
-  ['nl', 'Nederlands'], ['sv', 'Svenska'], ['da', 'Dansk'], ['no', 'Norsk'], ['fi', 'Suomi'], ['pl', 'Polski'], ['cs', 'Čeština'], ['sk', 'Slovenčina'],
-  ['hu', 'Magyar'], ['ro', 'Română'], ['bg', 'Български'], ['el', 'Ελληνικά'], ['tr', 'Türkçe'], ['ru', 'Русский'], ['uk', 'Українська'],
-  ['ar', 'العربية'], ['he', 'עברית'], ['hi', 'हिन्दी'], ['ja', '日本語'], ['ko', '한국어'], ['zh', '中文'], ['id', 'Bahasa Indonesia'], ['vi', 'Tiếng Việt'],
-  ['hr', 'Hrvatski'], ['sl', 'Slovenščina'], ['ca', 'Català'], ['gsw', 'Schwiizerdütsch'],
+  ['en', __("English")], ['it', __("Italiano")], ['fr', __("Français")], ['de', __("Deutsch")], ['es', __("Español")], ['pt', __("Português")], ['pt-br', __("Português (Brasil)")],
+  ['nl', __("Nederlands")], ['sv', __("Svenska")], ['da', __("Dansk")], ['no', __("Norsk")], ['fi', __("Suomi")], ['pl', __("Polski")], ['cs', 'Čeština'], ['sk', __("Slovenčina")],
+  ['hu', __("Magyar")], ['ro', __("Română")], ['bg', 'Български'], ['el', 'Ελληνικά'], ['tr', __("Türkçe")], ['ru', 'Русский'], ['uk', 'Українська'],
+  ['ar', 'العربية'], ['he', 'עברית'], ['hi', 'हिन्दी'], ['ja', '日本語'], ['ko', '한국어'], ['zh', '中文'], ['id', __("Bahasa Indonesia")], ['vi', __("Tiếng Việt")],
+  ['hr', __("Hrvatski")], ['sl', __("Slovenščina")], ['ca', __("Català")], ['gsw', __("Schwiizerdütsch")],
 ];
 export const MAX_LANGUAGES = 12;
 

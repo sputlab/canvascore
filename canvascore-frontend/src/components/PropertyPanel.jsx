@@ -12,11 +12,12 @@ import StyleTab from './panel/StyleTab';
 import AdvancedTab from './panel/AdvancedTab';
 import PageSettings from './panel/PageSettings';
 import { confirmDialog, promptDialog } from '../ui/dialog';
+import { __ } from '../i18n/index.js';
 
 // Editor right panel. With no block selected it shows the page settings; with a block selected,
 // three tabs: Content (the block's own panel, src/components/panel/blocks/), Style and Advanced
 // (shared by every block). The first section of each tab starts open.
-const TABS = [['content', 'Content', Sliders], ['style', 'Style', Palette], ['advanced', 'Advanced', Shield]];
+const TABS = [['content', __("Content"), Sliders], ['style', __("Style"), Palette], ['advanced', __("Advanced"), Shield]];
 
 export default function PropertyPanel() {
   const { blocks, selectedBlockId, setSelectedBlockId, updateBlock, removeBlock, activePage, updateActivePage, pages, enterMasterEditMode, saveAsMaster, userRole, duplicateBlock, copyBlock, moveBlockBy, viewport } = useStore();
@@ -37,14 +38,14 @@ export default function PropertyPanel() {
   // one implementation, shared with the canvas menu (store: saveBlockAsTemplate)
   const handleSaveTemplate = () => useStore.getState().saveBlockAsTemplate(selectedBlock.id);
   const handleCreateMaster = async () => {
-    const name = await promptDialog({ title: 'Make a global master', message: 'The block becomes shared: edit it once and it changes on every page that uses it.', label: 'Master name', placeholder: 'e.g. Main Header', confirmLabel: 'Create master' });
+    const name = await promptDialog({ title: __("Make a global master"), message: __("The block becomes shared: edit it once and it changes on every page that uses it."), label: __("Master name"), placeholder: __("e.g. Main Header"), confirmLabel: __("Create master") });
     if (!name || name.trim() === '') return;
     await saveAsMaster(selectedBlock.id, name);
   };
   const handleDeleteBlock = async () => {
     const info = blockInfo(selectedBlock.type);
     const inside = selectedBlock.children && selectedBlock.children.length;
-    if (await confirmDialog({ title: `Delete this ${info.label} block?`, message: inside ? 'Everything inside it is deleted too. You can undo it with Ctrl+Z.' : 'You can undo it with Ctrl+Z.', confirmLabel: 'Delete block', danger: true })) removeBlock(selectedBlock.id);
+    if (await confirmDialog({ title: __("Delete this {0} block?", info.label), message: inside ? __("Everything inside it is deleted too. You can undo it with Ctrl+Z.") : __("You can undo it with Ctrl+Z."), confirmLabel: __("Delete block"), danger: true })) removeBlock(selectedBlock.id);
   };
 
   // Content is ALWAYS read from the store (not from the last render's copy): two edits in quick succession
@@ -127,7 +128,7 @@ export default function PropertyPanel() {
   const head = (color, actions) => (
     <div className="cc-pp-head">
       <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <IconButton icon={ChevronLeft} label="Back to page settings (Esc)" size="sm" onClick={() => setSelectedBlockId(null)} />
+        <IconButton icon={ChevronLeft} label={__("Back to page settings (Esc)")} size="sm" onClick={() => setSelectedBlockId(null)} />
         <info.icon size={15} color={color || info.color} aria-hidden="true" />
         <strong className="cc-pp-title">{info.label}</strong>
       </span>
@@ -137,26 +138,26 @@ export default function PropertyPanel() {
   // Quick actions on the selected block (same as the keyboard shortcuts)
   const sib = (function where(list) { for (let i = 0; i < (list || []).length; i++) { if (list[i].id === selectedBlock.id) return { i, n: list.length }; const r = where(list[i].children); if (r) return r; } return null; })(blocks) || { i: 0, n: 1 };
   const quick = (
-    <div className="cc-pp-quick" role="toolbar" aria-label="Block actions">
-      <IconButton icon={ArrowUp} label="Move up (Alt+↑)" size="sm" disabled={sib.i === 0} onClick={() => moveBlockBy(selectedBlock.id, -1)} />
-      <IconButton icon={ArrowDown} label="Move down (Alt+↓)" size="sm" disabled={sib.i >= sib.n - 1} onClick={() => moveBlockBy(selectedBlock.id, 1)} />
+    <div className="cc-pp-quick" role="toolbar" aria-label={__("Block actions")}>
+      <IconButton icon={ArrowUp} label={__("Move up (Alt+↑)")} size="sm" disabled={sib.i === 0} onClick={() => moveBlockBy(selectedBlock.id, -1)} />
+      <IconButton icon={ArrowDown} label={__("Move down (Alt+↓)")} size="sm" disabled={sib.i >= sib.n - 1} onClick={() => moveBlockBy(selectedBlock.id, 1)} />
       <span className="cc-ed-sep" style={{ height: 18 }} />
-      <IconButton icon={CopyPlus} label="Duplicate (Ctrl/Cmd+D)" size="sm" onClick={() => duplicateBlock(selectedBlock.id)} />
-      <IconButton icon={Clipboard} label="Copy, to paste on any page (Ctrl/Cmd+C)" size="sm" onClick={() => { if (copyBlock(selectedBlock.id)) notify(`${info.label} copied. Paste it on any page with Ctrl/Cmd+V or from the Add tab.`); }} />
+      <IconButton icon={CopyPlus} label={__("Duplicate (Ctrl/Cmd+D)")} size="sm" onClick={() => duplicateBlock(selectedBlock.id)} />
+      <IconButton icon={Clipboard} label={__("Copy, to paste on any page (Ctrl/Cmd+C)")} size="sm" onClick={() => { if (copyBlock(selectedBlock.id)) notify(__("{0} copied. Paste it on any page with Ctrl/Cmd+V or from the Add tab.", info.label)); }} />
     </div>
   );
 
   if (selectedBlock.type === 'MASTER') {
     return (
       <div className="cc-pp">
-        {head('#fcd34d', <IconButton icon={Trash2} label="Remove this master from the page" size="sm" onClick={handleDeleteBlock} style={{ color: '#f87171' }} />)}
+        {head('#fcd34d', <IconButton icon={Trash2} label={__("Remove this master from the page")} size="sm" onClick={handleDeleteBlock} style={{ color: '#f87171' }} />)}
         {quick}
         <div style={{ padding: 14 }}>
           <div className="ui-card" style={{ textAlign: 'center' }}>
             <Crown size={30} color="#fcd34d" style={{ marginBottom: 8 }} aria-hidden="true" />
-            <h3 style={{ margin: '0 0 8px', color: '#f8fafc', fontSize: 15 }}>{selectedBlock.content?.name || 'Global Component'}</h3>
-            <p className="ui-hint" style={{ fontSize: 12.5 }}>This is a global component. Changes made to it appear on every page that uses it.</p>
-            <Button variant="gold" block icon={FileEdit} onClick={() => enterMasterEditMode(selectedBlock.content.masterId)} style={{ marginTop: 14 }}>Edit Global Master</Button>
+            <h3 style={{ margin: '0 0 8px', color: '#f8fafc', fontSize: 15 }}>{selectedBlock.content?.name || __("Global Component")}</h3>
+            <p className="ui-hint" style={{ fontSize: 12.5 }}>{__("This is a global component. Changes made to it appear on every page that uses it.")}</p>
+            <Button variant="gold" block icon={FileEdit} onClick={() => enterMasterEditMode(selectedBlock.content.masterId)} style={{ marginTop: 14 }}>{__("Edit Global Master")}</Button>
           </div>
         </div>
       </div>
@@ -191,13 +192,13 @@ export default function PropertyPanel() {
     <div className="cc-pp">
       {renderMediaPicker()}
       {head(null, <>
-        <IconButton icon={Save} label="Save as template (a reusable copy)" size="sm" onClick={handleSaveTemplate} style={{ color: '#c4b5fd' }} />
-        <IconButton icon={Crown} label="Make it a global master: edit once, update everywhere" size="sm" onClick={handleCreateMaster} style={{ color: '#fbbf24' }} />
-        <IconButton icon={Trash2} label="Delete block" size="sm" onClick={handleDeleteBlock} style={{ color: '#f87171' }} />
+        <IconButton icon={Save} label={__("Save as template (a reusable copy)")} size="sm" onClick={handleSaveTemplate} style={{ color: '#c4b5fd' }} />
+        <IconButton icon={Crown} label={__("Make it a global master: edit once, update everywhere")} size="sm" onClick={handleCreateMaster} style={{ color: '#fbbf24' }} />
+        <IconButton icon={Trash2} label={__("Delete block")} size="sm" onClick={handleDeleteBlock} style={{ color: '#f87171' }} />
       </>)}
       {quick}
 
-      <div className="ui-tabs" role="tablist" aria-label="Block settings" style={{ background: '#0f172a' }}>
+      <div className="ui-tabs" role="tablist" aria-label={__("Block settings")} style={{ background: '#0f172a' }}>
         {tabs.map(([id, label, Icon]) => (
           <button key={id} type="button" role="tab" className="ui-tab" aria-selected={tab === id} onClick={() => setActiveTab(id)}>
             <Icon size={14} aria-hidden="true" />{label}
@@ -211,7 +212,7 @@ export default function PropertyPanel() {
           : (
             <div className="ui-hint" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: 8 }}>
               <MousePointerClick size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
-              {CONTAINER_TYPES.includes(selectedBlock.type) ? 'Add blocks inside this container from the Add panel; set its look in Style.' : 'Edit this block directly on the canvas; set its look in Style.'}
+              {CONTAINER_TYPES.includes(selectedBlock.type) ? __("Add blocks inside this container from the Add panel; set its look in Style.") : __("Edit this block directly on the canvas; set its look in Style.")}
             </div>
           ))}
         {tab === 'style' && <StyleTab ctx={ctx} />}

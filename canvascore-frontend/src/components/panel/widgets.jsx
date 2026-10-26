@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { ItemCard, TxtF, NumF, ColorF } from './fields';
 import { labelStyle, inputStyle, lstAddBtn, fldInput } from './helpers';
 import { DEFAULT_HOURS } from './constants';
+import { __ } from '../../i18n/index.js';
 
 // --- Hotspots: the click-to-place area and the pins (a pin selected in the cards is placed by a click on the image)
 function PinPlacer({ image, ratio, pins, selected, onSelect, onPlace }) {
@@ -17,16 +18,16 @@ function PinPlacer({ image, ratio, pins, selected, onSelect, onPlace }) {
   };
   return (
     <div style={{ marginBottom: 10 }}>
-      <div role="group" aria-label="Pin placement area: click to move the selected pin" onClick={place}
+      <div role="group" aria-label={__("Pin placement area: click to move the selected pin")} onClick={place}
         style={{ position: 'relative', cursor: selected == null ? 'default' : 'crosshair', borderRadius: 8, overflow: 'hidden', background: '#e2e8f0', aspectRatio: image ? undefined : ratio, border: '1px solid #334155' }}>
         {image && <img src={image} alt="" draggable={false} style={{ display: 'block', width: '100%', height: 'auto', pointerEvents: 'none' }} />}
         {pins.map((p, i) => (
-          <button key={i} type="button" aria-label={`Select pin ${i + 1}`} aria-pressed={selected === i}
+          <button key={i} type="button" aria-label={__("Select pin {0}", i + 1)} aria-pressed={selected === i}
             onClick={(e) => { e.stopPropagation(); onSelect(i); }}
             style={{ position: 'absolute', left: `${Number(p.x) || 0}%`, top: `${Number(p.y) || 0}%`, transform: 'translate(-50%, -50%)', width: 22, height: 22, borderRadius: '50%', padding: 0, cursor: 'pointer', font: '700 11px/1 system-ui', color: '#fff', background: selected === i ? '#f59e0b' : '#3b82f6', border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,.4)' }}>{i + 1}</button>
         ))}
       </div>
-      <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0 0' }}>{selected == null ? 'Select a pin, then click on the image to place it.' : `Pin ${selected + 1} selected: click on the image to move it.`}</p>
+      <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0 0' }}>{selected == null ? __("Select a pin, then click on the image to place it.") : __("Pin {0} selected: click on the image to move it.", selected + 1)}</p>
     </div>
   );
 }
@@ -39,17 +40,17 @@ export function HotspotPins({ ctx }) {
     <>
       <PinPlacer image={c.image} ratio={c.ratio || '16 / 9'} pins={pins} selected={sel} onSelect={setSelected} onPlace={(i, x, y) => lstPatch('pins', i, { x, y })} />
       {pins.map((p, i) => (
-        <ItemCard key={i} title={p.title || `Pin ${i + 1}`} index={i} total={pins.length} onMove={(d) => { lstMove('pins', i, d); setSelected(Math.min(pins.length - 1, Math.max(0, i + d))); }} onRemove={() => { lstRemove('pins', i); setSelected(null); }}>
-          <TxtF label="Title" value={p.title} onChange={(v) => lstPatch('pins', i, { title: v })} />
-          <TxtF label="Text" value={p.text} onChange={(v) => lstPatch('pins', i, { text: v })} multiline rows={2} />
-          <TxtF label="Link text (empty = no link)" value={p.linkText} onChange={(v) => lstPatch('pins', i, { linkText: v })} />
-          <TxtF label="Link" value={p.href} onChange={(v) => lstPatch('pins', i, { href: v })} placeholder="/page or https://…" />
-          <NumF label="Position from the left (%)" value={p.x ?? 50} onChange={(v) => lstPatch('pins', i, { x: v })} min={0} max={100} step={0.5} />
-          <NumF label="Position from the top (%)" value={p.y ?? 50} onChange={(v) => lstPatch('pins', i, { y: v })} min={0} max={100} step={0.5} />
-          <button onClick={() => setSelected(i)} style={{ ...lstAddBtn, marginTop: 6, borderStyle: 'solid', borderWidth: '1px', color: '#94a3b8' }}>Place this pin on the image</button>
+        <ItemCard key={i} title={p.title || __("Pin {0}", i + 1)} index={i} total={pins.length} onMove={(d) => { lstMove('pins', i, d); setSelected(Math.min(pins.length - 1, Math.max(0, i + d))); }} onRemove={() => { lstRemove('pins', i); setSelected(null); }}>
+          <TxtF label={__("Title")} value={p.title} onChange={(v) => lstPatch('pins', i, { title: v })} />
+          <TxtF label={__("Text")} value={p.text} onChange={(v) => lstPatch('pins', i, { text: v })} multiline rows={2} />
+          <TxtF label={__("Link text (empty = no link)")} value={p.linkText} onChange={(v) => lstPatch('pins', i, { linkText: v })} />
+          <TxtF label={__("Link")} value={p.href} onChange={(v) => lstPatch('pins', i, { href: v })} placeholder={__("/page or https://…")} />
+          <NumF label={__("Position from the left (%)")} value={p.x ?? 50} onChange={(v) => lstPatch('pins', i, { x: v })} min={0} max={100} step={0.5} />
+          <NumF label={__("Position from the top (%)")} value={p.y ?? 50} onChange={(v) => lstPatch('pins', i, { y: v })} min={0} max={100} step={0.5} />
+          <button onClick={() => setSelected(i)} style={{ ...lstAddBtn, marginTop: 6, borderStyle: 'solid', borderWidth: '1px', color: '#94a3b8' }}>{__("Place this pin on the image")}</button>
         </ItemCard>
       ))}
-      {pins.length < 20 && <button onClick={() => { lstAdd('pins', { x: 50, y: 50, title: 'New pin', text: '', linkText: '', href: '' }); setSelected(pins.length); }} style={lstAddBtn}>+ Add pin</button>}
+      {pins.length < 20 && <button onClick={() => { lstAdd('pins', { x: 50, y: 50, title: __("New pin"), text: '', linkText: '', href: '' }); setSelected(pins.length); }} style={lstAddBtn}>{__("+ Add pin")}</button>}
     </>
   );
 }
@@ -65,10 +66,10 @@ export function SearchFacets({ ctx }) {
   const toggle = (key, on) => set('facets', on ? [...facets, key] : facets.filter((x) => x !== key));
   return (
     <>
-      <label style={{ display: 'block', fontSize: '12px', color: '#cbd5e1', margin: '12px 0 6px' }}>Filters (faceted search)</label>
-      <div role="group" aria-label="Filters" style={{ display: 'grid', gap: '4px' }}>
+      <label style={{ display: 'block', fontSize: '12px', color: '#cbd5e1', margin: '12px 0 6px' }}>{__("Filters (faceted search)")}</label>
+      <div role="group" aria-label={__("Filters")} style={{ display: 'grid', gap: '4px' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1' }}>
-          <input type="checkbox" checked={facets.includes('collection')} onChange={(e) => toggle('collection', e.target.checked)} /> Collection (Pages, or the name of each collection)
+          <input type="checkbox" checked={facets.includes('collection')} onChange={(e) => toggle('collection', e.target.checked)} /> {__("Collection (Pages, or the name of each collection)")}
         </label>
         {taxes.map((t) => (
           <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#cbd5e1' }}>
@@ -84,19 +85,19 @@ export function SearchFacets({ ctx }) {
 export function BusinessHours({ ctx }) {
   const { c, set, lstPatch } = ctx;
   const hours = Array.isArray(c.hours) ? c.hours : [];
-  if (hours.length === 0) return <button onClick={() => set('hours', DEFAULT_HOURS)} style={lstAddBtn}>+ Add weekly hours</button>;
+  if (hours.length === 0) return <button onClick={() => set('hours', DEFAULT_HOURS)} style={lstAddBtn}>{__("+ Add weekly hours")}</button>;
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 74px 74px 24px', gap: '4px', fontSize: '10px', color: '#64748b', fontWeight: 700 }}><span>DAY (label)</span><span>OPENS</span><span>CLOSES</span><span title="Closed">✕</span></div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 74px 74px 24px', gap: '4px', fontSize: '10px', color: '#64748b', fontWeight: 700 }}><span>{__("DAY (label)")}</span><span>{__("OPENS")}</span><span>{__("CLOSES")}</span><span title={__("Closed")}>✕</span></div>
       {hours.map((hr, i) => (
         <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 74px 74px 24px', gap: '4px', alignItems: 'center', marginTop: '4px' }}>
           <input type="text" style={fldInput} value={hr.day ?? ''} onChange={(e) => lstPatch('hours', i, { day: e.target.value })} />
           <input type="time" style={fldInput} value={hr.open || ''} disabled={!!hr.closed} onChange={(e) => lstPatch('hours', i, { open: e.target.value })} />
           <input type="time" style={fldInput} value={hr.close || ''} disabled={!!hr.closed} onChange={(e) => lstPatch('hours', i, { close: e.target.value })} />
-          <input type="checkbox" title="Closed" checked={!!hr.closed} onChange={(e) => lstPatch('hours', i, { closed: e.target.checked })} />
+          <input type="checkbox" title={__("Closed")} checked={!!hr.closed} onChange={(e) => lstPatch('hours', i, { closed: e.target.checked })} />
         </div>
       ))}
-      <button onClick={() => set('hours', [])} style={{ ...lstAddBtn, marginTop: '8px', borderStyle: 'solid', borderWidth: '1px', color: '#94a3b8' }}>Remove opening hours</button>
+      <button onClick={() => set('hours', [])} style={{ ...lstAddBtn, marginTop: '8px', borderStyle: 'solid', borderWidth: '1px', color: '#94a3b8' }}>{__("Remove opening hours")}</button>
     </>
   );
 }
@@ -110,9 +111,9 @@ export function GridCount({ ctx }) {
   const count = gridCount(selectedBlock);
   return (
     <>
-      <label style={labelStyle}>{isCards ? 'Number of cards' : 'Number of columns'}: {count}</label>
+      <label style={labelStyle}>{isCards ? __("Number of cards") : __("Number of columns")}: {count}</label>
       <input type="range" min="1" max={isCards ? 12 : 24} style={{ width: '100%', cursor: 'pointer' }} value={count}
-        aria-label={isCards ? 'Number of cards' : 'Number of columns'}
+        aria-label={isCards ? __("Number of cards") : __("Number of columns")}
         onChange={(e) => {
           const n = parseInt(e.target.value);
           const newItems = Array(n).fill('').map((_, i) => (items[i] !== undefined ? items[i] : (isCards ? `<h3>Card ${i + 1}</h3><p>Describe it here.</p>` : `<p>Column ${i + 1}</p>`)));
@@ -128,12 +129,12 @@ export function GridItems({ ctx }) {
   const items = selectedBlock.content.items || [];
   return items.map((item, idx) => (
     <div key={idx} style={{ background: '#0f172a', padding: '15px', borderRadius: '8px', marginBottom: '15px', border: '1px solid #334155' }}>
-      <label style={{ ...labelStyle, marginTop: 0 }}>{isCards ? 'Card' : 'Item'} {idx + 1}</label>
+      <label style={{ ...labelStyle, marginTop: 0 }}>{isCards ? __("Card") : __("Item")} {idx + 1}</label>
       <textarea rows="4" style={inputStyle} value={item} onChange={(e) => handleContentChange('items', items.map((x, i) => (i === idx ? e.target.value : x)))} />
       <div style={{ display: 'flex', gap: '8px', marginTop: '5px' }}>
-        <button onClick={() => setMediaPickerTarget({ type: 'grid_item', index: idx })} style={{ flex: 1, padding: '6px', background: '#334155', color: '#f8fafc', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>+ Image</button>
+        <button onClick={() => setMediaPickerTarget({ type: 'grid_item', index: idx })} style={{ flex: 1, padding: '6px', background: '#334155', color: '#f8fafc', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>{__("+ Image")}</button>
         <button onClick={() => handleContentChange('items', items.map((x, i) => (i === idx ? x + '<a href="#" style="display:inline-block; padding:10px 20px; background:#3b82f6; color:#fff; border-radius:6px; text-decoration:none; margin-top:10px; font-weight:bold;">Click Here</a>' : x)))}
-          style={{ flex: 1, padding: '6px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>+ Button</button>
+          style={{ flex: 1, padding: '6px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>{__("+ Button")}</button>
       </div>
     </div>
   ));
@@ -144,13 +145,13 @@ export function ButtonSize({ ctx }) {
   const { patchStyles } = ctx;
   return (
     <>
-      <label style={labelStyle}>Button Size</label>
+      <label style={labelStyle}>{__("Button Size")}</label>
       <select style={inputStyle} value="" onChange={(e) => {
         if (e.target.value === 'sm') patchStyles({ padding: '8px 16px', fontSize: '14px' });
         if (e.target.value === 'md') patchStyles({ padding: '12px 24px', fontSize: '16px' });
         if (e.target.value === 'lg') patchStyles({ padding: '18px 36px', fontSize: '20px' });
       }}>
-        <option value="">Custom</option><option value="sm">Small</option><option value="md">Medium</option><option value="lg">Large</option>
+        <option value="">{__("Custom")}</option><option value="sm">{__("Small")}</option><option value="md">{__("Medium")}</option><option value="lg">{__("Large")}</option>
       </select>
     </>
   );
@@ -160,7 +161,7 @@ export function ButtonBorder({ ctx }) {
   const st = selectedBlock.styles || {};
   const hasBorder = parseFloat(st.borderWidth) > 0;
   return (
-    <ColorF label="Border" value={hasBorder ? st.borderColor : ''} allowTransparent={false} placeholder="No border"
+    <ColorF label={__("Border")} value={hasBorder ? st.borderColor : ''} allowTransparent={false} placeholder={__("No border")}
       onChange={(v) => {
         if (!v) patchStyles({ borderColor: '', borderWidth: '' });
         else patchStyles(hasBorder ? { borderColor: v } : { borderColor: v, borderWidth: '2px', borderStyle: 'solid' });
@@ -169,7 +170,7 @@ export function ButtonBorder({ ctx }) {
 }
 
 // --- Hero buttons: a quick look (filled, outlined, or text only) that sets the colours
-const LOOKS = [['solid', 'Solid'], ['outline', 'Outline'], ['ghost', 'Text only']];
+const LOOKS = [['solid', __("Solid")], ['outline', __("Outline")], ['ghost', __("Text only")]];
 const lookOf = (b) => (b.bgColor === 'transparent' ? (b.borderColor ? 'outline' : 'ghost') : 'solid');
 const applyLook = (b, id) => {
   const ink = b.bgColor && b.bgColor !== 'transparent' ? b.bgColor : (b.borderColor || '#ffffff');
@@ -180,8 +181,8 @@ const applyLook = (b, id) => {
 export function HeroButtonLook({ item, patch }) {
   return (
     <div>
-      <label style={labelStyle}>Style</label>
-      <div className="ui-seg" role="group" aria-label="Button style" style={{ display: 'flex', gap: 4 }}>
+      <label style={labelStyle}>{__("Style")}</label>
+      <div className="ui-seg" role="group" aria-label={__("Button style")} style={{ display: 'flex', gap: 4 }}>
         {LOOKS.map(([id, name]) => (
           <button key={id} type="button" className="ui-seg__btn" aria-pressed={lookOf(item) === id} onClick={() => patch(applyLook(item, id))}>{name}</button>
         ))}
@@ -205,15 +206,15 @@ export function PaymentLink({ ctx, k, item, patch }) {
   const known = (links || []).some((l) => l.url === value);
   return (
     <>
-      <label style={labelStyle}>Stripe payment link</label>
-      <select style={inputStyle} aria-label="Choose a payment link" value={known ? value : ''} onChange={(e) => put(e.target.value)}>
-        <option value="">{links === null ? 'Loading…' : links.length ? 'Choose a payment link…' : 'No payment links yet'}</option>
+      <label style={labelStyle}>{__("Stripe payment link")}</label>
+      <select style={inputStyle} aria-label={__("Choose a payment link")} value={known ? value : ''} onChange={(e) => put(e.target.value)}>
+        <option value="">{links === null ? __("Loading…") : links.length ? __("Choose a payment link…") : __("No payment links yet")}</option>
         {(links || []).map((l) => <option key={l.id} value={l.url}>{l.name}{l.amount ? ` — ${l.amount} ${String(l.currency || '').toUpperCase()}` : ''}</option>)}
       </select>
-      <label style={{ ...labelStyle, marginTop: 8 }}>Or paste a link</label>
-      <input style={inputStyle} aria-label="Payment link address" type="url" placeholder="https://buy.stripe.com/…" value={value} onChange={(e) => put(e.target.value.trim())} />
-      {value && !/^https:\/\/(buy|donate)\.stripe\.com\//.test(value) && <p role="alert" style={{ fontSize: 11, color: '#fbbf24', margin: '6px 0 0' }}>This is not a Stripe payment link, so the button stays empty.</p>}
-      {(links || []).length === 0 && links !== null && <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>Add links in Administration › Integrations › Stripe.</p>}
+      <label style={{ ...labelStyle, marginTop: 8 }}>{__("Or paste a link")}</label>
+      <input style={inputStyle} aria-label={__("Payment link address")} type="url" placeholder={__("https://buy.stripe.com/…")} value={value} onChange={(e) => put(e.target.value.trim())} />
+      {value && !/^https:\/\/(buy|donate)\.stripe\.com\//.test(value) && <p role="alert" style={{ fontSize: 11, color: '#fbbf24', margin: '6px 0 0' }}>{__("This is not a Stripe payment link, so the button stays empty.")}</p>}
+      {(links || []).length === 0 && links !== null && <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>{__("Add links in Administration › Integrations › Stripe.")}</p>}
     </>
   );
 }

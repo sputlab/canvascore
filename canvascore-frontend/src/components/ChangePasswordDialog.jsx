@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { notify } from '../ui/notify';
+import { __ } from '../i18n/index.js';
 
 export default function ChangePasswordDialog({ onClose }) {
   const [form, setForm] = useState({ current: '', next: '', again: '' });
@@ -10,8 +11,8 @@ export default function ChangePasswordDialog({ onClose }) {
   const [error, setError] = useState('');
   const first = useRef(null);
   useEffect(() => { if (first.current) first.current.focus(); }, []);
-  const problem = form.next.length > 0 && form.next.length < 8 ? 'At least 8 characters.'
-    : form.again && form.next !== form.again ? 'The two new passwords do not match.' : '';
+  const problem = form.next.length > 0 && form.next.length < 8 ? __("At least 8 characters.")
+    : form.again && form.next !== form.again ? __("The two new passwords do not match.") : '';
   const ready = form.current && form.next.length >= 8 && form.next === form.again;
 
   const submit = async (e) => {
@@ -21,9 +22,9 @@ export default function ChangePasswordDialog({ onClose }) {
     try {
       const res = await fetch('api.php?action=change_own_password', { method: 'POST', body: JSON.stringify({ current: form.current, password: form.next }) });
       const data = await res.json();
-      if (data && data.success) { if (data.csrf) window.__CC_CSRF = data.csrf; notify('Password changed.'); onClose(); return; }
-      setError((data && data.message) || 'The password was not changed.');
-    } catch { setError('Connection problem: the password was not changed.'); }
+      if (data && data.success) { if (data.csrf) window.__CC_CSRF = data.csrf; notify(__("Password changed.")); onClose(); return; }
+      setError((data && data.message) || __("The password was not changed."));
+    } catch { setError(__("Connection problem: the password was not changed.")); }
     setBusy(false);
   };
   const field = (key, label, auto, ref) => (
@@ -38,15 +39,15 @@ export default function ChangePasswordDialog({ onClose }) {
         onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } }}>
         <div className="ui-dialog__head">
           <span className="ui-dialog__icon" aria-hidden="true"><KeyRound size={18} /></span>
-          <h2 id="cc-pw-title" className="ui-dialog__title">Change your password</h2>
+          <h2 id="cc-pw-title" className="ui-dialog__title">{__("Change your password")}</h2>
         </div>
-        {field('current', 'Current password', 'current-password', first)}
-        {field('next', 'New password (at least 8 characters)', 'new-password')}
-        {field('again', 'Repeat the new password', 'new-password')}
+        {field('current', __("Current password"), 'current-password', first)}
+        {field('next', __("New password (at least 8 characters)"), 'new-password')}
+        {field('again', __("Repeat the new password"), 'new-password')}
         {(problem || error) && <p className="ui-error" role="alert" style={{ marginTop: 8 }}>{error || problem}</p>}
         <div className="ui-dialog__actions">
-          <button type="button" className="ui-btn ui-btn--secondary" onClick={onClose}>Cancel</button>
-          <button type="submit" className="ui-btn ui-btn--primary" disabled={!ready || busy}>{busy ? 'Saving…' : 'Change password'}</button>
+          <button type="button" className="ui-btn ui-btn--secondary" onClick={onClose}>{__("Cancel")}</button>
+          <button type="submit" className="ui-btn ui-btn--primary" disabled={!ready || busy}>{busy ? __("Saving…") : __("Change password")}</button>
         </div>
       </form>
     </div>

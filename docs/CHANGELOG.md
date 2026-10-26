@@ -5,10 +5,48 @@ All notable changes to CanvasCore are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-While the version stays at `0.x`, the API and formats may change from one
-minor to the next: `MINOR` signals new features, `PATCH` fixes.
+From 1.0 the formats are stable through the whole 1.x line (Developer Guide, section 14): `MINOR` adds features and
+never removes anything, `PATCH` fixes. Before 1.0 (`0.x`) the API and formats could change from one minor to the next.
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-10-26 — Stable
+
+CanvasCore 1.0: the formats are stable, the 1.x line is the long-term support line, and the editor speaks Italian as well as English. A full review of security and stability went into this release (below).
+
+### Added
+- **Translated admin interface**: the editor is available in **English and Italian** (3,050 texts, the settings of every block and the server's messages included). Choose it with **Interface language** on the sign-in screen or in the sidebar; it is kept in this browser and defaults to the browser's language. A text with no translation shows in English, and another language is one file (`src/i18n/locales/<code>.json`, Developer Guide section 15). Everything the server writes into an answer is translated as it arrives, but the site's own content (blocks, titles, header and footer) never is. New suites: `test:i18n` (every text translated, the {values} match, the runtime and the server messages) and `test:i18n-ui` (every screen opened in Italian, no English left).
+- **Stable formats and long-term support (1.x LTS)**: from 1.0 the database schema, the content of pages, backups, settings files, block packages, template kits, the update package, the API actions and the published addresses only **grow** through 1.x; breaking changes wait for 2.0, and the last 1.x gets security fixes for at least 24 months after 2.0. The policy is in the Developer Guide (section 14) and in SECURITY.md. New suite `test:formats`: holds every table, column, API action, block type and content key of 1.0, upgrades a database from **every** earlier schema step, restores a backup made by 1.0, and checks the backup manifest.
+- The editor's drag and drop reads out its instructions and announcements to screen readers in the editor's language.
+
+### Security
+A review of access control, published output, file handling and updates found these; none needs more than a signed-in account, and all are fixed and covered by tests (`test:security` is now 455 checks).
+- **Version history** (`get_revisions`, `get_revision`) could be read by any signed-in account, whatever the page or collection: an author could read other authors' drafts and anyone the content of a collection limited to chosen people. It now follows the access of the page or item itself.
+- An editor kept out of a collection could **schedule** (publish or take down) its items; a reviewer could rewrite a **live collection item** without a review (pages already needed one); the **design** of a restricted collection was readable. All three now follow the collection's access and the review rules.
+- **Uploaded file names** keep one dot, before the extension: a name such as `shell.php.png` is run as PHP by servers that give a handler to any extension of a name (Apache's `AddHandler`, common on cPanel). The uploads folder rules also deny any such name already there. An `.ico` upload must be an icon.
+- **Site address**: must be one line starting with `http://` or `https://` (a value with line breaks could add lines to `robots.txt`).
+- What an editor types as a page's **SEO title or description** is no longer expanded as a placeholder of the page template (it could pull the page body or the menu into `<title>` and the meta tags); the **cookie banner** text is inserted literally (`$0` and `\0` were read as back-references).
+- The unattended installer refuses a data folder inside the web root that can be downloaded, as the wizard does, and the Softaculous package makes CanvasCore write its folder's access rules before the file with the answers exists.
+- Dependencies: **DOMPurify 3.4.17** (the bundled copy was affected by advisories GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr and GHSA-c6gr-qvv4-5v3f), and Vite and undici updated: `npm audit` reports no vulnerability.
+
+### Fixed
+- **A section that failed during a publish (one item that cannot be rendered, the archives, the feeds, the redirects) no longer takes the pages it did not write off the live site**: nothing is removed that time, the answer says so, and the next whole publish catches up. (Before, every item or archive page of the previous build was deleted and the publish still said "successful".)
+- Publishing: two publishes never run at once (the editor, the scheduler, cron: the second waits a few seconds); a publish is not cut short by the host's time limit or a closed tab; pages and data files are written whole and renamed into place (a full disk never leaves a half-written page or an empty `settings.json`); saving the settings, the menu or the languages says so when the file could not be written.
+- Hosts without the **mbstring** extension: sorted and archive pages still publish.
+- Moving the data folder out of the web root (when it becomes possible) now moves **everything** in it (integrations and their keys, media data, packages, library, backups, updates), not just the database and three files, and the old database is deleted only after the copy is checked.
+- A slug is cut to 100 characters (a longer folder name made every later publish fail and kept deleted pages online).
+- On a multilingual site, popups limited to a language no longer show on the archive pages of other languages (and the publish no longer logs a notice for each archive page).
+- An update that is rolled back says so when the database could not be put back, and how to do it by hand.
+- Content migrations (for the day the block format changes) now cover pages, collection items, popups and the header and footer, in one transaction, and only the rows that need them.
+- A backup made before roles existed (before 0.15) gives its pages back their creator when restored, so authors keep their own pages.
+- The Italian editor no longer translates site content that happens to have a field called `message` (for example a Share Bar's); only the server's own messages are.
+- The sources of the hosting-installer packages (`installers/`) were missing from the repository since 0.26.0 (a `.gitignore` rule): they are there now.
+- With no sodium extension the template library says so in a sentence; PHP 8.4/8.5 deprecation notices (`curl_close`, `fputcsv`) are gone.
+
+### Upgrade notes
+- Updating from any 0.x is safe: migrations run by themselves (the schema stays 17 since 0.26.0). Take a backup first, as always.
+- **Nginx**: if you have not yet, add `languages|installlib|install-cli` to the library-file rule (Administrator Guide section 4.2).
+- The old `canvascore-admin/data` folder, if your site still uses it, is moved outside the web root on the first request after the update when that is possible; everything in it moves with it.
 
 ## [0.26.0] - 2026-10-26 — Multilingual sites and one-click installers
 

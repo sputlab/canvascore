@@ -9,6 +9,7 @@ import { notify } from '../../ui/notify';
 import { confirmDialog } from '../../ui/dialog';
 import { blockLabel } from '../../editor/blockCatalog';
 import { PanelAccordion } from './fields';
+import { __ } from '../../i18n/index.js';
 
 // Every block of the page in page order, with its depth and a number per type ("Hero 2")
 function pageBlocks(blocks) {
@@ -39,43 +40,43 @@ export default function CopyPasteStyle({ block }) {
   const label = blockLabel(block.type);
   const paste = (ids, what) => {
     const n = useStore.getState().pasteStyle(ids);
-    notify(`Style pasted ${what}${n > 1 ? ` (${n} blocks)` : ''}. Ctrl+Z undoes it.`);
+    notify(__("Style pasted {0}{1}. Ctrl+Z undoes it.", what, n > 1 ? __(" ({0} blocks)", n) : ''));
     setPicked([]);
   };
   const copy = () => {
     useStore.getState().copyStyle(block.id);
-    notify(`Style of this ${label} copied. Paste it onto another block.`);
+    notify(__("Style of this {0} copied. Paste it onto another block.", label));
   };
   const reset = async () => {
-    if (!(await confirmDialog({ title: 'Reset this block to the global style?', message: 'Its own colours, spacing, typography and device overrides are removed, so it follows the site\'s styles again. Its text style and animation stay. Ctrl+Z undoes it.', confirmLabel: 'Reset style', danger: true }))) return;
+    if (!(await confirmDialog({ title: __("Reset this block to the global style?"), message: __("Its own colours, spacing, typography and device overrides are removed, so it follows the site's styles again. Its text style and animation stay. Ctrl+Z undoes it."), confirmLabel: __("Reset style"), danger: true }))) return;
     useStore.getState().resetStyle(block.id);
-    notify('Style reset to the global style.');
+    notify(__("Style reset to the global style."));
   };
   return (
-    <PanelAccordion title="Copy & paste style" icon={Copy} defaultOpen={false}>
+    <PanelAccordion title={__("Copy & paste style")} icon={Copy} defaultOpen={false}>
       <p style={{ margin: '0 0 8px', fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
-        {clip ? `Copied from a ${blockLabel(clip.type)} block. Paste it onto this block or onto other blocks below.` : 'Copy this block\'s style, then paste it onto other blocks.'}
+        {clip ? __("Copied from a {0} block. Paste it onto this block or onto other blocks below.", blockLabel(clip.type)) : __("Copy this block's style, then paste it onto other blocks.")}
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-        <Button size="sm" icon={Copy} onClick={copy}>Copy style</Button>
-        <Button size="sm" icon={ClipboardPaste} disabled={!clip} onClick={() => paste([block.id], 'onto this block')}>Paste onto this block</Button>
-        <Button size="sm" variant="ghost" icon={RotateCcw} onClick={reset}>Reset to global style</Button>
+        <Button size="sm" icon={Copy} onClick={copy}>{__("Copy style")}</Button>
+        <Button size="sm" icon={ClipboardPaste} disabled={!clip} onClick={() => paste([block.id], 'onto this block')}>{__("Paste onto this block")}</Button>
+        <Button size="sm" variant="ghost" icon={RotateCcw} onClick={reset}>{__("Reset to global style")}</Button>
       </div>
       {targets.length > 0 && (
         <>
-          <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Paste onto other blocks</div>
-          <div role="group" aria-label="Blocks to paste onto" style={{ maxHeight: 180, overflowY: 'auto', display: 'grid', gap: 2, marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>{__("Paste onto other blocks")}</div>
+          <div role="group" aria-label={__("Blocks to paste onto")} style={{ maxHeight: 180, overflowY: 'auto', display: 'grid', gap: 2, marginBottom: 8 }}>
             {targets.map((t) => (
               <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#e2e8f0', padding: '3px 0', paddingLeft: t.depth * 14 }}>
-                <input type="checkbox" checked={picked.includes(t.id)} onChange={() => toggle(t.id)} aria-label={`Paste onto ${t.label}`} />
+                <input type="checkbox" checked={picked.includes(t.id)} onChange={() => toggle(t.id)} aria-label={__("Paste onto {0}", t.label)} />
                 {t.label}
               </label>
             ))}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {sameType.length > 0 && <Button size="sm" variant="ghost" onClick={() => setPicked(sameType)}>Select all {label} blocks</Button>}
+            {sameType.length > 0 && <Button size="sm" variant="ghost" onClick={() => setPicked(sameType)}>{__("Select all")} {label} {__("blocks")}</Button>}
             <Button size="sm" icon={ClipboardPaste} disabled={!clip || picked.length === 0} onClick={() => paste(picked, `onto ${picked.length} ${picked.length === 1 ? 'block' : 'blocks'}`)}>
-              Paste onto selected{picked.length ? ` (${picked.length})` : ''}
+              {__("Paste onto selected")}{picked.length ? ` (${picked.length})` : ''}
             </Button>
           </div>
         </>

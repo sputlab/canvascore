@@ -74,6 +74,7 @@ function cc_lib_source() {
 }
 function cc_lib_signed_message($bytes) { return "canvascore-library-v1\n" . hash('sha256', $bytes); }
 function cc_lib_verify($bytes, $sigB64, array $keys) {
+    if (!function_exists('sodium_crypto_sign_verify_detached')) throw new RuntimeException('The library is signed, and checking it needs the PHP sodium extension, which this server does not have.');
     $sig = base64_decode(trim((string)$sigB64), true);
     if ($sig === false || strlen($sig) !== SODIUM_CRYPTO_SIGN_BYTES) return false;
     foreach ($keys as $k) if (is_string($k) && strlen($k) === SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES && sodium_crypto_sign_verify_detached($sig, cc_lib_signed_message($bytes), $k)) return true;
@@ -396,7 +397,7 @@ function cc_lib_copy_assets(array $kit, $baseDir) {
     $urls = []; $made = [];
     foreach ($kit['assets'] as $name => $bytes) {
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-        $base = preg_replace('/[^a-zA-Z0-9._-]/', '', pathinfo($name, PATHINFO_FILENAME)) ?: 'image';
+        $base = str_replace('.', '-', preg_replace('/[^a-zA-Z0-9._-]/', '', pathinfo($name, PATHINFO_FILENAME))) ?: 'image';
         $fname = time() . '_' . $kit['id'] . '-' . $base . '.' . $ext;
         if (file_exists("$dir/$fname")) $fname = time() . '_' . bin2hex(random_bytes(3)) . '_' . $kit['id'] . '-' . $base . '.' . $ext;
         file_put_contents("$dir/$fname", $bytes);
@@ -477,12 +478,12 @@ function cc_lib_apply_design($pdo, array $kit, array $urls, &$dropped, $user) {
     if (isset($c['menu']) && is_array($c['menu'])) {
         $cur = $snap['menu'] !== null ? (json_decode($snap['menu'], true) ?: []) : [];
         $cur['items'] = cc_lib_menu_clean($c['menu']);
-        file_put_contents("$dataDir/menu.json", json_encode($cur, JSON_UNESCAPED_UNICODE));
+        cc_write_file("$dataDir/menu.json", json_encode($cur, JSON_UNESCAPED_UNICODE));
     }
     $design = cc_lib_design_clean(cc_lib_prepare_strings($c['design'] ?? [], $urls));
     if ($design) {
         $cur = $snap['settings'] !== null ? (json_decode($snap['settings'], true) ?: []) : [];
-        file_put_contents("$dataDir/settings.json", json_encode(array_merge($cur, $design), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        cc_write_file("$dataDir/settings.json", json_encode(array_merge($cur, $design), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
     return ['undo' => $undoFile];
 }
@@ -503,7 +504,7 @@ function cc_lib_undo($pdo, $installId) {
             else $pdo->prepare("INSERT INTO site_parts (name, content_json, content_schema) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET content_json = excluded.content_json, content_schema = excluded.content_schema")->execute([$part, (string)$snap[$part], cc_version()['content_schema']]);
         }
         foreach (['menu' => 'menu.json', 'settings' => 'settings.json'] as $k => $file) {
-            if (($snap[$k] ?? null) === null) @unlink("$dataDir/$file"); else file_put_contents("$dataDir/$file", $snap[$k]);
+            if (($snap[$k] ?? null) === null) @unlink("$dataDir/$file"); else cc_write_file("$dataDir/$file", $snap[$k]);
         }
         @unlink(cc_lib_dir() . '/' . $row['undo']);
         $log[$i]['undo'] = ''; $log[$i]['restored'] = date('Y-m-d H:i:s');

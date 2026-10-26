@@ -1,6 +1,6 @@
 # CanvasCore manuals
 
-Manuals for CanvasCore 0.26.0. Pick the one that matches what you do:
+Manuals for CanvasCore 1.0.0. Pick the one that matches what you do:
 
 | Manual | For | What's inside |
 | --- | --- | --- |
@@ -9,7 +9,7 @@ Manuals for CanvasCore 0.26.0. Pick the one that matches what you do:
 | [Administrator Guide](ADMIN-GUIDE.md) | Whoever installs and runs the site | Requirements, installation, web server, updates, accounts and roles, publishing, backups and restore, forms and email, security, troubleshooting, license |
 | [Developer Guide](DEVELOPER-GUIDE.md) | Developers working on CanvasCore | Architecture, local setup, data model, rendering and parity, adding a block, state and saving, UI and API conventions, tests, releases |
 
-Release history is in [CHANGELOG.md](../CHANGELOG.md) and on GitHub Releases.
+The formats that stay stable through 1.x and the support policy are in the [Developer Guide](DEVELOPER-GUIDE.md#14-stability-and-support-policy-1x-lts). Release history is in [CHANGELOG.md](../CHANGELOG.md) and on GitHub Releases.
 
 ## License
 

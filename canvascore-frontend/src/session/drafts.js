@@ -1,3 +1,4 @@
+import { __ } from '../i18n/index.js';
 // canvascore-frontend/src/session/drafts.js
 // LOCAL backup of unsaved work (safety net for refresh, tab close, crash).
 //
@@ -118,19 +119,19 @@ export function purgeOldDrafts(nowMs = Date.now()) {
 // Human-readable label for the UI ("Page · Home", "Menu", ...).
 export function describeDraft(entry) {
   const scope = entry.scope || '';
-  if (scope === 'menu') return { kind: 'Menu', title: 'Navigation menu' };
-  if (scope === 'settings') return { kind: 'Global options', title: 'Global options' };
+  if (scope === 'menu') return { kind: __("Menu"), title: __("Navigation menu") };
+  if (scope === 'settings') return { kind: __("Global options"), title: __("Global options") };
   if (scope.startsWith('editor:')) {
     const pl = entry.payload || {};
     const page = (pl.page && pl.page.page) || {};
-    if (pl.master) return { kind: 'Master component', title: pl.master.name || 'Master' };
-    let kind = 'Page';
-    if (page.__part === 'header') kind = 'Global header';
-    else if (page.__part === 'footer') kind = 'Global footer';
-    else if (page.__item) kind = 'Collection item';
-    return { kind, title: page.title || 'Untitled' };
+    if (pl.master) return { kind: __("Master component"), title: pl.master.name || __("Master") };
+    let kind = __("Page");
+    if (page.__part === 'header') kind = __("Global header");
+    else if (page.__part === 'footer') kind = __("Global footer");
+    else if (page.__item) kind = __("Collection item");
+    return { kind, title: page.title || __("Untitled") };
   }
-  return { kind: 'Changes', title: scope };
+  return { kind: __("Changes"), title: scope };
 }
 
 // ---- registry of "flushers": synchronous backup saves, called before showing the login

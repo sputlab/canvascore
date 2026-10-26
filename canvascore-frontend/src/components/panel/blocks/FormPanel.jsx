@@ -3,11 +3,12 @@ import { Layout, Mail } from 'lucide-react';
 import { PanelAccordion, ItemCard, TxtF, SelF, ChkF } from '../fields';
 import { labelStyle, inputStyle, lstAddBtn } from '../helpers';
 import { RichTextField } from '../../../editor/RichText';
+import { __ } from '../../../i18n/index.js';
 
-const DEFAULT_FIELDS = [{ label: 'Name', type: 'text', required: true }, { label: 'Email', type: 'email', required: true }, { label: 'Message', type: 'textarea', required: true }];
+const DEFAULT_FIELDS = [{ label: __("Name"), type: 'text', required: true }, { label: __("Email"), type: 'email', required: true }, { label: __("Message"), type: 'textarea', required: true }];
 
 // Same list as the renderers accept (FORM_TYPES / CC_FORM_TYPES)
-const FIELD_TYPES = [['text', 'Short text'], ['email', 'Email'], ['tel', 'Phone'], ['number', 'Number'], ['url', 'Website address'], ['date', 'Date'], ['textarea', 'Long text']];
+const FIELD_TYPES = [['text', __("Short text")], ['email', __("Email")], ['tel', __("Phone")], ['number', __("Number")], ['url', __("Website address")], ['date', __("Date")], ['textarea', __("Long text")]];
 
 // Content panel: FORM
 export default function FormPanel({ ctx }) {
@@ -21,30 +22,30 @@ export default function FormPanel({ ctx }) {
   };
   return (
     <>
-      <PanelAccordion title="Form Settings" icon={Mail} defaultOpen={true}>
-        <label style={labelStyle}>Form Title</label>
-        <RichTextField label="Form title" variant="basic" value={selectedBlock.content.title ?? '<h3>Contact Us</h3>'} onChange={(val) => handleContentChange('title', val)} />
+      <PanelAccordion title={__("Form Settings")} icon={Mail} defaultOpen={true}>
+        <label style={labelStyle}>{__("Form Title")}</label>
+        <RichTextField label={__("Form title")} variant="basic" value={selectedBlock.content.title ?? '<h3>Contact Us</h3>'} onChange={(val) => handleContentChange('title', val)} />
         {userRole === 'admin' && <>
-          <label style={labelStyle}>Receiving Email</label>
-          <input type="email" style={inputStyle} value={selectedBlock.content.email || ''} onChange={e => handleContentChange('email', e.target.value)} placeholder="Leave blank for Global Email" />
+          <label style={labelStyle}>{__("Receiving Email")}</label>
+          <input type="email" style={inputStyle} value={selectedBlock.content.email || ''} onChange={e => handleContentChange('email', e.target.value)} placeholder={__("Leave blank for Global Email")} />
         </>}
-        <label style={labelStyle}>Submit Button Text</label>
-        <input type="text" style={inputStyle} value={selectedBlock.content.btnText ?? ''} placeholder="Send Message" onChange={e => handleContentChange('btnText', e.target.value)} />
-        <label style={labelStyle}>Message after sending</label>
-        <input type="text" style={inputStyle} value={selectedBlock.content.successMsg ?? ''} placeholder="Sent!" onChange={e => handleContentChange('successMsg', e.target.value)} />
-        <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0' }}>Shown to the visitor once the message has been sent.</p>
+        <label style={labelStyle}>{__("Submit Button Text")}</label>
+        <input type="text" style={inputStyle} value={selectedBlock.content.btnText ?? ''} placeholder={__("Send Message")} onChange={e => handleContentChange('btnText', e.target.value)} />
+        <label style={labelStyle}>{__("Message after sending")}</label>
+        <input type="text" style={inputStyle} value={selectedBlock.content.successMsg ?? ''} placeholder={__("Sent!")} onChange={e => handleContentChange('successMsg', e.target.value)} />
+        <p style={{ fontSize: '11px', color: '#64748b', margin: '6px 0 0' }}>{__("Shown to the visitor once the message has been sent.")}</p>
       </PanelAccordion>
 
-      <PanelAccordion title="Form Fields" icon={Layout} defaultOpen={false}>
+      <PanelAccordion title={__("Form Fields")} icon={Layout} defaultOpen={false}>
         {formFields.map((field, idx) => (
-          <ItemCard key={idx} title={`Field ${idx + 1}`} index={idx} total={formFields.length} onMove={(d) => moveField(idx, d)}
+          <ItemCard key={idx} title={__("Field {0}", idx + 1)} index={idx} total={formFields.length} onMove={(d) => moveField(idx, d)}
             onRemove={() => handleContentChange('fields', formFields.filter((_, i) => i !== idx))}>
-            <TxtF label="Label" value={field.label} onChange={v => patchField(idx, { label: v })} placeholder="e.g. Name" />
-            <SelF label="Type" value={field.type || 'text'} onChange={v => patchField(idx, { type: v })} options={FIELD_TYPES} />
-            <ChkF label="Required field" checked={field.required} onChange={v => patchField(idx, { required: v })} />
+            <TxtF label={__("Label")} value={field.label} onChange={v => patchField(idx, { label: v })} placeholder={__("e.g. Name")} />
+            <SelF label={__("Type")} value={field.type || 'text'} onChange={v => patchField(idx, { type: v })} options={FIELD_TYPES} />
+            <ChkF label={__("Required field")} checked={field.required} onChange={v => patchField(idx, { required: v })} />
           </ItemCard>
         ))}
-        <button onClick={() => handleContentChange('fields', [...formFields, { label: 'New Field', type: 'text', required: false }])} style={lstAddBtn}>+ Add Field</button>
+        <button onClick={() => handleContentChange('fields', [...formFields, { label: __("New Field"), type: 'text', required: false }])} style={lstAddBtn}>{__("+ Add Field")}</button>
       </PanelAccordion>
     </>
   );

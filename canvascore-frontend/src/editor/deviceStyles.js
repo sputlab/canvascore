@@ -2,8 +2,9 @@
 // previewed: on desktop it changes the block's own styles; on tablet or phone it writes overrides, and a value equal
 // to what that device would inherit anyway (or an emptied field) removes the override instead.
 import { DEVICE_KEYS, effectiveStyles } from '../render/renderBlock.mjs';
+import { __ } from '../i18n/index.js';
 
-export const DEVICES = [['desktop', 'Desktop'], ['tablet', 'Tablet'], ['mobile', 'Phone']];
+export const DEVICES = [['desktop', __("Desktop")], ['tablet', __("Tablet")], ['mobile', __("Phone")]];
 export const deviceName = (d) => (DEVICES.find(([id]) => id === d) || DEVICES[0])[1];
 
 // The block with its styles as shown on `device`, for the panel's fields

@@ -13,6 +13,7 @@ import { forViewport } from '../editor/devicePreview';
 import { blockLabel, CONTAINER_TYPES } from '../editor/blockCatalog';
 import { bindBlock, contextFor } from '../render/itemBinding.mjs';
 import BlockHandles from './BlockHandles';
+import { __ } from '../i18n/index.js';
 
 const CONTAINERS = CONTAINER_TYPES;
 // Blocks whose canonical HTML is interactive in the canvas too (native details/radio, no JS):
@@ -45,9 +46,9 @@ function splitStyles(styles = {}, type = '') {
 // Rich text fields edited in place on the canvas, with their toolbar ('basic' for titles, 'full' for body text)
 const TEXT_FIELDS = {
   TEXT: { text: 'full' },
-  HERO: { title: 'basic', subtitle: 'basic' },
+  HERO: { title: __("basic"), subtitle: __("basic") },
   IMAGE_TEXT: { text: 'full' },
-  FORM: { title: 'basic' },
+  FORM: { title: __("basic") },
 };
 
 function canonicalHtml(block, viewport) {
@@ -210,7 +211,7 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
       return (
         <div id={innerId} className={`cc-master-wrapper ${innerClass}`} style={{ outline: isSelected ? '2px solid #fcd34d' : '1px solid transparent', position: 'relative', width: '100%' }}>
           {isSelected && (
-            <div style={{ position: 'absolute', top: 0, right: 0, background: '#fcd34d', color: '#78350f', fontSize: '10px', padding: '4px 8px', fontWeight: 'bold', zIndex: 10, borderBottomLeftRadius: '6px' }}>👑 GLOBAL MASTER</div>
+            <div style={{ position: 'absolute', top: 0, right: 0, background: '#fcd34d', color: '#78350f', fontSize: '10px', padding: '4px 8px', fontWeight: 'bold', zIndex: 10, borderBottomLeftRadius: '6px' }}>{__("👑 GLOBAL MASTER")}</div>
           )}
           <div style={{ pointerEvents: 'none' }}>
             {masterRealContent ? (
@@ -218,8 +219,8 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
             ) : (
               <div style={{ padding: '40px 20px', background: '#fef3c7', border: '2px dashed #f59e0b', borderRadius: '12px', textAlign: 'center', color: '#92400e' }}>
                 <Crown size={32} color="#d97706" style={{ margin: '0 auto 10px', display: 'block' }} />
-                <h3 style={{ margin: '0 0 5px 0', fontSize: '16px' }}>{block.content.name || 'Master Component'}</h3>
-                <p style={{ margin: 0, fontSize: '13px', opacity: 0.8 }}>⚠ Content not found.</p>
+                <h3 style={{ margin: '0 0 5px 0', fontSize: '16px' }}>{block.content.name || __("Master Component")}</h3>
+                <p style={{ margin: 0, fontSize: '13px', opacity: 0.8 }}>{__("⚠ Content not found.")}</p>
               </div>
             )}
           </div>
@@ -234,7 +235,7 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
       return (
         <div style={{ padding: '14px', pointerEvents: isMasterPreview ? 'auto' : 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#64748b', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            <span>{'\uD83D\uDCDA'} Collection List</span>
+            <span>{'\uD83D\uDCDA'} {__("Collection List")}</span>
             <span style={{ color: '#38bdf8' }}>{c.collectionName || c.collectionSlug || 'choose a collection \u2192'}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '16px' }}>
@@ -249,7 +250,7 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
               </div>
             ))}
           </div>
-          <div style={{ marginTop: '8px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>Live items are generated on publish.</div>
+          <div style={{ marginTop: '8px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>{__("Live items are generated on publish.")}</div>
         </div>
       );
     }
@@ -257,24 +258,24 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
     // ITEM_FIELD: the page shows the value only on a collection item; the canvas shows which field it is
     if (block.type === 'ITEM_FIELD') {
       const d = (fieldDefs || []).find((x) => x.id === block.content?.field);
-      return emptyPlaceholder(d ? `Item field: ${d.label}. Shown on each collection item page.` : 'Item field: choose a field in the settings panel.');
+      return emptyPlaceholder(d ? __("Item field: {0}. Shown on each collection item page.", d.label) : __("Item field: choose a field in the settings panel."));
     }
 
     // ITEM_TERMS: the categories and tags of the item being published (shown on its page)
-    if (block.type === 'ITEM_TERMS') return emptyPlaceholder('Categories and tags of the item, shown on each collection item page.');
+    if (block.type === 'ITEM_TERMS') return emptyPlaceholder(__("Categories and tags of the item, shown on each collection item page."));
 
     // LANGUAGE_SWITCHER: the links are made when the site is published (they depend on the page); the canvas shows the languages of the site
     if (block.type === 'LANGUAGE_SWITCHER') {
       const c = block.content || {};
       const list = siteLangs && siteLangs.enabled && Array.isArray(siteLangs.list) && siteLangs.list.length >= 2 ? siteLangs.list : null;
-      if (!list) return emptyPlaceholder('Language switcher: add at least two languages in Administration › Languages.');
+      if (!list) return emptyPlaceholder(__("Language switcher: add at least two languages in Administration › Languages."));
       const cur = langOf(page, siteLangs);   // the language of the page being edited
       const text = (l) => (c.labels === 'code' ? l.code.toUpperCase() : l.name);
       const shown = list.filter((l) => c.showCurrent !== false || l.code !== cur);
       return (
         <div style={{ padding: '8px 0', pointerEvents: isMasterPreview ? 'auto' : 'none' }} data-cc-lang-preview>
           {c.style === 'dropdown'
-            ? <select aria-label="Language" defaultValue={cur} style={{ font: 'inherit', padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff', color: '#0f172a' }}>{shown.map((l) => <option key={l.code} value={l.code}>{text(l)}</option>)}</select>
+            ? <select aria-label={__("Language")} defaultValue={cur} style={{ font: 'inherit', padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff', color: '#0f172a' }}>{shown.map((l) => <option key={l.code} value={l.code}>{text(l)}</option>)}</select>
             : <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>{shown.map((l) => <li key={l.code} style={{ fontWeight: l.code === cur ? 700 : 400 }}>{text(l)}</li>)}</ul>}
         </div>
       );
@@ -283,7 +284,7 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
     // RELATED: the items that point to the collection item being published (listed on the published item page)
     if (block.type === 'RELATED') {
       const cname = block.content?.collectionName;
-      return emptyPlaceholder(cname ? `Related items from ${cname}. Shown on each collection item page.` : 'Related items: choose a collection and a reference field in the settings panel.');
+      return emptyPlaceholder(cname ? __("Related items from {0}. Shown on each collection item page.", cname) : __("Related items: choose a collection and a reference field in the settings panel."));
     }
 
     // CONTAINER: canonical root (with sizing neutralized) + interactive React children
@@ -295,7 +296,7 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
       const childIds = kids.map(c => c.id);
       const children = kids.length > 0
         ? <SortableContext items={childIds} strategy={verticalListSortingStrategy}>{kids.map(c => <SortableBlock key={c.id} block={c} isMasterPreview={isMasterPreview} />)}</SortableContext>
-        : emptyPlaceholder(`Empty ${blockLabel(block.type)}. Select it and add blocks from the Add tab, or drop them here in Layers.`);
+        : emptyPlaceholder(__("Empty {0}. Select it and add blocks from the Add tab, or drop them here in Layers.", blockLabel(block.type)));
       return React.createElement(r.tag, { id: r.id, className: r.className, style }, children);
     }
 
@@ -331,7 +332,7 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
     <div ref={(el) => { setNodeRef(el); frameRef.current = el; }} style={wrapperStyle} onClick={handleClick} onContextMenu={handleContextMenu}>
       {dragHandle}
       {isSelected && !isDragging && !locked && block.type !== 'MASTER' && <BlockHandles block={rawBlock} frameRef={frameRef} />}
-      {hiddenHere && <div className="cc-hidden-badge" style={{ position: 'absolute', top: 4, right: 4, zIndex: 40, background: '#334155', color: '#f8fafc', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', pointerEvents: 'none' }}>Hidden on {DEVICE_NAMES[viewport]}</div>}
+      {hiddenHere && <div className="cc-hidden-badge" style={{ position: 'absolute', top: 4, right: 4, zIndex: 40, background: '#334155', color: '#f8fafc', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', pointerEvents: 'none' }}>{__("Hidden on")} {DEVICE_NAMES[viewport]}</div>}
       {block.content?.customCss && <style>{String(block.content.customCss).replace(/__THIS__/g, `#${innerId}`)}</style>}
       {renderBody()}
     </div>

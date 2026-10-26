@@ -6,6 +6,7 @@ import { useStore, findNodeById } from '../store/useStore';
 import { deviceStylePatch } from '../editor/deviceStyles';
 import { effectiveStyles } from '../render/renderBlock.mjs';
 import { HANDLES, boxSides, sidePx, setBoxSide, dragValue } from '../editor/handles';
+import { __ } from '../i18n/index.js';
 
 const COLORS = { margin: '#f59e0b', padding: '#22c55e', size: '#38bdf8' };
 // Where each handle sits on the frame (the frame is position: relative)
@@ -105,7 +106,7 @@ export default function BlockHandles({ block, frameRef }) {
         const active = drag && drag.id === spec.id;
         return (
           <div key={spec.id} className="cc-block-handle" data-handle={spec.id} role="slider" tabIndex={0}
-            aria-label={`${spec.label}. Drag, or use the arrow keys`} title={spec.label}
+            aria-label={__("{0}. Drag, or use the arrow keys", spec.label)} title={spec.label}
             onPointerDown={(e) => startDrag(e, spec)} onKeyDown={(e) => onKey(e, spec)} onClick={(e) => e.stopPropagation()}
             style={{ position: 'absolute', ...pos, transform, width: 10, height: 10, borderRadius: 3, background: color, border: '2px solid #fff',
               boxShadow: '0 0 0 1px rgba(15,23,42,.45)', cursor, zIndex: 30, touchAction: 'none', boxSizing: 'border-box', outline: active ? '2px solid #0f172a' : 'none' }}>
