@@ -91,6 +91,15 @@ check('the manifest of a backup has every field of 1.0', !array_diff($need, arra
 $db2 = mem(); cc_migrate($db2);
 $new = cc_backup_create($db2, "$tmp/new.zip");
 check('a backup made today has them too', !array_diff($need, array_keys($new)));
+// the demo site that ships with the product restores on a new site, in its two languages
+$demoZip = __DIR__ . '/../../demo/demo-baseline.zip';
+cc_backup_rrmdir($tmp); @mkdir("$tmp/data", 0755, true); @mkdir("$tmp/site/uploads", 0755, true);
+file_put_contents("$tmp/data/settings.json", json_encode(['siteUrl' => 'https://this-demo.example']));
+$ddb = mem(); cc_migrate($ddb);
+$r = is_file($demoZip) ? cc_backup_restore($ddb, $demoZip) : ['success' => false, 'message' => 'no demo/demo-baseline.zip'];
+$dset = json_decode((string)@file_get_contents("$tmp/data/settings.json"), true) ?: [];
+check('demo/demo-baseline.zip (the ready-made demo site) restores: its pages in two languages, a blog, a popup, a menu per language and its pictures', !empty($r['success']) && (int)$ddb->query("SELECT COUNT(*) FROM pages WHERE is_draft_copy = 0 AND status = 'published'")->fetchColumn() === 9 && (int)$ddb->query("SELECT COUNT(*) FROM pages WHERE lang = 'it'")->fetchColumn() === 3 && (int)$ddb->query("SELECT COUNT(*) FROM collection_items")->fetchColumn() === 3 && (int)$ddb->query("SELECT COUNT(*) FROM popups WHERE status = 'published'")->fetchColumn() === 1 && !empty($dset['languages']['enabled']) && count(glob("$tmp/site/uploads/lumen-*.jpg") ?: glob("$tmp/site/uploads/*lumen-*.jpg")) === 3 && !empty(json_decode((string)@file_get_contents("$tmp/data/menu.json"), true)['langs']['it']['items']), json_encode($r['message'] ?? ''));
+check('…and keeps the address of the site it is restored on', ($dset['siteUrl'] ?? '') === 'https://this-demo.example');
 cc_backup_rrmdir($tmp);
 
 echo "\nAPI AND BLOCKS\n";

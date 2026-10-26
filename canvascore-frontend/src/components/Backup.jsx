@@ -12,6 +12,7 @@ import { confirmDialog } from '../ui/dialog';
 import { postForm } from '../editor/upload';
 import { formatBytes } from '../editor/mediaInfo';
 import { __, _n } from '../i18n/index.js';
+import DemoCard from './DemoCard.jsx';
 
 const post = (action, body) => fetch(`api.php?action=${action}`, { method: 'POST', body: JSON.stringify(body || {}) }).then((r) => r.json());
 // Starts the browser's own download (no copy in memory, works for big files)
@@ -132,6 +133,8 @@ export default function Backup() {
   return (
     <div style={{ maxWidth: 820 }}>
       <PageHeader icon={DatabaseBackup} title={__("Backup")} description={__("Save the whole site (content, options and images) to one ZIP file, and restore it here or on another CanvasCore installation.")} />
+
+      <DemoCard />
 
       {noZip && (
         <div role="alert" className="cc-backup-alert">

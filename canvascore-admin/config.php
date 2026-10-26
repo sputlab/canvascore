@@ -92,7 +92,7 @@ $GLOBALS['CC_HT_ADMIN'] =
     "  Header always set Referrer-Policy \"same-origin\"\n" .
     "  Header always set Cross-Origin-Opener-Policy \"same-origin\"\n" .
     "</IfModule>\n" .
-    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|popups|languages|installlib|install-cli|update|update-keys|update-source|library-source|integrations-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
+    "<FilesMatch \"^(config|compiler|migrations|media|backup|publish|blockdef|blockpkg|wpimport|roles|library|integrations|popups|languages|installlib|install-cli|demo|update|update-keys|update-source|library-source|integrations-source)\\.php$|\\.(?i:json|md|sqlite|log|zip|part|lock)$\">\n" .
     "  <IfModule mod_authz_core.c>\n    Require all denied\n  </IfModule>\n" .
     "  <IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n  </IfModule>\n" .
     "</FilesMatch>\n" .
@@ -1534,8 +1534,8 @@ function cc_public_branding(array $settings) {
 }
 
 // Demo mode: on only when <data dir>/demo.json exists (never in a normal installation). The file holds the public
-// demo login, the reset interval shown on the sign-in screen and in the editor, and how many pages and collection
-// items visitors may create; while on, passwords and uploads are locked, form mails are not sent and the site is
+// demo login, the reset interval shown on the sign-in screen and in the editor, how many pages and collection
+// items visitors may create, whether they may publish ("publish", off by default) and the secret of the reset address ("resetToken"); while on, passwords and uploads are locked, form mails are not sent and the site is
 // not indexed. $override: the config to use (tests); null reads the file.
 function cc_demo_config($override = null) {
     static $demo = false;
@@ -1544,7 +1544,11 @@ function cc_demo_config($override = null) {
         $raw = @json_decode((string)@file_get_contents(cc_data_dir() . '/demo.json'), true);
         $demo = is_array($raw) && trim((string)($raw['username'] ?? '')) !== ''
             ? ['username' => (string)$raw['username'], 'password' => (string)($raw['password'] ?? ''), 'resetMinutes' => max(1, min(60, (int)($raw['resetMinutes'] ?? 10))),
-               'maxNewPages' => max(0, (int)($raw['maxNewPages'] ?? 5)), 'maxNewItems' => max(0, (int)($raw['maxNewItems'] ?? 5))]
+               'maxNewPages' => max(0, (int)($raw['maxNewPages'] ?? 5)), 'maxNewItems' => max(0, (int)($raw['maxNewItems'] ?? 5)),
+               // may visitors publish the site? Off unless asked: what they write would be public on the demo's address until the next reset
+               'publish' => !empty($raw['publish']),
+               // the secret of demo-reset.php, for a cron service that calls it by address (empty: only a command line can)
+               'resetToken' => preg_match('/^[A-Za-z0-9_-]{16,128}$/', (string)($raw['resetToken'] ?? '')) ? (string)$raw['resetToken'] : '']
             : null;
     }
     return $demo;

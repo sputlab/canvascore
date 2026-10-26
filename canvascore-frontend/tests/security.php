@@ -588,6 +588,68 @@ check('removing demo.json turns demo mode off', !isset((new Client())->api('bran
 $own->req('POST', '/canvascore-admin/rebuild_all.php', '');
 check('…and the next publish lets search engines in again', strpos((string)@file_get_contents($web . '/contact/index.html'), 'name="robots"') === false && strpos((string)@file_get_contents($web . '/robots.txt'), 'Allow: /') !== false);
 
+echo "\nDEMO: PUBLISHING, ACCOUNT, BASELINE AND RESET\n";
+$tok = 'reset-token-0123456789abcdef';
+file_put_contents($data . '/demo.json', json_encode(['username' => 'demo', 'password' => 'canvasdemo', 'resetMinutes' => 10, 'maxNewPages' => 2, 'maxNewItems' => 2, 'resetToken' => $tok]));
+$r = $vis->req('POST', '/canvascore-admin/rebuild_all.php', '');
+check('visitors of the demo cannot publish the site (what they wrote would be public)', $r['code'] === 403 && strpos((string)($r['json']['message'] ?? ''), 'turned off in the demo') !== false, $r['body']);
+$r = $vis->api('set_schedule', ['kind' => 'page', 'id' => 'demo-p1', 'publish_at' => '2030-01-01 10:00']);
+check('…nor schedule a publication', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'turned off in the demo') !== false, $r['body']);
+check('…while the owner can publish', !empty($own->req('POST', '/canvascore-admin/rebuild_all.php', '')['json']['success']));
+file_put_contents($data . '/demo.json', json_encode(['username' => 'demo', 'password' => 'canvasdemo', 'resetMinutes' => 10, 'publish' => true]));
+check('a demo that allows it lets visitors publish', !empty($vis->req('POST', '/canvascore-admin/rebuild_all.php', '')['json']['success']));
+file_put_contents($data . '/demo.json', json_encode(['username' => 'demo', 'password' => 'canvasdemo', 'resetMinutes' => 10, 'maxNewPages' => 2, 'maxNewItems' => 2, 'resetToken' => $tok]));
+check('the demo tools are for admins only', strpos((string)($vis->api('demo_status')['json']['message'] ?? ''), 'Only admins') !== false && strpos((string)($vis->api('demo_baseline', [])['json']['message'] ?? ''), 'Only admins') !== false);
+$st = $own->api('demo_status')['json'] ?? [];
+check('the owner sees the state of the demo: no baseline yet, the reset period, the account missing', !empty($st['success']) && $st['baseline'] === null && $st['resetMinutes'] === 10 && $st['account'] === null && $st['publish'] === false && $st['token'] === true, json_encode($st));
+$r = $own->api('demo_account', []);
+$dl = new Client(); $lg = $dl->login('demo', 'canvasdemo');
+check('"make the account" creates the visitors\' editor with the password of demo.json, already chosen', !empty($r['json']['success']) && !empty($lg['json']['success']) && ($lg['json']['role'] ?? '') === 'editor' && empty($lg['json']['must_change_pw']), $r['body'] . ' ' . $lg['body']);
+check('…and again refreshes it (the password is put back)', !empty($own->api('demo_account', [])['json']['success']));
+file_put_contents($data . '/demo.json', json_encode(['username' => 'owner', 'password' => 'canvasdemo', 'resetMinutes' => 10]));
+$r = $own->api('demo_account', []);
+check('an administrator is never turned into the visitors\' account', empty($r['json']['success']) && (string)db()->query("SELECT role FROM admin WHERE username = 'owner'")->fetchColumn() === 'admin', $r['body']);
+file_put_contents($data . '/demo.json', json_encode(['username' => 'demo', 'password' => 'canvasdemo', 'resetMinutes' => 10, 'maxNewPages' => 2, 'maxNewItems' => 2, 'resetToken' => $tok]));
+@unlink($data . '/demo-reset.json');
+$r = $own->api('demo_reset', []);
+check('with no baseline a reset says so and changes nothing', empty($r['json']['success']) && strpos((string)($r['json']['message'] ?? ''), 'no baseline') !== false, $r['body']);
+$r = $own->api('demo_baseline', []);
+check('the site as it is becomes the baseline', !empty($r['json']['success']) && is_file($data . '/demo-baseline.zip') && !empty($r['json']['status']['baseline']), $r['body']);
+$pagesAtBaseline = db()->query("SELECT group_concat(id) FROM (SELECT id FROM pages WHERE is_draft_copy = 0 ORDER BY id)")->fetchColumn();
+// visitors work on the demo…
+$own->api('save_page', ['id' => 'after-baseline', 'title' => 'Written by a visitor', 'slug' => 'after-baseline', 'blocks' => [], 'publish' => true]);
+$own->api('save_page', ['id' => 'demo-own', 'title' => 'CHANGED', 'slug' => 'demo-own', 'blocks' => []]);
+file_put_contents($data . '/demo-usage.json', json_encode(['pages' => 2, 'items' => 2]));
+$r = $own->api('demo_reset', []);
+check('a reset puts the site back to the baseline: later pages are gone, changed ones are as they were', !empty($r['json']['success']) && !db()->query("SELECT 1 FROM pages WHERE id = 'after-baseline'")->fetch() && (string)db()->query("SELECT title FROM pages WHERE id = 'demo-own' AND is_draft_copy = 0")->fetchColumn() === 'o' && db()->query("SELECT group_concat(id) FROM (SELECT id FROM pages WHERE is_draft_copy = 0 ORDER BY id)")->fetchColumn() === $pagesAtBaseline, $r['body']);
+check('…visitors get their new pages and items back', !is_file($data . '/demo-usage.json') && $page('demo-p9') && $page('demo-p8'));
+check('…the site published again matches (the visitor\'s page is offline)', !is_file($web . '/after-baseline/index.html'));
+check('…the accounts are untouched (the visitor can still sign in)', !empty((new Client())->login('demo', 'canvasdemo')['json']['success']) && !empty((new Client())->login('visitor', 'Visitor-pass-2')['json']['success']));
+// the reset by itself: the first request of a new time slot
+$own->api('save_page', ['id' => 'later-page', 'title' => 'Later', 'slug' => 'later-page', 'blocks' => []]);
+$state = json_decode((string)file_get_contents($data . '/demo-reset.json'), true);
+check('the reset was recorded with its time slot', ($state['ok'] ?? null) === true && preg_match('/^\d{10}:\d$/', (string)($state['slot'] ?? '')) === 1, json_encode($state));
+(new Client())->api('branding');
+check('within the same slot nothing is reset again', (bool)db()->query("SELECT 1 FROM pages WHERE id = 'later-page'")->fetch());
+file_put_contents($data . '/demo-reset.json', json_encode(['slot' => '2000010100:0', 'at' => '2000-01-01T00:00:00+00:00', 'ok' => true, 'message' => '']));
+(new Client())->api('branding');
+check('the first visit of a later slot (even the sign-in screen) puts the demo back by itself, with no scheduled task', !db()->query("SELECT 1 FROM pages WHERE id = 'later-page'")->fetch() && json_decode((string)file_get_contents($data . '/demo-reset.json'), true)['slot'] !== '2000010100:0');
+@unlink($data . '/demo-reset.json');
+$own->api('save_page', ['id' => 'fresh-page', 'title' => 'Fresh', 'slug' => 'fresh-page', 'blocks' => []]);
+(new Client())->api('branding');
+check('a demo just built is not wiped by its first visit (the state starts from the site as it is)', (bool)db()->query("SELECT 1 FROM pages WHERE id = 'fresh-page'")->fetch() && is_file($data . '/demo-reset.json'));
+// the address for a cron service
+file_put_contents($data . '/demo-reset.json', json_encode(['slot' => '2000010100:0']));
+$rs = function ($q) { return (new Client())->req('GET', '/canvascore-admin/demo-reset.php' . $q); };
+check('demo-reset.php does not exist for the web without the right token', $rs('')['code'] === 404 && $rs('?token=wrong')['code'] === 404 && $rs('?token=' . $tok . 'x')['code'] === 404 && (bool)db()->query("SELECT 1 FROM pages WHERE id = 'fresh-page'")->fetch());
+$r = $rs('?token=' . $tok);
+check('…with it, it resets the demo now', $r['code'] === 200 && !empty($r['json']['success']) && !db()->query("SELECT 1 FROM pages WHERE id = 'fresh-page'")->fetch(), $r['body']);
+file_put_contents($data . '/demo.json', json_encode(['username' => 'demo', 'password' => 'canvasdemo', 'resetMinutes' => 10]));
+check('a demo with no resetToken cannot be reset from the web at all', $rs('?token=' . $tok)['code'] === 404 && $rs('?token=')['code'] === 404);
+unlink($data . '/demo.json');
+check('without demo.json the address and the tools are not there', $rs('?token=' . $tok)['code'] === 404 && strpos((string)($own->api('demo_status')['json']['message'] ?? ''), 'not a demo') !== false && strpos((string)($own->api('demo_reset', [])['json']['message'] ?? ''), 'not a demo') !== false);
+@unlink($data . '/demo-baseline.zip'); @unlink($data . '/demo-reset.json');
+
 echo "\nBLOCK PACKAGES (over HTTP)\n";
 $exDir = realpath(__DIR__ . '/../../docs/examples/block-packages/pull-quote'); $PT = 'X_PULL_QUOTE__PULL_QUOTE'; $pkgN = 0;
 // a package ZIP made from the example (without its minVersion: this server runs the version being tested), changed by $edit(files, block)

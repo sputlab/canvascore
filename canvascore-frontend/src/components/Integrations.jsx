@@ -48,7 +48,7 @@ function Webhooks({ data, reload, secrets, setSecrets }) {
       reload();
     } catch { notify(__("Not saved (connection problem)."), 'error'); } finally { setBusy(false); }
   };
-  const test = async (w) => { const d = await post('integrations_test', { kind: 'webhook', id: w.id }); notify(d.message || d.success ? __("Sent.") : __("Failed."), d.success ? 'success' : 'error'); reload(); };
+  const test = async (w) => { const d = await post('integrations_test', { kind: 'webhook', id: w.id }); notify(d.message || (d.success ? __("Sent.") : __("Failed.")), d.success ? 'success' : 'error'); reload(); };
   const rotate = async (w) => {
     if (!(await confirmDialog({ title: __("New secret for “{0}”?", w.name), message: __("The old secret stops working at once: update the receiver with the new one."), confirmLabel: __("Make a new secret") }))) return;
     const d = await post('integrations_rotate_secret', { id: w.id });
@@ -101,7 +101,7 @@ function Service({ name, svc, cfg, forms, reload, doubleOptin, keyHint, idLabel,
       notify(__("{0} saved.", name)); setC((x) => ({ ...x, api_key: '' })); reload();
     } catch { notify(__("Not saved (connection problem)."), 'error'); } finally { setBusy(''); }
   };
-  const test = async () => { setBusy('test'); const d = await post('integrations_test', { kind: svc }); notify(d.message || d.success ? __("Connected.") : __("Failed."), d.success ? 'success' : 'error'); setBusy(''); };
+  const test = async () => { setBusy('test'); const d = await post('integrations_test', { kind: svc }); notify(d.message || (d.success ? __("Connected.") : __("Failed.")), d.success ? 'success' : 'error'); setBusy(''); };
   return (
     <Card title={name} icon={Mail} description={__("Add the people who sign up on your site to a {0} {1}. Only with their consent: a ticked consent box, or a Newsletter block (which is the signup itself).", name, svc === 'mailchimp' ? 'audience' : 'list')} data-service={svc}>
       <Checkbox label={__("Send sign-ups to {0}", name)} checked={c.enabled} onChange={(e) => setC({ ...c, enabled: e.target.checked })} />
@@ -168,7 +168,7 @@ function Stripe({ data, reload }) {
   const [busy, setBusy] = useState('');
   const run = async (what, action, body, ok) => {
     setBusy(what);
-    try { const d = await post(action, body); notify(d.message || d.success ? ok : __("Failed."), d.success ? 'success' : 'error'); if (d.success) { reload(); return d; } } catch { notify(__("Connection problem."), 'error'); } finally { setBusy(''); }
+    try { const d = await post(action, body); notify(d.message || (d.success ? ok : __("Failed.")), d.success ? 'success' : 'error'); if (d.success) { reload(); return d; } } catch { notify(__("Connection problem."), 'error'); } finally { setBusy(''); }
     return null;
   };
   return (
@@ -223,7 +223,7 @@ function Stripe({ data, reload }) {
 }
 
 function Activity({ data, reload }) {
-  const resend = async (r) => { const d = await post('integrations_resend', { id: r.id }); notify(d.message || d.success ? __("Sent.") : __("Failed."), d.success ? 'success' : 'error'); reload(); };
+  const resend = async (r) => { const d = await post('integrations_resend', { id: r.id }); notify(d.message || (d.success ? __("Sent.") : __("Failed.")), d.success ? 'success' : 'error'); reload(); };
   const clear = async () => { if (!(await confirmDialog({ title: __("Clear the activity list?"), message: __("Failed deliveries that could be sent again are forgotten too."), confirmLabel: __("Clear"), danger: true }))) return; await post('integrations_log_clear'); reload(); };
   return (
     <Card title={__("Activity")} icon={ListChecks} description={__("The latest deliveries of webhooks and newsletter sign-ups. A failed one can be sent again.")} actions={data.log.length > 0 && <Button size="sm" variant="ghost" onClick={clear}>{__("Clear")}</Button>}>

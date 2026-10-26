@@ -31,6 +31,7 @@ try {
     if ((int)$account['must_change_pw'] === 1) { http_response_code(403); die(json_encode(['success' => false, 'code' => 'must_change_pw', 'message' => 'Choose a new password first.'])); }
     if (!function_exists('cc_can_publish_site')) require_once __DIR__ . '/roles.php';
     if (!cc_can_publish_site(cc_role_clean($account['role']))) { http_response_code(403); die(json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Authors cannot publish the site. Submit your work for review.'])); }
+    if (cc_demo_on() && cc_role_clean($account['role']) !== 'admin' && !cc_demo_config()['publish']) { http_response_code(403); die(json_encode(['success' => false, 'code' => 'forbidden', 'message' => 'Publishing is turned off in the demo.'])); }
     cc_session_touch();
     session_write_close(); // the rebuild can take a while: don't hold the other screens' requests
 

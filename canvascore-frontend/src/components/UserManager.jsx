@@ -30,7 +30,7 @@ export default function UserManager() {
     try {
       const res = await fetch('api.php?action=add_user', { method: 'POST', body: JSON.stringify({ username: newUsername, password: newPassword, role: newRole }) });
       const data = await res.json();
-      notify(data.message || data.success ? __("User added.") : __("Error adding user."), data.success ? 'success' : 'error');
+      notify(data.message || (data.success ? __("User added.") : __("Error adding user.")), data.success ? 'success' : 'error');
       if (data.success) {
         setNewUsername(''); setNewPassword(''); setNewRole('editor');
         fetchUsers();
@@ -53,7 +53,7 @@ export default function UserManager() {
   const changeRole = async (u, role) => {
     try {
       const data = await (await fetch('api.php?action=set_role', { method: 'POST', body: JSON.stringify({ id: u.id, role }) })).json();
-      notify(data.message || data.success ? __("Role changed.") : __("The role was not changed."), data.success ? 'success' : 'error');
+      notify(data.message || (data.success ? __("Role changed.") : __("The role was not changed.")), data.success ? 'success' : 'error');
     } catch { notify(__("Network error."), 'error'); }
     fetchUsers();
   };

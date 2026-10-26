@@ -16,6 +16,6 @@ export async function addImageFromUrl(folder = '') {
   try {
     d = await (await fetch('api.php?action=media_import_url', { method: 'POST', body: JSON.stringify({ url, folder }) })).json();
   } catch { d = { success: false, message: __("Connection problem: the image was not added.") }; }
-  notify(d && d.message || d && d.success ? __("Image added.") : __("The image was not added."), d && d.success ? 'success' : 'error');
+  notify((d && d.message) || (d && d.success ? __("Image added.") : __("The image was not added.")), d && d.success ? 'success' : 'error');
   return d && d.success ? d : null;
 }

@@ -23,12 +23,12 @@ export default function ReviewBar({ page, role, username, onChange }) {
     const note = await promptDialog({ title: __("Send this {0} back", kind), message: __("{0} sees your note and can submit it again.", review.by || __("The author")), label: __("What should change?"), confirmLabel: __("Send back") });
     if (!note) return;
     const d = await post('review_back', { kind, id: page.id, note });
-    notify(d.message || d.success ? __("Sent back.") : __("Not sent back."), d.success ? 'success' : 'error');
+    notify(d.message || (d.success ? __("Sent back.") : __("Not sent back.")), d.success ? 'success' : 'error');
     if (d.success) onChange({ review_state: 'changes', review_note: note });
   };
   const withdraw = async () => {
     const d = await post('review_withdraw', { kind, id: page.id });
-    notify(d.message || d.success ? __("Withdrawn.") : __("Not withdrawn."), d.success ? 'success' : 'error');
+    notify(d.message || (d.success ? __("Withdrawn.") : __("Not withdrawn.")), d.success ? 'success' : 'error');
     if (d.success) onChange(NONE);
   };
 

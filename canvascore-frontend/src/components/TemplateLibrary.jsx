@@ -82,7 +82,7 @@ export default function TemplateLibrary() {
   const undo = async (row) => {
     if (!(await confirmDialog({ title: __("Restore the design from before “{0}”?", row.name), message: __("Your previous header, footer, menu and colours come back. The pages the kit added stay."), confirmLabel: __("Restore") }))) return;
     const d = await post('library_undo', { install_id: row.install_id });
-    notify(d.message || d.success ? __("Restored.") : __("Not restored."), d.success ? 'success' : 'error');
+    notify(d.message || (d.success ? __("Restored.") : __("Not restored.")), d.success ? 'success' : 'error');
     if (d.success) { setResult(null); load(false); }
   };
   const openPage = async (id) => {

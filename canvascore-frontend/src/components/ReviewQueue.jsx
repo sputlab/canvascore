@@ -42,12 +42,12 @@ export default function ReviewQueue() {
     const note = await promptDialog({ title: __("Send “{0}” back", r.title), message: __("{0} sees your note next to the {1}, and can change it and submit it again.", r.by, r.kind), label: __("What should change?"), confirmLabel: __("Send back") });
     if (!note) return;
     const d = await post('review_back', { kind: r.kind, id: r.id, note });
-    notify(d.message || d.success ? __("Sent back.") : __("Not sent back."), d.success ? 'success' : 'error');
+    notify(d.message || (d.success ? __("Sent back.") : __("Not sent back.")), d.success ? 'success' : 'error');
     load();
   };
   const withdraw = async (r) => {
     const d = await post('review_withdraw', { kind: r.kind, id: r.id });
-    notify(d.message || d.success ? __("Withdrawn.") : __("Not withdrawn."), d.success ? 'success' : 'error');
+    notify(d.message || (d.success ? __("Withdrawn.") : __("Not withdrawn.")), d.success ? 'success' : 'error');
     load();
   };
 
