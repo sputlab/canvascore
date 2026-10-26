@@ -10,6 +10,41 @@ minor to the next: `MINOR` signals new features, `PATCH` fixes.
 
 ## [Unreleased]
 
+### Added
+- **Multilingual sites** (Administration › **Languages**, admins): publish the site in several languages. Switch it on and add the languages (at most 12; a list of
+  common ones, or any code like `sq` or `pt-br`), and choose the **default language**: it stays where it is (`/about/`); every other language is published in a
+  folder of its own (`/it/chi-siamo/`), with its own home page (`/it/`).
+  - **Translated pages and items**: a translation is a page (or a collection item) of its own, with its own address, texts, blocks and search engine details,
+    linked to the others by a shared id. **Translate** (in Pages and in a collection's list, or in the page's *Language* settings) makes a draft copy in the
+    language you choose, opens it, and keeps both linked; the lists show each page's language, its translations and the ones it lacks, and can be filtered by
+    language. An address is unique per language (an English `/about/` and an Italian `/it/about/` can both exist); the default language may not take the folder of
+    another; a page linked to translations keeps its language until it is unlinked. Items of the same collection live in each language's own folder
+    (`/it/blog/ciao/`), with their own listing, archive, category and tag pages and RSS feed per language.
+  - **Language Switcher** block (Business & dynamic): a row of links or a drop-down, by name or by code, with or without the current language. Each link goes to the
+    translation of the page being viewed; a language the page has no translation in sends to that language's home page (and is left out when it has none).
+    Put it in the global header to have it everywhere. The editor shows a preview with the site's languages.
+  - **hreflang and the rest of the page head**: every page that has translations gets `<link rel="alternate" hreflang>` for each of them (itself included) and
+    `x-default` for the default language, `<html lang>` and `og:locale` in its own language, a canonical address of its own, and the sitemap lists the
+    alternates (`xhtml:link`). The hreflang links use absolute addresses: set the site address in Global Options (the publish message says so when it is missing).
+  - **Per language**: the **menu** (Menu › *Menu for*: its own links, or the default language's; the look is shared), the **global header and footer**
+    (Global Options: each language can have its own, otherwise it uses the default's), the **site search** (one index per language: `search-index-it.json`), the
+    **announcement bar and the cookie banner** (Languages › Texts per language: a field filled in replaces the site's text in that language), the lists and
+    related items on a page (they show the items in the page's language), the links to the home page (a button or a menu link to "Homepage" goes to the home
+    of the language being published) and **popups** (a popup can be limited to the pages of one language).
+  - Content in a language that was taken away from the site is not published (the publish message says how many); switching multilingual off publishes the default
+    language only, as before. The editor's link choosers (menu, buttons, rich text, announcement) offer each page at its real address.
+  - Migration 17 adds `lang` and `trans_group` to pages and collection items (both empty for what exists: it is all in the default language). The languages are kept
+    in `settings.json` and the language menus in `menu.json`, so they are in site backups.
+
+### Upgrade notes
+- Migration 17 (the schema becomes 17) runs by itself on the first request. Nothing changes on a site until at least two languages are added and *This site is
+  multilingual* is on.
+- **Nginx**: add `languages` to the library-file rule of the example in the Administrator Guide (section 4.2); one-click updates do not change your server configuration. Apache needs nothing.
+- A language folder (`it`, `de`…) is an address of the site: no page or collection of the default language may use it. Rename such a page or collection before you
+  switch a language on (Languages tells you which ones clash).
+- Texts the site writes itself (the 404 page, the labels of listing and archive pages such as *Sort* or *Years*, the names of collections, taxonomies and
+  categories) are not translated: they are shown as they are written once. The 404 page is a single page for the whole site.
+
 ## [0.25.0] - 2026-10-25 — Popups
 
 ### Added

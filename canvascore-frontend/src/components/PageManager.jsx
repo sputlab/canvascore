@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { uniqueSlug } from '../utils/slug';
-import { FileText, Plus, Trash2, Edit3, LayoutTemplate, ExternalLink, Copy, Home } from 'lucide-react';
+import { FileText, Plus, Trash2, Edit3, LayoutTemplate, ExternalLink, Copy, Home, Languages as LanguagesIcon } from 'lucide-react';
 import { Button, IconButton, PageHeader, EmptyState, SearchInput, Segmented, Select, StatusBadge, Badge } from '../ui/kit';
 import { notify } from '../ui/notify';
 import { confirmDialog } from '../ui/dialog';
 import { canCreate, canManageSite, reviewOf, REVIEW_LABEL } from '../session/permissions';
+import { isMultilingual, langOf, langName, langPrefix, pagePath, translationsOf, missingLanguages } from '../editor/languages';
 
 export default function PageManager() {
   const { setView, setActivePage, setBlocks, pages, setPages, setSelectedBlockId, userRole } = useStore();
@@ -18,6 +19,11 @@ export default function PageManager() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('updated');
+  // Languages: the filter, the badge of each page, and the translations it has (with Translate for the ones it lacks)
+  const langs = useStore((s) => s.languages);
+  const multi = isMultilingual(langs);
+  const [langFilter, setLangFilter] = useState('');
+  const [translating, setTranslating] = useState('');
 
   const loadPages = useCallback(() => {
     fetch('api.php?action=get_pages')
@@ -32,9 +38,10 @@ export default function PageManager() {
 
   const createPage = async () => {
     const id = 'page-' + Date.now();
-    const slug = uniqueSlug('New Page', { pages });
+    const lang = multi ? (langFilter || langs.default) : '';
+    const slug = uniqueSlug('New Page', { pages, lang, cfg: langs });
     const newPage = {
-      id, title: 'New Page', slug, clean_slug: slug,
+      id, title: 'New Page', slug, clean_slug: slug, lang,
       layout: 'boxed', boxed_width: '1200px', bg_color: '#ffffff',
       seo_title: '', seo_description: '', content_json: '[]',
       status: 'draft', is_draft_copy: 0, parent_id: null, is_home: 0
@@ -42,7 +49,7 @@ export default function PageManager() {
     // Persist right away: this way the page is a real record and the right-hand panel
     // behaves exactly as when it is reopened from the dashboard.
     try {
-      const data = await (await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, blocks: [], publish: false }) })).json();
+      const data = await (await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...newPage, ...(multi ? {} : { lang: undefined }), blocks: [], publish: false }) })).json();
       if (!data || data.success === false) { notify('Could not create the page: ' + ((data && data.message) || 'unexpected answer'), 'error'); return; }
     } catch { notify('Could not create the page (connection problem).', 'error'); return; }
     setPages([newPage, ...pages]);
@@ -54,8 +61,9 @@ export default function PageManager() {
 
   const pageUrl = (page) => {
     const slug = page.clean_slug || 'index';
-    if (Number(page.is_home) || slug === 'index' || slug === 'home') return '../index.html';
-    return `../${encodeURIComponent(slug)}/index.html`;
+    const pre = langPrefix(langOf(page, langs), langs);
+    if (Number(page.is_home) || slug === 'index' || slug === 'home') return `../${pre}index.html`;
+    return `../${pre}${encodeURIComponent(slug)}/index.html`;
   };
 
   const editPage = (page) => {
@@ -85,13 +93,13 @@ export default function PageManager() {
   const duplicatePage = async (page) => {
     const id = 'page-' + Date.now();
     const title = `${page.title} (copy)`;
-    const slug = uniqueSlug(title, { pages });
+    const slug = uniqueSlug(title, { pages, lang: page.lang || '', cfg: langs });
     const source = page.status === 'modified' && page.draft_copy ? page.draft_copy : page;
     let blocks = [];
     try { blocks = JSON.parse(source.content_json || '[]'); } catch { blocks = []; }
     const copy = {
       ...page, id, title, slug, clean_slug: slug, content_json: JSON.stringify(blocks),
-      status: 'draft', is_draft_copy: 0, parent_id: null, is_home: 0, draft_copy: undefined, updated_at: new Date().toISOString(),
+      status: 'draft', is_draft_copy: 0, parent_id: null, is_home: 0, draft_copy: undefined, updated_at: new Date().toISOString(), trans_group: '',   // a copy is not a translation
     };
     try {
       const res = await fetch('api.php?action=save_page', { method: 'POST', body: JSON.stringify({ ...copy, blocks, publish: false }) });
@@ -101,6 +109,19 @@ export default function PageManager() {
       notify(`"${title}" created as a draft.`);
     } catch { notify('Could not duplicate the page.', 'error'); }
   };
+
+  // A translation: a draft copy in another language, opened in the editor
+  const translate = async (page, code) => {
+    setTranslating(page.id + code);
+    try {
+      const d = await (await fetch('api.php?action=translate_page', { method: 'POST', body: JSON.stringify({ id: page.id, lang: code }) })).json();
+      if (!d || !d.success) { notify((d && d.message) || 'Could not create the translation.', 'error'); return; }
+      notify(d.message || 'Translation created.');
+      await useStore.getState().refreshPages();
+      editPage(d.page);
+    } catch { notify('Could not create the translation (connection problem).', 'error'); } finally { setTranslating(''); }
+  };
+  const openTranslation = (id) => { const p = pages.find((x) => x.id === id); if (p) editPage(p); };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Not saved yet';
@@ -113,11 +134,12 @@ export default function PageManager() {
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = pages.filter((p) => (filter === 'all' || statusOf(p) === filter)
+      && (!multi || !langFilter || langOf(p, langs) === langFilter)
       && (!q || `${p.title} ${p.clean_slug || ''}`.toLowerCase().includes(q)));
     return [...list].sort((a, b) => (sort === 'title'
       ? String(a.title).localeCompare(String(b.title))
       : String(b.updated_at || '').localeCompare(String(a.updated_at || ''))));
-  }, [pages, query, filter, sort]);
+  }, [pages, query, filter, sort, multi, langFilter, langs]);
 
   return (
     <>
@@ -141,6 +163,11 @@ export default function PageManager() {
             <Segmented label="Filter by status" value={filter} onChange={setFilter} options={[
               ['all', `All ${pages.length}`], ['published', `Published ${counts.published}`], ['modified', `Modified ${counts.modified}`], ['draft', `Drafts ${counts.draft}`],
             ]} />
+            {multi && (
+              <div style={{ width: 170 }}>
+                <Select aria-label="Filter by language" value={langFilter} onChange={(e) => setLangFilter(e.target.value)} options={[['', 'All languages'], ...langs.list.map((l) => [l.code, l.name])]} />
+              </div>
+            )}
             <div style={{ marginLeft: 'auto', width: 170 }}>
               <Select aria-label="Sort pages" value={sort} onChange={(e) => setSort(e.target.value)} options={[['updated', 'Recently updated'], ['title', 'Title (A–Z)']]} />
             </div>
@@ -151,7 +178,7 @@ export default function PageManager() {
           ) : (
             <div className="ui-table-wrap">
               <table className="ui-table">
-                <thead><tr><th>Page</th><th>Status</th><th>Last update</th><th>Author</th><th className="ui-cell-actions">Actions</th></tr></thead>
+                <thead><tr><th>Page</th>{multi && <th>Languages</th>}<th>Status</th><th>Last update</th><th>Author</th><th className="ui-cell-actions">Actions</th></tr></thead>
                 <tbody>
                   {shown.map((page) => (
                     <tr key={page.id} onDoubleClick={() => editPage(page)}>
@@ -161,8 +188,21 @@ export default function PageManager() {
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{page.title}</span>
                           {Number(page.is_home) ? <Badge tone="accent" icon={Home}>Home</Badge> : null}
                         </button>
-                        <div className="ui-cell-muted" style={{ color: '#38bdf8' }}>/{Number(page.is_home) ? '' : (page.clean_slug || 'index')}</div>
+                        <div className="ui-cell-muted" style={{ color: '#38bdf8' }}>{pagePath(page, langs)}</div>
                       </td>
+                      {multi && (
+                        <td data-testid="page-languages">
+                          <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <Badge tone="accent" icon={LanguagesIcon}>{langOf(page, langs).toUpperCase()}</Badge>
+                            {translationsOf(pages, page).map((t) => (
+                              <button key={t.id} type="button" className="ui-btn ui-btn--ghost ui-btn--sm" title={`Edit the ${langName(langOf(t, langs), langs)} translation: ${t.title}`} onClick={() => openTranslation(t.id)}>{langOf(t, langs).toUpperCase()}</button>
+                            ))}
+                            {mayCreate && missingLanguages(pages, page, langs).map((l) => (
+                              <button key={l.code} type="button" className="ui-btn ui-btn--ghost ui-btn--sm" style={{ opacity: 0.8 }} disabled={translating !== ''} title={`Translate into ${l.name}`} aria-label={`Translate ${page.title} into ${l.name}`} onClick={() => translate(page, l.code)}>+ {l.code.toUpperCase()}</button>
+                            ))}
+                          </span>
+                        </td>
+                      )}
                       <td>
                         <StatusBadge status={page.status} />
                         {pageReview(page).state && <div style={{ marginTop: 4 }} data-testid="page-review"><Badge tone={pageReview(page).state === 'pending' ? 'draft' : 'neutral'}>{REVIEW_LABEL[pageReview(page).state]}</Badge></div>}

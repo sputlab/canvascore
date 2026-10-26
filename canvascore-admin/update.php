@@ -23,7 +23,7 @@ const CC_UPDATE_MAX_ENTRIES = 20000;
 const CC_UPDATE_SIG_CONTEXT = "canvascore-update-v1\n";
 const CC_UPDATE_KEEP_COPIES = 3;                    // database and code copies kept in the data folder
 const CC_UPDATE_REQUIRED = ['api.php', 'config.php', 'compiler.php', 'migrations.php', 'publish.php', 'backup.php', 'media.php',
-    'install.php', 'update.php', 'update-keys.php', 'version.json', 'blocks.json', 'blockdef.php', 'blockpkg.php', 'wpimport.php', 'roles.php', 'library.php', 'integrations.php', 'popups.php', 'popups.css', 'popups.js', 'blocks/text.json', 'index.html'];
+    'install.php', 'update.php', 'update-keys.php', 'version.json', 'blocks.json', 'blockdef.php', 'blockpkg.php', 'wpimport.php', 'roles.php', 'library.php', 'integrations.php', 'popups.php', 'languages.php', 'popups.css', 'popups.js', 'blocks/text.json', 'index.html'];
 // What belongs to this site, not to the release: moved or copied into the new admin folder
 const CC_UPDATE_KEEP_FILES = ['.htaccess', 'update-source.php', 'library-source.php', 'integrations-source.php'];
 

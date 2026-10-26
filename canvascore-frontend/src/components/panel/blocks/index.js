@@ -14,12 +14,14 @@ import NewsletterPanel from './NewsletterPanel';
 import ItemFieldPanel from './ItemFieldPanel';
 import RelatedPanel from './RelatedPanel';
 import ItemTermsPanel from './ItemTermsPanel';
+import LanguageSwitcherPanel from './LanguageSwitcherPanel';
 
 export const CONTENT_PANELS = {
   FLEX_ROW: FlexRowPanel,
   ITEM_FIELD: ItemFieldPanel,
   RELATED: RelatedPanel,
   ITEM_TERMS: ItemTermsPanel,
+  LANGUAGE_SWITCHER: LanguageSwitcherPanel,
   COLLECTION_LIST: CollectionListPanel,
   CSS_GRID: CssGridPanel,
   FORM: FormPanel,

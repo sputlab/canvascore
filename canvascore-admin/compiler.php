@@ -5,6 +5,7 @@ if (PHP_SAPI !== 'cli' && realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/blockdef.php';
 require_once __DIR__ . '/blockpkg.php';
+require_once __DIR__ . '/languages.php';
 
 // Registry of the forms collected during the build (formId => recipient email, labels, message, kind, and where the email, name and
 // consent fields are: what the integrations (webhooks, newsletter services) read)
@@ -34,7 +35,8 @@ function cc_block_url($url) {
     $url = trim((string)$url);
     if ($url === '') return '#';
     if ($url === '#' || preg_match('~^(?:f|ht)tps?://~i', $url) || preg_match('~^(?:mailto|tel):~i', $url)) return $url;
-    if (in_array($url, ['index.html', 'index/index.html', 'home/index.html', '/'], true)) return '{{BASE_URL}}';
+    if (in_array($url, ['index.html', 'index/index.html', 'home/index.html'], true)) return cc_lang_home();
+    if ($url === '/') return '{{BASE_URL}}';
     $clean = str_replace(['index/index.html', 'index.html'], '', $url);
     return '{{BASE_URL}}' . ltrim($clean, '/');
 }
@@ -202,12 +204,12 @@ function cc_collections_data() {
         if (!file_exists($db)) return $d;
         $pdo = new PDO("sqlite:$db");
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        foreach ($pdo->query("SELECT i.id, i.title, i.slug, i.status, i.archived, c.slug AS col_slug FROM collection_items i JOIN collections c ON c.id = i.collection_id") as $ii) {
-            $d['items'][$ii['id']] = ['title' => (string)$ii['title'], 'slug' => cc_safe_slug($ii['slug']), 'col_slug' => cc_safe_slug($ii['col_slug']),
+        foreach ($pdo->query("SELECT i.id, i.title, i.slug, i.status, i.archived, i.lang, c.slug AS col_slug FROM collection_items i JOIN collections c ON c.id = i.collection_id") as $ii) {
+            $d['items'][$ii['id']] = ['title' => (string)$ii['title'], 'slug' => cc_safe_slug($ii['slug']), 'col_slug' => cc_safe_slug($ii['col_slug']), 'lang' => (string)($ii['lang'] ?? ''),
                 'live' => $ii['status'] === 'published' && (int)($ii['archived'] ?? 0) !== 1];
         }
         $cols = $pdo->query("SELECT id, name, slug, fields FROM collections")->fetchAll(PDO::FETCH_ASSOC);
-        $ist = $pdo->prepare("SELECT id, title, slug, excerpt, cover_image, date, archived, field_values, terms_json FROM collection_items WHERE collection_id = ? AND status = 'published' ORDER BY (date = '') ASC, date DESC, updated_at DESC");
+        $ist = $pdo->prepare("SELECT id, title, slug, excerpt, cover_image, date, archived, lang, field_values, terms_json FROM collection_items WHERE collection_id = ? AND status = 'published' ORDER BY (date = '') ASC, date DESC, updated_at DESC");
         foreach ($cols as $c) {
             $defs = cc_field_defs(json_decode((string)($c['fields'] ?? '[]'), true), $pdo);
             $c['defsById'] = [];
@@ -287,7 +289,7 @@ function cc_list_cards($items, $cslug, $o) {
     $cards = '';
     foreach ($items as $it) {
         $islug = cc_safe_slug($it['slug']);
-        $href = '{{BASE_URL}}' . $cslug . '/' . $islug . '/';
+        $href = '{{BASE_URL}}' . cc_lang_prefix($it['lang'] ?? '', cc_lang_cfg()) . $cslug . '/' . $islug . '/';
         $title = htmlspecialchars($it['title']);
         $dateTxt = (!empty($it['date'])) ? htmlspecialchars($it['date']) : '';
         $excTxt = (!empty($it['excerpt'])) ? htmlspecialchars($it['excerpt']) : '';
@@ -439,7 +441,7 @@ function cc_render_item_terms($block) {
             if ($t === null) continue;
             $label = htmlspecialchars($t['name']);
             $link = !empty($ctx['item_archived']) ? $label
-                : '<a class="cc-item-term" href="' . htmlspecialchars('{{BASE_URL}}' . $t['col_slug'] . '/' . $t['tax_slug'] . '/' . $t['slug'] . '/') . '" style="color:inherit;">' . $label . '</a>';
+                : '<a class="cc-item-term" href="' . htmlspecialchars('{{BASE_URL}}' . cc_lang_prefix(($ctx['lang'] ?? ''), cc_lang_cfg()) . $t['col_slug'] . '/' . $t['tax_slug'] . '/' . $t['slug'] . '/') . '" style="color:inherit;">' . $label . '</a>';
             $parts[] = ($only === '' ? '<span class="cc-item-term-tax" style="color:#64748b;">' . htmlspecialchars($t['tax_name']) . ': </span>' : '') . $link;
         }
     }
@@ -473,7 +475,7 @@ function cc_render_related_tags($block, $ctx) {
     foreach ($mine as $mids) foreach ((array)$mids as $m) $mine_ids[$m] = true;   // term ids are unique across the site
     if (!$mine_ids) return '';
     $scored = [];
-    foreach ($coll['items'] as $it) {
+    foreach (cc_lang_filter_items($coll['items']) as $it) {
         if (!empty($it['archived']) || $it['id'] === $ctx['item']) continue;
         $shared = 0;
         foreach ((array)($it['terms'] ?? []) as $tid => $mids) {
@@ -501,7 +503,7 @@ function cc_render_related($block) {
     $coll = $data['by_id'][$cid] ?? null;
     $def = $coll['defsById'][$fid] ?? null;
     if ($coll === null || $def === null || $def['type'] !== 'reference' || $def['target'] !== $ctx['collection_id']) return '';
-    $mine = array_values(array_filter($coll['items'], function ($it) use ($fid, $ctx) {
+    $mine = array_values(array_filter(cc_lang_filter_items($coll['items']), function ($it) use ($fid, $ctx) {
         return empty($it['archived']) && (($it['vals'][$fid] ?? null) === $ctx['item']);
     }));
     $mine = cc_sort_items($mine, is_string($c['sortBy'] ?? null) ? $c['sortBy'] : '', ($c['sortDir'] ?? 'asc') === 'desc', $coll['defsById']);
@@ -1158,7 +1160,8 @@ function cc_menu_url($url) {
     if ($url === '' || $url === '#') return '';
     $u = htmlspecialchars($url);
     if (preg_match('~^(?:f|ht)tps?://~i', $u) || strpos($u, 'mailto:') === 0 || strpos($u, 'tel:') === 0) return $u;
-    if ($u === 'index.html' || $u === 'index/index.html' || $u === 'home/index.html' || $u === '/') return '{{BASE_URL}}';
+    if ($u === 'index.html' || $u === 'index/index.html' || $u === 'home/index.html') return cc_lang_home();   // the home page of the page's language
+    if ($u === '/') return '{{BASE_URL}}';
     $clean = str_replace(['index/index.html', 'index.html'], '', $u);
     return '{{BASE_URL}}' . ltrim($clean, '/');
 }
@@ -1690,7 +1693,7 @@ function cc_bind_token($m, $ctx) {
         case 'reference':
             $ref = is_string($v) && $v !== '' ? ($ctx['items'][$v] ?? null) : null;
             if ($ref === null) return '';
-            if ($part === 'url') return $ref['live'] ? htmlspecialchars('{{BASE_URL}}' . $ref['col_slug'] . '/' . $ref['slug'] . '/') : '';
+            if ($part === 'url') return $ref['live'] ? htmlspecialchars('{{BASE_URL}}' . cc_lang_prefix($ref['lang'] ?? '', cc_lang_cfg()) . $ref['col_slug'] . '/' . $ref['slug'] . '/') : '';
             return htmlspecialchars($ref['title']);
     }
     return '';
@@ -1744,7 +1747,7 @@ function cc_field_html($d, $v, $c, $ctx) {
             if (!$it) return '';
             $title = htmlspecialchars($it['title']);
             return $it['live']
-                ? '<a class="cc-field-ref" href="{{BASE_URL}}' . htmlspecialchars($it['col_slug'] . '/' . $it['slug'] . '/') . '">' . $title . '</a>'
+                ? '<a class="cc-field-ref" href="{{BASE_URL}}' . htmlspecialchars(cc_lang_prefix($it['lang'] ?? '', cc_lang_cfg()) . $it['col_slug'] . '/' . $it['slug'] . '/') . '">' . $title . '</a>'
                 : '<span class="cc-field-ref">' . $title . '</span>';
     }
     return '';
@@ -1910,7 +1913,7 @@ function cc_render_block_body($block) {
             $data = cc_collections_data();
             $coll = $data['by_id'][$cid] ?? ($data['by_slug'][$cslugRaw] ?? null);
             $cslug = $coll ? cc_safe_slug($coll['slug']) : cc_safe_slug($cslugRaw);
-            $all = $coll ? $coll['items'] : [];
+            $all = $coll ? cc_lang_filter_items($coll['items']) : [];   // the items in the language of the page
             // Filter by archive status
             $items = array_values(array_filter($all, function ($it) use ($source) {
                 $arch = !empty($it['archived']);
@@ -1951,6 +1954,10 @@ function cc_render_block_body($block) {
         case 'ITEM_TERMS':
             // the categories and tags of the item being published; nothing on other pages
             return $customCss . cc_render_item_terms($block);
+
+        case 'LANGUAGE_SWITCHER':
+            // links to the other languages of the page being published (languages.php); nothing on a site with one language
+            return $customCss . cc_render_language_switcher($block);
 
         case 'PRICE_CALCULATOR': {
             $c = $block['content'] ?? [];

@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useStore } from '../store/useStore';
+import { langOf } from '../editor/languages';
 import { InlineRegions } from '../editor/RichText';
 import { Crown } from 'lucide-react';
 import { renderBlock, blockRoot, effectiveStyles, hiddenOn } from '../render/renderBlock.mjs';
@@ -65,6 +66,7 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
   const locked = !!(page && page.__locked);
   const revealBlockId = useStore((s) => s.revealBlockId);
   const fieldDefs = useStore((s) => s.activePage && s.activePage.__fieldDefs);
+  const siteLangs = useStore((s) => s.languages);
   const frameRef = useRef(null);
   const isSelected = selectedBlockId === block.id && !isMasterPreview;
 
@@ -260,6 +262,23 @@ export default function SortableBlock({ block: rawBlock, isMasterPreview = false
 
     // ITEM_TERMS: the categories and tags of the item being published (shown on its page)
     if (block.type === 'ITEM_TERMS') return emptyPlaceholder('Categories and tags of the item, shown on each collection item page.');
+
+    // LANGUAGE_SWITCHER: the links are made when the site is published (they depend on the page); the canvas shows the languages of the site
+    if (block.type === 'LANGUAGE_SWITCHER') {
+      const c = block.content || {};
+      const list = siteLangs && siteLangs.enabled && Array.isArray(siteLangs.list) && siteLangs.list.length >= 2 ? siteLangs.list : null;
+      if (!list) return emptyPlaceholder('Language switcher: add at least two languages in Administration › Languages.');
+      const cur = langOf(page, siteLangs);   // the language of the page being edited
+      const text = (l) => (c.labels === 'code' ? l.code.toUpperCase() : l.name);
+      const shown = list.filter((l) => c.showCurrent !== false || l.code !== cur);
+      return (
+        <div style={{ padding: '8px 0', pointerEvents: isMasterPreview ? 'auto' : 'none' }} data-cc-lang-preview>
+          {c.style === 'dropdown'
+            ? <select aria-label="Language" defaultValue={cur} style={{ font: 'inherit', padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff', color: '#0f172a' }}>{shown.map((l) => <option key={l.code} value={l.code}>{text(l)}</option>)}</select>
+            : <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>{shown.map((l) => <li key={l.code} style={{ fontWeight: l.code === cur ? 700 : 400 }}>{text(l)}</li>)}</ul>}
+        </div>
+      );
+    }
 
     // RELATED: the items that point to the collection item being published (listed on the published item page)
     if (block.type === 'RELATED') {

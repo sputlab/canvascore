@@ -15,6 +15,7 @@ import { useStore } from '../store/useStore';
 import MediaPickerModal from '../components/MediaPickerModal';
 import { tidyHtml } from './cleanHtml';
 import { colorRef } from './palette';
+import { pageLink } from './languages';
 import { safeHtml } from '../utils/safeHtml';
 import {
   TOOLSETS, BLOCK_FORMATS, FONTS, SIZES, TEXT_COLORS, HIGHLIGHTS, SITE_COLOR, TB_ATTR,
@@ -263,7 +264,7 @@ function ColorPop({ brand, colors, label, highlight, onPick }) {
   );
 }
 
-const pageUrl = (p) => (p.clean_slug && p.clean_slug !== 'index' && p.clean_slug !== 'home' ? `{{BASE_URL}}${p.clean_slug}/` : '{{BASE_URL}}');
+const pageUrl = (p, langs) => pageLink(p, langs);
 
 function LinkPop({ region, pages, savedRange, onApply, onClose }) {
   // The link under the caret (if any), read once when the dialog opens
@@ -280,6 +281,7 @@ function LinkPop({ region, pages, savedRange, onApply, onClose }) {
   const [nofollow, setNofollow] = useState(start.nofollow);
   const [text, setText] = useState(start.text);
   const live = pages.filter((p) => !Number(p.is_draft_copy));
+  const langs = useStore((s) => s.languages);
 
   const apply = () => {
     const url = href.trim();
@@ -309,7 +311,7 @@ function LinkPop({ region, pages, savedRange, onApply, onClose }) {
       {live.length > 0 && (
         <select value="" onChange={(e) => { if (e.target.value) setHref(e.target.value); }} style={{ ...popInput, marginTop: 6 }} aria-label="Link to a page">
           <option value="">Link to a page…</option>
-          {live.map((p) => <option key={p.id} value={pageUrl(p)}>{p.title || p.slug}</option>)}
+          {live.map((p) => <option key={p.id} value={pageUrl(p, langs)}>{p.title || p.slug}{langs && langs.enabled && p.lang ? ` (${p.lang.toUpperCase()})` : ''}</option>)}
         </select>
       )}
       {!start.a && !start.text && (

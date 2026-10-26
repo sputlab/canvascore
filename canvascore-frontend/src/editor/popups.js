@@ -10,7 +10,7 @@ export const FREQUENCIES = [['always', 'Every time it is due'], ['session', 'Onc
 export const defaultSettings = () => ({
   look: { position: 'center', width: 520, animation: 'fade', overlay: true, overlayColor: '#0f172a', overlayOpacity: 60, background: '#ffffff', radius: 16, padding: 28, closeButton: true, closeOverlay: true, closeEsc: true },
   triggers: { time: { on: true, seconds: 5 }, scroll: { on: false, percent: 50 }, exit: { on: false }, click: true },
-  rules: { where: { mode: 'all', pages: [], collections: [] }, devices: { desktop: true, tablet: true, mobile: true }, visitor: 'all', frequency: { mode: 'days', days: 7 }, schedule: { from: '', to: '' }, priority: 10 },
+  rules: { where: { mode: 'all', pages: [], collections: [] }, devices: { desktop: true, tablet: true, mobile: true }, visitor: 'all', frequency: { mode: 'days', days: 7 }, schedule: { from: '', to: '' }, language: '', priority: 10 },
 });
 // settings from the server (or older ones) with every missing value filled in
 export function withDefaults(s) {
@@ -43,6 +43,7 @@ export function rulesSummary(s) {
   const off = ['desktop', 'tablet', 'mobile'].filter((k) => r.devices[k] === false);
   if (off.length) bits.push(`Not on ${off.join(', ')}`);
   if (r.visitor !== 'all') bits.push(r.visitor === 'new' ? 'New visitors' : 'Returning visitors');
+  if (r.language) bits.push(`${r.language.toUpperCase()} pages only`);
   if (r.schedule.from || r.schedule.to) bits.push(`${r.schedule.from || '…'} → ${r.schedule.to || '…'}`);
   return bits.join(' · ');
 }

@@ -7,6 +7,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/compiler.php';
 require_once __DIR__ . '/media.php';
+require_once __DIR__ . '/languages.php';
 
 // Publishes the site. Returns ['success' => bool, 'message' => string] (the message says what was published or what failed).
 function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
@@ -17,24 +18,65 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         $settings = file_exists($settings_file) ? json_decode(file_get_contents($settings_file), true) : [];
         if (!is_array($settings)) $settings = [];
 
+        // Languages (Administration › Languages): the default language is published at the root, every other one in its own folder.
+        // $folders: the languages that get pages ('' = the default one). $dlang: the default language's code ('' on a one-language site).
+        $lcfg = cc_lang_config($settings);
+        $multi = cc_lang_active($lcfg);
+        $dlang = $multi ? $lcfg['default'] : '';
+        $folders = [''];
+        if ($multi) foreach (cc_lang_codes($lcfg) as $lc) if ($lc !== $dlang) $folders[] = $lc;
+        // The context blocks read while a page is built: the language of the page and the addresses of its translations
+        $lang_ctx = function ($L, $alts = []) use ($lcfg, $multi, $dlang) {
+            return $multi ? ['lang' => $L, 'self' => $L === '' ? $dlang : $L, 'alternates' => $alts, 'cfg' => $lcfg] : null;
+        };
+
         $menu_file = $data_dir . '/menu.json';
         $menu_json = file_exists($menu_file) ? file_get_contents($menu_file) : '{"items":[], "settings":{}}';
-        $menu_html = render_menu_html($menu_json, ['inheritTheme' => !empty($settings['menuInheritTheme'])]);
+        // The menu of each language: its own items when it has some (Menu), the default language's otherwise
+        $menu_data = json_decode($menu_json, true);
+        $menus = [];
+        $menu_for = function ($L) use (&$menus, $menu_json, $menu_data, $settings, $lang_ctx) {
+            if (isset($menus[$L])) return $menus[$L];
+            $json = $menu_json;
+            if ($L !== '' && is_array($menu_data) && !empty($menu_data['langs'][$L]['items']) && is_array($menu_data['langs'][$L]['items'])) {
+                $m = $menu_data; unset($m['langs']); $m['items'] = $menu_data['langs'][$L]['items'];
+                $json = json_encode($m, JSON_UNESCAPED_UNICODE);
+            }
+            cc_lang_context($lang_ctx($L));
+            $menus[$L] = render_menu_html($json, ['inheritTheme' => !empty($settings['menuInheritTheme'])]);
+            cc_lang_context(null);
+            return $menus[$L];
+        };
 
-        // Global header/footer (blocks applied to every page)
-        $header_html = '';
-        $footer_html = '';
+        // Global header/footer (blocks applied to every page); a language may have its own ("header:it"), else the default ones are used
+        $part_blocks = ['header' => [], 'footer' => []];
         try {
             foreach ($pdo->query("SELECT name, content_json FROM site_parts") as $part) {
-                $pblocks = json_decode($part['content_json'] ?? '[]', true);
-                $phtml = '';
-                if (is_array($pblocks)) foreach ($pblocks as $pb) $phtml .= render_block($pb);
-                if ($part['name'] === 'header') $header_html = $phtml;
-                elseif ($part['name'] === 'footer') $footer_html = $phtml;
+                $pb = json_decode($part['content_json'] ?? '[]', true);
+                if (is_array($pb)) $part_blocks[$part['name']] = $pb;
             }
         } catch (Exception $e) {}
-        if (isset($settings['headerEnabled']) && empty($settings['headerEnabled'])) $header_html = '';
-        if (isset($settings['footerEnabled']) && empty($settings['footerEnabled'])) $footer_html = '';
+        $parts_cache = [];
+        // [header html, footer html] of a language. Rendered once per language, but for every page when a part holds a Language Switcher (its links differ per page)
+        $parts_for = function ($L, $alts) use (&$parts_cache, $part_blocks, $settings, $lang_ctx) {
+            $out = [];
+            foreach (['header', 'footer'] as $nm) {
+                $blocks = $part_blocks[$nm . ($L !== '' ? ':' . $L : '')] ?? $part_blocks[$nm] ?? [];
+                $dyn = strpos(json_encode($blocks), 'LANGUAGE_SWITCHER') !== false;
+                $ck = $nm . '|' . $L;
+                if (!$dyn && isset($parts_cache[$ck])) { $out[] = $parts_cache[$ck]; continue; }
+                $off = isset($settings[$nm . 'Enabled']) && empty($settings[$nm . 'Enabled']);
+                $html = '';
+                if (!$off) {
+                    cc_lang_context($lang_ctx($L, $alts));
+                    foreach ($blocks as $b) $html .= render_block($b);
+                    cc_lang_context(null);
+                }
+                if (!$dyn) $parts_cache[$ck] = $html;
+                $out[] = $html;
+            }
+            return $out;
+        };
 
         // These go into <style> and <title>: only safe values (a color, a font name, escaped text)
         $palette = cc_palette($settings);
@@ -81,17 +123,28 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
 
         // RSS feeds: one per collection with published items, announced in every page's <head>
         // (feeds need absolute addresses, so they're made only when Global Options › Site address is set)
+        // (one per collection and language: the items of a language are in its own feed, /it/blog/feed.xml)
         $feeds = [];
         if ($site_url) {
             try {
-                foreach ($pdo->query("SELECT c.id, c.name, c.slug FROM collections c WHERE EXISTS (SELECT 1 FROM collection_items i WHERE i.collection_id = c.id AND i.status = 'published' AND COALESCE(i.archived, 0) = 0)") as $fc) {
-                    $feeds[$fc['id']] = ['name' => (string)$fc['name'], 'slug' => cc_safe_slug($fc['slug']), 'items' => []];
+                foreach ($pdo->query("SELECT c.id, c.name, c.slug, i.lang FROM collections c JOIN collection_items i ON i.collection_id = c.id WHERE i.status = 'published' AND COALESCE(i.archived, 0) = 0 GROUP BY c.id, i.lang") as $fc) {
+                    if (!cc_lang_known($fc['lang'] ?? '', $lcfg)) continue;
+                    $fl = cc_lang_norm($fc['lang'] ?? '', $lcfg);
+                    $feeds[$fc['id'] . '|' . $fl] = ['name' => (string)$fc['name'], 'slug' => cc_safe_slug($fc['slug']), 'lang' => $fl, 'dir' => cc_lang_prefix($fl, $lcfg) . cc_safe_slug($fc['slug']), 'items' => []];
                 }
             } catch (Throwable $e) { error_log('CanvasCore publish (feeds): ' . $e->getMessage()); $warnings[] = 'Feeds could not be published (details in the server error log).'; }
         }
-        $feed_links = '';
-        foreach ($feeds as $fd) $feed_links .= '<link rel="alternate" type="application/rss+xml" title="' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '" href="' . htmlspecialchars($site_url . '/' . $fd['slug'] . '/feed.xml') . '">' . "\n";
-        $cookie_html = cc_cookie_banner_html($settings['cookieBanner'] ?? null);
+        $feed_links_by_lang = [];
+        foreach ($feeds as $fd) $feed_links_by_lang[$fd['lang']] = ($feed_links_by_lang[$fd['lang']] ?? '') . '<link rel="alternate" type="application/rss+xml" title="' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '" href="' . htmlspecialchars($site_url . '/' . $fd['dir'] . '/feed.xml') . '">' . "\n";
+        // The cookie banner and the announcement bar: the site's own, with the texts of the language over them (Languages › Texts)
+        $cookie_by_lang = []; $announce_by_lang = [];
+        foreach ($folders as $fl) {
+            $str = $fl !== '' ? ($lcfg['strings'][$fl] ?? []) : [];
+            $cookie_by_lang[$fl] = cc_cookie_banner_html(isset($settings['cookieBanner']) && is_array($settings['cookieBanner']) ? cc_lang_override($settings['cookieBanner'], $str['cookie'] ?? []) : null);
+            $annc = $settings['announcement'] ?? null;
+            $announce_by_lang[$fl] = (is_array($annc) && !empty($annc['enabled'])) ? cc_announcement_html(cc_lang_override($annc, $str['announcement'] ?? []), 'cc-site-announce', '', '', true) : '';
+        }
+        $cookie_html = $cookie_by_lang[''];
         // Administration › Integrations › Analytics: the snippet in the head of every page; it waits for the cookie banner (when there is one)
         $analytics_html = '';
         try {
@@ -101,10 +154,8 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         // schedule and frequency, and the triggers, are decided in the visitor's browser by popups.js)
         $popups = [];
         try { require_once __DIR__ . '/popups.php'; $popups = cc_popups_published($pdo); } catch (Throwable $e) { error_log('CanvasCore publish (popups): ' . $e->getMessage()); $warnings[] = 'Popups could not be published (details in the server error log).'; }
-        // Global Options › Announcement bar: at the top of every page (nothing when it is off or has no text)
-        $ann = $settings['announcement'] ?? null;
-        $announce_html = (is_array($ann) && !empty($ann['enabled'])) ? cc_announcement_html($ann, 'cc-site-announce', '', '', true) : '';
-        $search_index = [];
+        // (Global Options › Announcement bar: at the top of every page, nothing when it is off or has no text; see $announce_by_lang)
+        $search_index = [];   // language ('' = the default one) => the entries of its search index
         // Plain text of a page for the site search (no tags, scripts or styles; collapsed spaces)
         $plain = function ($html) {
             $t = preg_replace('#<(script|style)\b[^>]*>.*?</\1>#is', ' ', (string)$html);
@@ -112,11 +163,19 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             return trim(preg_replace('/\s+/u', ' ', $t));
         };
         // Every published page and item gets the same finishing touches
-        $finish = function ($html, $canonical, $noindex, $ctx = null) use ($feed_links, $cookie_html, $announce_html, $analytics_html, $popups, $base_url, &$media_meta) {
+        // $L: the language of the page ('' = the default one); $alt_head: its hreflang links
+        $finish = function ($html, $canonical, $noindex, $ctx = null, $L = '', $alt_head = '') use ($feed_links_by_lang, $cookie_by_lang, $announce_by_lang, $analytics_html, $popups, $base_url, &$media_meta, $multi, $dlang) {
+            $cookie_html = $cookie_by_lang[$L] ?? ''; $announce_html = $announce_by_lang[$L] ?? '';
+            if ($multi) {
+                // <html lang>, and the search of this language (its own index)
+                $html = preg_replace_callback('#<html lang="[^"]*"#i', function () use ($L, $dlang) { return '<html lang="' . htmlspecialchars(cc_lang_tag($L === '' ? $dlang : $L)) . '"'; }, $html, 1);
+                if ($L !== '') $html = str_replace('search-index.json"', 'search-index-' . $L . '.json"', $html);
+            }
             $head = '';
             if ($canonical !== '') $head .= '<link rel="canonical" href="' . htmlspecialchars($canonical) . '">' . "\n";
             if ($noindex || cc_demo_on()) $head .= '<meta name="robots" content="noindex">' . "\n";
-            $head .= $feed_links;
+            $head .= $alt_head;
+            $head .= $feed_links_by_lang[$L] ?? '';
             if ($analytics_html !== '' && !cc_demo_on()) $head .= $analytics_html;   // a demo site is not counted
             // (a callback: the snippet may contain $ or \\, which a replacement string would read as references)
             if ($head !== '') $html = preg_replace_callback('#</head>#i', function ($m) use ($head) { return $head . $m[0]; }, $html, 1);
@@ -142,18 +201,67 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
 
         // Only published/modified pages (the live version is always the parent row).
         $stmt = $pdo->query("SELECT * FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified')");
-        $pages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $pages = [];
+        $left_out = 0;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $pg) {
+            // A page in a language the site does not have (any more) is not published: its address would be the default language's
+            if (!cc_lang_known($pg['lang'] ?? '', $lcfg)) { $left_out++; continue; }
+            $pg['_l'] = cc_lang_norm($pg['lang'] ?? '', $lcfg);   // the folder it goes in ('' = the root)
+            $pages[] = $pg;
+        }
         $count = 0;
 
-        // Is there an explicitly designated homepage?
-        $homeExists = false;
+        // Is there an explicitly designated homepage? (one per language)
+        $home_in = [];
+        foreach ($pages as $pg) if ((int)($pg['is_home'] ?? 0) === 1) $home_in[$pg['_l']] = true;
+
+        // Where each page is online ('/about/', '/it/chi-siamo/'), and which pages are translations of each other. $alt_paths[group][language
+        // code] = the path; the Language Switcher and the hreflang links read it.
+        $page_where = function ($pg) use ($home_in, $lcfg) {
+            $L = $pg['_l'];
+            $slug = cc_safe_slug($pg['clean_slug'] ?? $pg['slug'] ?? 'index');
+            $isRootSlug = ($slug === 'index' || $slug === 'home');
+            $writeRoot = (int)($pg['is_home'] ?? 0) === 1 || (empty($home_in[$L]) && $isRootSlug);
+            $pre = cc_lang_prefix($L, $lcfg);
+            $path = ($isRootSlug || (int)($pg['is_home'] ?? 0) === 1) ? '/' . $pre : '/' . $pre . $slug . '/';
+            return [$slug, $isRootSlug, $writeRoot, $pre, $path];
+        };
+        $alt_paths = [];
+        $lang_root = [];   // language code => it has a home page (the switcher sends a visitor there when a page has no translation)
+        foreach ($pages as $pg) {
+            [$ps, , $pw, , $pp] = $page_where($pg);
+            if (cc_slug_reserved($ps)) continue;
+            if ($pw) $lang_root[cc_lang_of($pg['_l'], $lcfg)] = true;
+            $g = (string)($pg['trans_group'] ?? '');
+            if ($g === '') continue;
+            $alt_paths[$g][cc_lang_of($pg['_l'], $lcfg)] = $pp;
+        }
         try {
-            $homeExists = (int)$pdo->query("SELECT COUNT(*) FROM pages WHERE is_draft_copy = 0 AND is_home = 1 AND status IN ('published','modified')")->fetchColumn() > 0;
-        } catch (Exception $e) { $homeExists = false; }
+            foreach ($pdo->query("SELECT i.slug, i.lang, i.trans_group, c.slug AS col_slug FROM collection_items i JOIN collections c ON c.id = i.collection_id WHERE i.status = 'published' AND i.trans_group <> ''") as $ai) {
+                if (!cc_lang_known($ai['lang'] ?? '', $lcfg)) continue;
+                $al = cc_lang_norm($ai['lang'] ?? '', $lcfg);
+                $alt_paths[$ai['trans_group']][cc_lang_of($al, $lcfg)] = '/' . cc_lang_prefix($al, $lcfg) . cc_safe_slug($ai['col_slug']) . '/' . cc_safe_slug($ai['slug']) . '/';
+            }
+        } catch (Throwable $e) { error_log('CanvasCore publish (translations): ' . $e->getMessage()); }
+        // What a page of a group offers: the hreflang links (absolute, only with a site address), and the switcher's links (to the home of a language without a translation)
+        $alt_for = function ($group) use ($alt_paths, $lang_root, $multi, $lcfg, $site_url, $dlang) {
+            $sw = []; $abs_alts = [];
+            if (!$multi) return [$sw, $abs_alts];
+            $g = $alt_paths[(string)$group] ?? [];
+            foreach (cc_lang_codes($lcfg) as $code) {
+                if (isset($g[$code])) $sw[$code] = '{{BASE_URL}}' . ltrim($g[$code], '/');
+                elseif (!empty($lang_root[$code])) $sw[$code] = '{{BASE_URL}}' . cc_lang_prefix($code === $dlang ? '' : $code, $lcfg);   // no translation: that language's home page
+                if (isset($g[$code]) && $site_url) $abs_alts[$code] = $site_url . $g[$code];
+            }
+            return [$sw, $abs_alts];
+        };
+        $sitemap_alts = [];   // address => its hreflang links as sitemap entries
 
         foreach ($pages as $page) {
-            $slug = cc_safe_slug($page['clean_slug'] ?? $page['slug'] ?? 'index');
+            [$slug, $isRootSlug, $writeRoot, $pre, $page_path] = $page_where($page);
+            $L = $page['_l'];
             if (cc_slug_reserved($slug)) { $warnings[] = 'Not published: "' . ($page['title'] ?? '') . '" uses the reserved address /' . $slug . '/'; continue; }
+            if ($L === '' && cc_lang_folder_taken($slug, $lcfg)) { $warnings[] = 'Not published: "' . ($page['title'] ?? '') . '" uses /' . $slug . '/, the folder of a language.'; continue; }
             $title = htmlspecialchars($page['title'] ?? '');
             $seo_title = !empty($page['seo_title']) ? htmlspecialchars($page['seo_title']) : $title . $site_suffix;
             $seo_description = htmlspecialchars($page['seo_description'] ?? '');
@@ -161,12 +269,16 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             $page_bg = htmlspecialchars(cc_css_color($page['bg_color'] ?? '', '#ffffff'));
             $boxed_width = htmlspecialchars(cc_css_length($page['boxed_width'] ?? '', '1200px'));
 
-            $is_home_pg = (int)($page['is_home'] ?? 0) === 1;
             $blocks = json_decode($page['content_json'] ?? '[]', true);
+            [$sw_alts, $abs_alts] = $alt_for($page['trans_group'] ?? '');
+            [$header_html, $footer_html] = $parts_for($L, $sw_alts);
+            $menu_html = $menu_for($L);
             $content_html = '';
+            cc_lang_context($lang_ctx($L, $sw_alts));
             if (is_array($blocks)) {
                 foreach ($blocks as $block) $content_html .= render_block($block);
             }
+            cc_lang_context(null);
 
             $wrapper_style = $page_layout === 'boxed'
                 ? "max-width: $boxed_width; margin: 0 auto; padding: 0 20px; overflow-x: clip;"
@@ -178,13 +290,13 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             $html = str_replace('{{META_DESCRIPTION}}', $seo_description, $html);
             $generator = '<meta name="generator" content="CanvasCore">';   // no version number: it would tell attackers which fixes a site lacks
 
-            // Public path of the page (for og:url and sitemap)
-            $page_path = ($slug === 'index' || $slug === 'home' || $is_home_pg) ? '/' : '/' . $slug . '/';
+            // Public path of the page (for og:url and sitemap): $page_path, from $page_where
             $page_abs  = $site_url ? $site_url . $page_path : '';
             $og_image  = $abs(!empty($page['seo_image']) ? $page['seo_image'] : $default_og);
 
             $seo_head  = $favicon_url ? '<link rel="icon" href="' . htmlspecialchars($abs($favicon_url)) . '">' . "\n" : '';
             $seo_head .= '<meta property="og:type" content="website">' . "\n";
+            if ($multi) $seo_head .= '<meta property="og:locale" content="' . htmlspecialchars(str_replace('-', '_', cc_lang_tag(cc_lang_of($L, $lcfg)))) . '">' . "\n";
             $seo_head .= '<meta property="og:title" content="' . $seo_title . '">' . "\n";
             if ($seo_description !== '') $seo_head .= '<meta property="og:description" content="' . $seo_description . '">' . "\n";
             if ($site_name !== '') $seo_head .= '<meta property="og:site_name" content="' . htmlspecialchars($site_name) . '">' . "\n";
@@ -194,7 +306,10 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
 
             $html = str_replace('</head>', $custom_bg_style . "\n" . $generator . "\n" . $seo_head . "</head>", $html);
 
-            if ((int)($page['noindex'] ?? 0) !== 1) $sitemap_urls[] = $page_abs !== '' ? $page_abs : ($base_url . ltrim($page_path, '/'));
+            if ((int)($page['noindex'] ?? 0) !== 1) {
+                $sitemap_urls[] = $page_abs !== '' ? $page_abs : ($base_url . ltrim($page_path, '/'));
+                if (count($abs_alts) > 1 && $page_abs !== '') $sitemap_alts[$page_abs] = $abs_alts;
+            }
             $html = str_replace('{{MAIN_MENU}}', $menu_html, $html);
             $html = str_replace('{{GOOGLE_FONTS}}', $google_fonts_link, $html);
             $html = str_replace('{{BRAND_COLOR}}', $brand_color, $html);
@@ -207,21 +322,18 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             // - without an explicit flag, the index/home slug convention still applies
             // - every non-root page still gets its own /slug/index.html folder,
             //   so any form of internal link keeps working.
-            $is_home = (int)($page['is_home'] ?? 0) === 1;
-            $isRootSlug = ($slug === 'index' || $slug === 'home');
-            $writeRoot = $is_home || (!$homeExists && $isRootSlug);
-
+            // (a language other than the default has its own root: /it/index.html)
             $targets = [];
-            if ($writeRoot) $targets[] = __DIR__ . '/../index.html';
-            if (!$isRootSlug) $targets[] = __DIR__ . '/../' . $slug . '/index.html';
-            if (empty($targets)) $targets[] = __DIR__ . '/../' . $slug . '/index.html'; // slug 'index'/'home' that is not home while another page is the home
+            if ($writeRoot) $targets[] = __DIR__ . '/../' . $pre . 'index.html';
+            if (!$isRootSlug) $targets[] = __DIR__ . '/../' . $pre . $slug . '/index.html';
+            if (empty($targets)) $targets[] = __DIR__ . '/../' . $pre . $slug . '/index.html'; // slug 'index'/'home' that is not home while another page is the home
             $noindex_pg = (int)($page['noindex'] ?? 0) === 1;
-            $html = $finish($html, $page_abs, $noindex_pg, ['kind' => 'page', 'id' => (string)$page['id']]);
+            $html = $finish($html, $page_abs, $noindex_pg, ['kind' => 'page', 'id' => (string)$page['id'], 'lang' => $multi ? cc_lang_of($L, $lcfg) : ''], $L, cc_hreflang_html($abs_alts, $dlang));
             foreach ($targets as $fp) $write($fp, $html);
             if (!$noindex_pg) {
                 $txt = $plain($content_html);
                 // f: the facets of the entry (the collection, and the terms of each taxonomy); fl: their labels
-                $search_index[] = ['t' => html_entity_decode($title, ENT_QUOTES, 'UTF-8'), 'u' => $base_url . ltrim($page_path, '/'),
+                $search_index[$L][] = ['t' => html_entity_decode($title, ENT_QUOTES, 'UTF-8'), 'u' => $base_url . ltrim($page_path, '/'),
                                    'd' => (string)($page['seo_description'] ?? '') !== '' ? (string)$page['seo_description'] : mb_substr($txt, 0, 160), 'x' => mb_substr($txt, 0, 3000),
                                    'f' => ['collection' => 'Pages'], 'fl' => ['collection' => 'Collection']];
             }
@@ -240,12 +352,12 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     }
                 }
             }
-            $term_items = [];   // term id => its published, live items (for the term pages)
-            $item_slugs = [];   // collection id => the addresses its items use (a taxonomy may not take one)
+            $term_items = [];   // language => term id => its published, live items (for the term pages)
+            $item_slugs = [];   // collection id => language => the addresses its items use (a taxonomy may not take one)
             // Every item, for the references between items (a reference links to a published one)
             $item_index = [];
-            foreach ($pdo->query("SELECT i.id, i.title, i.slug, i.status, i.archived, c.slug AS col_slug FROM collection_items i JOIN collections c ON c.id = i.collection_id")->fetchAll(PDO::FETCH_ASSOC) as $ii) {
-                $item_index[$ii['id']] = ['title' => (string)$ii['title'], 'slug' => cc_safe_slug($ii['slug']), 'col_slug' => cc_safe_slug($ii['col_slug']),
+            foreach ($pdo->query("SELECT i.id, i.title, i.slug, i.status, i.archived, i.lang, c.slug AS col_slug FROM collection_items i JOIN collections c ON c.id = i.collection_id")->fetchAll(PDO::FETCH_ASSOC) as $ii) {
+                $item_index[$ii['id']] = ['title' => (string)$ii['title'], 'slug' => cc_safe_slug($ii['slug']), 'col_slug' => cc_safe_slug($ii['col_slug']), 'lang' => cc_lang_known($ii['lang'] ?? '', $lcfg) ? cc_lang_norm($ii['lang'] ?? '', $lcfg) : '',
                     'live' => $ii['status'] === 'published' && (int)($ii['archived'] ?? 0) !== 1];
             }
             $cols = $pdo->query("SELECT id, name, slug, fields, schema_json, design_json, archive_json FROM collections")->fetchAll(PDO::FETCH_ASSOC);
@@ -262,6 +374,9 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 $its = $pdo->prepare("SELECT * FROM collection_items WHERE collection_id = ? AND status = 'published'");
                 $its->execute([$col['id']]);
                 foreach ($its->fetchAll(PDO::FETCH_ASSOC) as $it) {
+                    if (!cc_lang_known($it['lang'] ?? '', $lcfg)) { $left_out++; continue; }   // a language the site does not have (any more)
+                    $L = cc_lang_norm($it['lang'] ?? '', $lcfg);
+                    $pre = cc_lang_prefix($L, $lcfg);
                     $it_slug = cc_safe_slug($it['slug']);
                     $i_title = htmlspecialchars($it['title'] ?? '');
                     $i_seo_title = !empty($it['seo_title']) ? htmlspecialchars($it['seo_title']) : $i_title . $site_suffix;
@@ -276,23 +391,30 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     foreach ($defs_by_id as $fid => $fd) $i_values[$fid] = cc_field_clean($fd, is_array($i_raw) ? ($i_raw[$fid] ?? null) : null, $pdo);
                     // Categories and tags of the item, cleaned against its collection (set before the item's blocks render)
                     $i_terms = cc_terms_clean(json_decode((string)($it['terms_json'] ?? '{}'), true), $pdo, $col['id']);
-                    cc_item_context(['defs' => $defs_by_id, 'values' => $i_values, 'items' => $item_index, 'item' => (string)$it['id'], 'collection_id' => (string)$col['id'],
+                    // (the header, footer and menu are made outside the item's context: they are the same for every item of a language)
+                    [$i_sw, $i_abs_alts] = $alt_for($it['trans_group'] ?? '');
+                    [$header_html, $footer_html] = $parts_for($L, $i_sw);
+                    $menu_html = $menu_for($L);
+                    cc_item_context(['defs' => $defs_by_id, 'values' => $i_values, 'items' => $item_index, 'item' => (string)$it['id'], 'collection_id' => (string)$col['id'], 'lang' => $L,
                         'item_terms' => $i_terms, 'terms' => $term_index, 'item_archived' => (int)($it['archived'] ?? 0) === 1,
-                        'page' => ['title' => (string)$it['title'], 'excerpt' => (string)($it['excerpt'] ?? ''), 'date' => (string)($it['date'] ?? ''), 'url' => '{{BASE_URL}}' . $col_slug . '/' . $it_slug . '/']]);
+                        'page' => ['title' => (string)$it['title'], 'excerpt' => (string)($it['excerpt'] ?? ''), 'date' => (string)($it['date'] ?? ''), 'url' => '{{BASE_URL}}' . $pre . $col_slug . '/' . $it_slug . '/']]);
                     // Categories and tags of the item, cleaned against its collection; the term pages list the live items
-                    $item_slugs[$col['id']][$it_slug] = true;
-                    if ((int)($it['archived'] ?? 0) !== 1) foreach ($i_terms as $i_mids) foreach ($i_mids as $i_mid) $term_items[$i_mid][] = $it;
+                    $item_slugs[$col['id']][$L][$it_slug] = true;
+                    if ((int)($it['archived'] ?? 0) !== 1) foreach ($i_terms as $i_mids) foreach ($i_mids as $i_mid) $term_items[$L][$i_mid][] = $it;
                     $i_content = '';
+                    cc_lang_context($lang_ctx($L, $i_sw));
                     if (is_array($i_blocks)) foreach ($i_blocks as $b) $i_content .= render_block($b);
+                    cc_lang_context(null);
                     cc_item_context(null);
                     $i_wrap = "<div style=\"max-width:1100px; margin:0 auto; padding:0 20px; overflow-x:clip;\">\n" . $i_content . "\n</div>";
                     $i_full = $header_html . $i_wrap . $footer_html;
 
-                    $i_path = '/' . $col_slug . '/' . $it_slug . '/';
+                    $i_path = '/' . $pre . $col_slug . '/' . $it_slug . '/';
                     $i_abs  = $site_url ? $site_url . $i_path : '';
                     $og_image = $abs(!empty($it['cover_image']) ? $it['cover_image'] : $default_og);
                     $i_seo_head  = $favicon_url ? '<link rel="icon" href="' . htmlspecialchars($abs($favicon_url)) . '">' . "\n" : '';
                     $i_seo_head .= '<meta property="og:type" content="article">' . "\n";
+                    if ($multi) $i_seo_head .= '<meta property="og:locale" content="' . htmlspecialchars(str_replace('-', '_', cc_lang_tag(cc_lang_of($L, $lcfg)))) . '">' . "\n";
                     $i_seo_head .= '<meta property="og:title" content="' . $i_title . '">' . "\n";
                     if ($i_seo_desc !== '') $i_seo_head .= '<meta property="og:description" content="' . $i_seo_desc . '">' . "\n";
                     if ($site_name !== '') $i_seo_head .= '<meta property="og:site_name" content="' . htmlspecialchars($site_name) . '">' . "\n";
@@ -312,8 +434,8 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                     $ihtml = str_replace('{{PAGE_CONTENT}}', $i_full, $ihtml);
                     $ihtml = str_replace('{{BASE_URL}}', $base_url, $ihtml);
 
-                    $ihtml = $finish($ihtml, $i_abs, false, ['kind' => 'item', 'id' => (string)$it['id'], 'collection' => (string)$it['collection_id']]);
-                    $write(__DIR__ . '/../' . $col_slug . '/' . $it_slug . '/index.html', $ihtml);
+                    $ihtml = $finish($ihtml, $i_abs, false, ['kind' => 'item', 'id' => (string)$it['id'], 'collection' => (string)$it['collection_id'], 'lang' => $multi ? cc_lang_of($L, $lcfg) : ''], $L, cc_hreflang_html($i_abs_alts, $dlang));
+                    $write(__DIR__ . '/../' . $pre . $col_slug . '/' . $it_slug . '/index.html', $ihtml);
                     if ((int)($it['archived'] ?? 0) !== 1) {
                         $itxt = $plain($i_content);
                         // facets: the collection, and the terms of the item in each taxonomy
@@ -323,13 +445,14 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                             foreach ($i_mids as $i_mid) if (isset($term_index[$i_mid])) { $tnames[] = $term_index[$i_mid]['name']; $sfl['tax:' . $i_tid] = $term_index[$i_mid]['tax_name']; }
                             if ($tnames) $sf['tax:' . $i_tid] = $tnames;
                         }
-                        $search_index[] = ['t' => (string)($it['title'] ?? ''), 'u' => $base_url . $col_slug . '/' . $it_slug . '/',
+                        $search_index[$L][] = ['t' => (string)($it['title'] ?? ''), 'u' => $base_url . $pre . $col_slug . '/' . $it_slug . '/',
                                            'd' => (string)($it['excerpt'] ?? '') !== '' ? (string)$it['excerpt'] : mb_substr($itxt, 0, 160), 'x' => mb_substr($itxt, 0, 3000),
                                            'f' => $sf, 'fl' => $sfl];
-                        if (isset($feeds[$col['id']])) $feeds[$col['id']]['items'][] = $it;
+                        if (isset($feeds[$col['id'] . '|' . $L])) $feeds[$col['id'] . '|' . $L]['items'][] = $it;
                     }
                     $count++;
-                    $sitemap_urls[] = $i_abs !== '' ? $i_abs : ($base_url . $col_slug . '/' . $it_slug . '/');
+                    $sitemap_urls[] = $i_abs !== '' ? $i_abs : ($base_url . $pre . $col_slug . '/' . $it_slug . '/');
+                    if (count($i_abs_alts) > 1 && $i_abs !== '') $sitemap_alts[$i_abs] = $i_abs_alts;
                 }
             }
         } catch (Throwable $e) { error_log('CanvasCore publish (collections): ' . $e->getMessage()); $warnings[] = 'Collections could not be published (details in the server error log).'; }
@@ -340,7 +463,11 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         // (/<col>/filter/<field>/<value>/), and the taxonomies: their pages (/<col>/<tax>/) and their terms (/<col>/<tax>/<term>/).
         // An address that an item already uses is never written over.
         try {
-            $render_page = function ($path, $title, $desc, $inner) use (&$sitemap_urls, $template, $menu_html, $google_fonts_link, $brand_color, $font_family, $header_html, $footer_html, $site_suffix, $base_url, $site_url, $finish, $write, $pdo) {
+            $arch_lang = '';   // the language being published ('' = the default one); $path starts with its folder
+            $render_page = function ($path, $title, $desc, $inner) use (&$sitemap_urls, &$arch_lang, $template, $menu_for, $parts_for, $google_fonts_link, $brand_color, $font_family, $site_suffix, $base_url, $site_url, $finish, $write, $pdo, $lcfg, $dlang) {
+                $L = $arch_lang;
+                $menu_html = $menu_for($L);
+                [$header_html, $footer_html] = $parts_for($L, []);
                 $tt = htmlspecialchars($title);
                 $tdesc = htmlspecialchars(mb_substr(trim(preg_replace('/\s+/u', ' ', $desc !== '' ? $desc : $title)), 0, 300));
                 $abs = $site_url ? $site_url . '/' . $path : '';
@@ -349,8 +476,8 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 $page = str_replace(['{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}'],
                     [$menu_html, $google_fonts_link, $brand_color, $font_family, $header_html . '<div style="max-width:1100px; margin:0 auto; padding:0 20px; overflow-x:clip;">' . $inner . '</div>' . $footer_html], $page);
                 $page = str_replace('{{BASE_URL}}', $base_url, $page);
-                $archCol = (string)($pdo->query("SELECT id FROM collections WHERE slug = " . $pdo->quote(explode('/', $path)[0]))->fetchColumn() ?: '');
-                $write(__DIR__ . '/../' . $path . 'index.html', $finish($page, $abs, false, ['kind' => 'archive', 'collection' => $archCol]));
+                $archCol = (string)($pdo->query("SELECT id FROM collections WHERE slug = " . $pdo->quote(explode('/', substr($path, strlen(cc_lang_prefix($L, $lcfg))))[0]))->fetchColumn() ?: '');
+                $write(__DIR__ . '/../' . $path . 'index.html', $finish($page, $abs, false, ['kind' => 'archive', 'collection' => $archCol, 'lang' => $multi ? cc_lang_of($L, $lcfg) : ''], $L));
                 $sitemap_urls[] = $abs !== '' ? $abs : ($base_url . $path);
             };
             // One archive: its items in pages of $per (the browse links go on its first page)
@@ -364,13 +491,19 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 }
             };
             $cdata = cc_collections_data();
-            foreach ($cdata['by_id'] as $cid => $cc) {
+            foreach ($cdata['by_id'] as $cid => $cc) foreach ($folders as $arch_lang) {   // each collection, in each language that has items (the default one always)
                 $cs = cc_safe_slug($cc['slug']);
                 if (cc_slug_reserved($cs) || !isset($archive_by_col[$cid])) continue;
+                if ($arch_lang === '' && cc_lang_folder_taken($cs, $lcfg)) { $warnings[] = 'Not published: the collection "' . $cc['name'] . '" uses /' . $cs . '/, the folder of a language.'; continue; }
                 $cfg = $archive_by_col[$cid];
                 $per = $cfg['perPage'];
-                $taken = $item_slugs[$cid] ?? [];
-                $live = array_values(array_filter($cc['items'], function ($it) { return empty($it['archived']); }));
+                $pre = cc_lang_prefix($arch_lang, $lcfg);
+                $cp = $pre . $cs;   // where its pages go: blog, it/blog
+                $taken = $item_slugs[$cid][$arch_lang] ?? [];
+                $live = array_values(array_filter($cc['items'], function ($it) use ($lcfg, $arch_lang) {
+                    return empty($it['archived']) && cc_lang_known($it['lang'] ?? '', $lcfg) && cc_lang_norm($it['lang'] ?? '', $lcfg) === $arch_lang;
+                }));
+                if ($arch_lang !== '' && !$live) continue;
                 $newest = cc_sort_items($live, 'date', true, []);
 
                 // 1. the taxonomies: the page of each one (its terms with their counts), and the page of each term (its items)
@@ -378,41 +511,41 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 foreach (($taxes_by_col[$cid]['taxes'] ?? []) as $tx) {
                     $tts = cc_tax_slug($tx['slug']);
                     if ($tts === '') continue;
-                    if (!empty($taken[$tts])) { $warnings[] = 'Taxonomy pages not published: an item of the collection "' . $cs . '" uses the address /' . $cs . '/' . $tts . '/.'; continue; }
+                    if (!empty($taken[$tts])) { $warnings[] = 'Taxonomy pages not published: an item of the collection "' . $cs . '" uses the address /' . $cp . '/' . $tts . '/.'; continue; }
                     $tax_terms = [];
                     foreach ($tx['terms'] as $tm) {
                         $tms = cc_tax_slug($tm['slug']);
-                        $its = $term_items[$tm['id']] ?? [];
+                        $its = $term_items[$arch_lang][$tm['id']] ?? [];
                         if ($tms === '' || !$its) continue;
                         usort($its, function ($a, $b) {
                             $c = strcmp((string)($b['date'] ?: ''), (string)($a['date'] ?: ''));
                             return $c !== 0 ? $c : strcmp((string)$a['title'], (string)$b['title']);
                         });
-                        $archive($cs . '/' . $tts . '/' . $tms . '/', $tx['name'], $tm['name'], (string)$tm['description'], $its, $cs, $per, '');
-                        $tax_terms[] = ['name' => $tm['name'], 'description' => (string)$tm['description'], 'count' => count($its), 'href' => $base_url . $cs . '/' . $tts . '/' . $tms . '/'];
+                        $archive($cp . '/' . $tts . '/' . $tms . '/', $tx['name'], $tm['name'], (string)$tm['description'], $its, $cs, $per, '');
+                        $tax_terms[] = ['name' => $tm['name'], 'description' => (string)$tm['description'], 'count' => count($its), 'href' => $base_url . $cp . '/' . $tts . '/' . $tms . '/'];
                     }
                     if (!$tax_terms) continue;
-                    $ipath = $cs . '/' . $tts . '/';
+                    $ipath = $cp . '/' . $tts . '/';
                     $render_page($ipath, $tx['name'], $tx['name'], cc_taxonomy_index_inner($tx['name'], $tax_terms));
                     $tax_pages[] = [$tx['name'], $ipath];
                 }
 
                 // 2. the browse links of the first listing page
                 $groups = [];
-                if ($cfg['sorts'] && empty($taken['sort'])) $groups[] = ['Sort', [['Newest first', $cs . '/'], ['Oldest first', $cs . '/sort/oldest/'], ['Title A–Z', $cs . '/sort/title/']]];
+                if ($cfg['sorts'] && empty($taken['sort'])) $groups[] = ['Sort', [['Newest first', $cp . '/'], ['Oldest first', $cp . '/sort/oldest/'], ['Title A–Z', $cp . '/sort/title/']]];
                 $years = []; $months = [];
                 foreach ($live as $it) {
                     if (preg_match('/^(\d{4})-(\d{2})/', (string)($it['date'] ?? ''), $ym)) { $years[$ym[1]][] = $it; $months[$ym[1] . '-' . $ym[2]][] = $it; }
                 }
                 krsort($years); krsort($months);
                 $year_links = [];
-                foreach (array_keys($years) as $y) if (empty($taken[$y])) $year_links[] = [$y, $cs . '/' . $y . '/'];
+                foreach (array_keys($years) as $y) if (empty($taken[$y])) $year_links[] = [$y, $cp . '/' . $y . '/'];
                 if ($cfg['years'] && $year_links) $groups[] = ['Years', $year_links];
                 if ($cfg['filters'] && empty($taken['filter'])) {
                     foreach ($cc['defsById'] as $fd) {
                         if ($fd['type'] !== 'choice') continue;
                         $links = [];
-                        foreach ($fd['options'] ?? [] as $o) $links[] = [$o['label'], $cs . '/filter/' . $fd['key'] . '/' . $o['value'] . '/'];
+                        foreach ($fd['options'] ?? [] as $o) $links[] = [$o['label'], $cp . '/filter/' . $fd['key'] . '/' . $o['value'] . '/'];
                         if ($links) $groups[] = [$fd['label'], $links];
                     }
                 }
@@ -420,22 +553,22 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                 $browse = cc_archive_browse_html($groups);
 
                 // 3. the listing and its sorts
-                $archive($cs . '/', 'Collection', $cc['name'], '', $newest, $cs, $per, $browse);
+                $archive($cp . '/', 'Collection', $cc['name'], '', $newest, $cs, $per, $browse);
                 if ($cfg['sorts'] && empty($taken['sort'])) {
-                    $archive($cs . '/sort/oldest/', 'Sorted', $cc['name'] . ' · oldest first', '', cc_sort_items($live, 'date', false, []), $cs, $per, '');
-                    $archive($cs . '/sort/title/', 'Sorted', $cc['name'] . ' · A–Z', '', cc_sort_items($live, 'title', false, []), $cs, $per, '');
+                    $archive($cp . '/sort/oldest/', 'Sorted', $cc['name'] . ' · oldest first', '', cc_sort_items($live, 'date', false, []), $cs, $per, '');
+                    $archive($cp . '/sort/title/', 'Sorted', $cc['name'] . ' · A–Z', '', cc_sort_items($live, 'title', false, []), $cs, $per, '');
                 }
 
                 // 4. the years and their months
                 if ($cfg['years']) {
                     foreach ($years as $y => $ys) {
                         if (!empty($taken[$y])) continue;
-                        $archive($cs . '/' . $y . '/', 'Year', $y, '', $ys, $cs, $per, '');
+                        $archive($cp . '/' . $y . '/', 'Year', $y, '', $ys, $cs, $per, '');
                     }
                     foreach ($months as $ym => $ms) {
                         [$my, $mm] = explode('-', $ym);
                         if (!empty($taken[$my])) continue;
-                        $archive($cs . '/' . $my . '/' . $mm . '/', 'Month', date('F Y', mktime(0, 0, 0, (int)$mm, 1, (int)$my)), '', $ms, $cs, $per, '');
+                        $archive($cp . '/' . $my . '/' . $mm . '/', 'Month', date('F Y', mktime(0, 0, 0, (int)$mm, 1, (int)$my)), '', $ms, $cs, $per, '');
                     }
                 }
 
@@ -449,7 +582,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                                 return in_array($o['value'], (array)$v, true);
                             }));
                             if (!$matches) continue;
-                            $archive($cs . '/filter/' . $fd['key'] . '/' . $o['value'] . '/', $fd['label'], $o['label'], '', $matches, $cs, $per, '');
+                            $archive($cp . '/filter/' . $fd['key'] . '/' . $o['value'] . '/', $fd['label'], $o['label'], '', $matches, $cs, $per, '');
                         }
                     }
                 }
@@ -463,9 +596,9 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             $rss .= '<title>' . htmlspecialchars($fd['name'] . ($site_name !== '' ? ' — ' . $site_name : '')) . '</title>' . "\n";
             $rss .= '<link>' . htmlspecialchars($site_url . '/') . '</link>' . "\n";
             $rss .= '<description>' . htmlspecialchars($fd['name']) . '</description>' . "\n";
-            $rss .= '<atom:link href="' . htmlspecialchars($site_url . '/' . $fd['slug'] . '/feed.xml') . '" rel="self" type="application/rss+xml"/>' . "\n";
+            $rss .= '<atom:link href="' . htmlspecialchars($site_url . '/' . $fd['dir'] . '/feed.xml') . '" rel="self" type="application/rss+xml"/>' . "\n";
             foreach (array_slice($fd['items'], 0, 50) as $it) {
-                $link = $site_url . '/' . $fd['slug'] . '/' . cc_safe_slug($it['slug']) . '/';
+                $link = $site_url . '/' . $fd['dir'] . '/' . cc_safe_slug($it['slug']) . '/';
                 $ts = strtotime((string)($it['date'] ?: $it['updated_at'])) ?: time();
                 $rss .= '<item><title>' . htmlspecialchars((string)$it['title']) . '</title><link>' . htmlspecialchars($link) . '</link><guid isPermaLink="true">' . htmlspecialchars($link) . '</guid>'
                       . '<pubDate>' . gmdate('D, d M Y H:i:s', $ts) . ' GMT</pubDate>'
@@ -474,11 +607,12 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
                       . '</item>' . "\n";
             }
             $rss .= '</channel></rss>' . "\n";
-            $write(__DIR__ . '/../' . $fd['slug'] . '/feed.xml', $rss);
+            $write(__DIR__ . '/../' . $fd['dir'] . '/feed.xml', $rss);
         }
 
         // --- Site search index (used by the Site Search block) ---
-        $write(__DIR__ . '/../search-index.json', json_encode($search_index, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        // (one per language: search-index.json for the default one, search-index-it.json for Italian)
+        foreach ($folders as $fl) $write(__DIR__ . '/../search-index' . ($fl !== '' ? '-' . $fl : '') . '.json', json_encode($search_index[$fl] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
         // --- Redirects: a small page at each old address (any host), plus real 301s for Apache ---
         $apache_rules = [];
@@ -507,8 +641,14 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         if (@file_put_contents($data_dir . '/forms.json', json_encode($forms, JSON_UNESCAPED_UNICODE)) === false) $failed[] = $data_dir . '/forms.json';
 
         // --- sitemap.xml ---
-        $sm = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
-        foreach (array_unique($sitemap_urls) as $u) $sm .= '  <url><loc>' . htmlspecialchars($u) . '</loc></url>' . "\n";
+        $sm = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' . ($sitemap_alts ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"' : '') . '>' . "\n";
+        foreach (array_unique($sitemap_urls) as $u) {
+            // a page that exists in several languages lists them all (each of them lists the same set)
+            $alt = '';
+            foreach ($sitemap_alts[$u] ?? [] as $ac => $au) $alt .= '<xhtml:link rel="alternate" hreflang="' . htmlspecialchars(cc_lang_tag($ac)) . '" href="' . htmlspecialchars($au) . '"/>';
+            if ($alt !== '' && isset($sitemap_alts[$u][$dlang])) $alt .= '<xhtml:link rel="alternate" hreflang="x-default" href="' . htmlspecialchars($sitemap_alts[$u][$dlang]) . '"/>';
+            $sm .= '  <url><loc>' . htmlspecialchars($u) . '</loc>' . $alt . '</url>' . "\n";
+        }
         $sm .= '</urlset>' . "\n";
         $write(__DIR__ . '/../sitemap.xml', $sm);
 
@@ -526,7 +666,7 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
             . '</div>';
         $nf = str_replace('{{PAGE_TITLE}}', '404 - Not Found' . $site_suffix, $template);
         $nf = str_replace(['{{META_DESCRIPTION}}', '{{MAIN_MENU}}', '{{GOOGLE_FONTS}}', '{{BRAND_COLOR}}', '{{FONT_FAMILY}}', '{{PAGE_CONTENT}}', '{{BASE_URL}}'],
-                          ['', $menu_html, $google_fonts_link, $brand_color, $font_family, $nf_content, $base_url], $nf);
+                          ['', $menu_for(''), $google_fonts_link, $brand_color, $font_family, $nf_content, $base_url], $nf);
         $nf = $finish($nf, '', true);
         $write(__DIR__ . '/../404.html', $nf);
 
@@ -560,6 +700,8 @@ function cc_publish_site(PDO $pdo, string $data_dir, string $base_dir): array {
         if ($failed) {
             return ['success' => false, 'message' => 'Publish incomplete: ' . count($failed) . ' file(s) could not be written (check the folder permissions on the server), e.g. ' . basename(dirname($failed[0])) . '/' . basename($failed[0]) . '.'];
         } else {
+            if ($left_out) $warnings[] = $left_out . ' page(s) or item(s) in a language the site does not use (Administration › Languages) were not published.';
+            if ($multi && !$site_url) $warnings[] = 'Languages: the hreflang links and the sitemap alternates need the site address (Global Options › Site address).';
             $msg = "Build successful: $count pages published." . ($removed ? " $removed old page(s) removed." : '');
             if ($warnings) $msg .= ' Warning: ' . implode(' ', $warnings);
             return ['success' => true, 'message' => $msg];
@@ -597,12 +739,16 @@ function cc_run_schedules(PDO $pdo, string $data_dir): array {
     $now = date('Y-m-d H:i');
     $changed = 0; $skipped = [];
     // items: go live (unless another live item has the address), then come down
-    $due = $pdo->prepare("SELECT id, collection_id, slug, title FROM collection_items WHERE status = 'draft' AND publish_at <> '' AND publish_at <= ?");
+    $lcfg = cc_lang_cfg();
+    $due = $pdo->prepare("SELECT id, collection_id, slug, title, lang FROM collection_items WHERE status = 'draft' AND publish_at <> '' AND publish_at <= ?");
     $due->execute([$now]);
     foreach ($due->fetchAll(PDO::FETCH_ASSOC) as $it) {
-        $taken = $pdo->prepare("SELECT 1 FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id <> ?");
+        // (an address is used once per language: /blog/hello/ and /it/blog/hello/ are two items)
+        $taken = $pdo->prepare("SELECT lang FROM collection_items WHERE collection_id = ? AND status = 'published' AND slug = ? AND id <> ?");
         $taken->execute([$it['collection_id'], $it['slug'], $it['id']]);
-        if ($taken->fetchColumn()) { $skipped[] = '"' . $it['title'] . '": another published item uses its address'; continue; }
+        $clash = false;
+        foreach ($taken->fetchAll(PDO::FETCH_COLUMN) as $tl) if (cc_lang_norm($tl, $lcfg) === cc_lang_norm($it['lang'] ?? '', $lcfg)) $clash = true;
+        if ($clash) { $skipped[] = '"' . $it['title'] . '": another published item uses its address'; continue; }
         $pdo->prepare("UPDATE collection_items SET status = 'published', publish_at = '' WHERE id = ?")->execute([$it['id']]);
         $changed++;
     }
@@ -610,12 +756,14 @@ function cc_run_schedules(PDO $pdo, string $data_dir): array {
     $n->execute([$now]); $changed += $n->rowCount();
     $pdo->prepare("UPDATE collection_items SET unpublish_at = '' WHERE status = 'draft' AND unpublish_at <> '' AND unpublish_at <= ?")->execute([$now]);
     // pages: the same, for pages that have no unpublished edits waiting
-    $due = $pdo->prepare("SELECT id, title, clean_slug FROM pages WHERE is_draft_copy = 0 AND status = 'draft' AND publish_at <> '' AND publish_at <= ?");
+    $due = $pdo->prepare("SELECT id, title, clean_slug, lang FROM pages WHERE is_draft_copy = 0 AND status = 'draft' AND publish_at <> '' AND publish_at <= ?");
     $due->execute([$now]);
     foreach ($due->fetchAll(PDO::FETCH_ASSOC) as $pg) {
-        $taken = $pdo->prepare("SELECT 1 FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified') AND clean_slug = ? AND id <> ?");
+        $taken = $pdo->prepare("SELECT lang FROM pages WHERE is_draft_copy = 0 AND status IN ('published', 'modified') AND clean_slug = ? AND id <> ?");
         $taken->execute([$pg['clean_slug'], $pg['id']]);
-        if ($taken->fetchColumn()) { $skipped[] = 'page "' . $pg['title'] . '": another published page uses its address'; continue; }
+        $clash = false;
+        foreach ($taken->fetchAll(PDO::FETCH_COLUMN) as $tl) if (cc_lang_norm($tl, $lcfg) === cc_lang_norm($pg['lang'] ?? '', $lcfg)) $clash = true;
+        if ($clash) { $skipped[] = 'page "' . $pg['title'] . '": another published page uses its address'; continue; }
         $pdo->prepare("UPDATE pages SET status = 'published', publish_at = '' WHERE id = ?")->execute([$pg['id']]);
         $changed++;
     }

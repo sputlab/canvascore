@@ -223,6 +223,7 @@ const fixtures = [
   { id: 'nl3', type: 'NEWSLETTER', styles: {}, content: {} },
   // Categories & Tags: the terms of the item being published; nothing on any other page (both renderers)
   { id: 'it1', type: 'ITEM_TERMS', styles: { width: '100%' }, content: { taxonomy: 'tx1', separator: ' · ' } },
+  { id: 'ls1', type: 'LANGUAGE_SWITCHER', styles: { width: '100%' }, content: { style: 'dropdown', labels: 'code', showCurrent: false } },
   // Related Items: the items that point to the collection item being published; nothing on any other page (both renderers)
   { id: 'rl1', type: 'RELATED', styles: { width: '100%' }, content: { collectionId: 'c1', fieldId: 'f1', limit: 3, columns: 3, title: 'Team', cardFields: ['x'] } },
   // Item Field: shows a field of the collection item being published; on any other page it shows nothing (both renderers)

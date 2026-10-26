@@ -8,7 +8,7 @@ import { canon, saveDraft, clearDraft, readDraft } from './drafts.js';
 
 // Page fields that count for "I changed something" (excludes updated_at, content_json, ...)
 const PAGE_KEYS = ['id', 'title', 'slug', 'seo_title', 'seo_description', 'seo_image', 'layout', 'bg_color', 'boxed_width',
-  'is_home', 'noindex', 'excerpt', 'cover_image', 'date', 'archived', 'status', 'collection_id', '__part', '__item', '__popup', 'settings'];
+  'is_home', 'noindex', 'excerpt', 'cover_image', 'date', 'archived', 'status', 'collection_id', '__part', '__item', '__popup', 'settings', 'lang'];
 
 export function pickPage(p) {
   const r = {};

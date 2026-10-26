@@ -26,6 +26,8 @@ import {
   Building2, StarHalf, ScrollText, Search, Share2, SquareChartGantt, Palette, MousePointerClick, Layout, CreditCard,
   Images, PanelLeft, PanelRight, TableOfContents, Table2, Users, MessagesSquare, Film, Type, Rows3, PanelTop, Columns3,
 } from 'lucide-react';
+import { useStore } from '../../store/useStore';
+import { pageFile } from '../../editor/languages';
 import { PanelAccordion, ItemCard, TxtF, NumF, SelF, ChkF, ColorF, ImgF, FileF, Fld } from './fields';
 import { lstAddBtn, fldInput, labelStyle } from './helpers';
 import { transformValue } from '../../render/blockDef.mjs';
@@ -84,6 +86,7 @@ const itemTitle = (s, it, i) => {
 // One field. scope: { settings, values, styles, ctx, pick (target base for the media library), patch (k, v), patchItem }
 function Control({ k, s, scope }) {
   const { ctx } = scope;
+  const langs = useStore((st) => st.languages);
   const fromStyles = s.from === 'styles';
   const key = s.key || k;
   const raw = fromStyles ? (scope.styles || {})[key] : scope.values[key];
@@ -141,7 +144,7 @@ function Control({ k, s, scope }) {
       <Fld label={label}>
         <select style={{ ...fldInput, marginBottom: '6px' }} aria-label={`${label}: a page of the site`} value={raw ?? '#'} onChange={(e) => onChange(e.target.value)}>
           <option value="#">Select internal page...</option>
-          {(ctx.pages || []).map((p) => <option key={p.id} value={p.clean_slug ? p.clean_slug + '/index.html' : 'index.html'}>📄 {p.title}</option>)}
+          {(ctx.pages || []).map((p) => <option key={p.id} value={pageFile(p, langs)}>📄 {p.title}{langs && langs.enabled && p.lang ? ` (${p.lang.toUpperCase()})` : ''}</option>)}
         </select>
         <input type="text" style={fldInput} aria-label={label} placeholder={placeholder || 'Custom URL...'} value={raw ?? ''} onChange={(e) => onChange(e.target.value)} />
       </Fld>
